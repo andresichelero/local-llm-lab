@@ -47,5 +47,7 @@ The first Tier 0 target is IBM Granite 4.1 3B in GGUF Q4_K_M, served locally by 
 
 ## ExLlamaV3 / EXL3 tier
 
-ExLlamaV3 1.6.0 is installed in an isolated Python 3.12 environment under `/mnt/e/local-llm-envs/exllamav3`; CUDA 12.8 PyTorch detected the RTX 3070. To reproduce the pinned install, run `scripts/04_install_exllamav3.sh`. The next benchmark target is Qwen3.5-9B EXL3 2.50bpw; its immutable revision, expected size and weight checksum are in `versions.lock`. Check disk space with `scripts/07_download_exl3_model.sh --dry-run`, download explicitly by running that script without `--dry-run`, then run `scripts/09_benchmark_inference_exllama.sh`. The comparison with the Granite GGUF result is cross-model and must not be read as a runtime-only comparison.
+ExLlamaV3 1.6.0 is installed in an isolated Python 3.12 environment under `/mnt/e/local-llm-envs/exllamav3`; CUDA 12.8 PyTorch detected the RTX 3070. To reproduce the pinned install, run `scripts/04_install_exllamav3.sh`. Qwen3.5-9B EXL3 2.50bpw has been measured through 64K context using chunked prefill and 4-bit K/V cache; see `results/raw/exllama-qwen35-9b.jsonl` and the execution status. Its same-family GGUF Q4_K_M counterpart has now been downloaded and verified for a runtime comparison. The GGUF and EXL3 measurements use different quantization formats and bit budgets, so any speed difference is not attributable to runtime alone.
+
+Reproduce the pinned GGUF download with `scripts/07_download_qwen35_gguf.sh --dry-run`, then omit `--dry-run` to download to `MODEL_DIR` (default `/mnt/e/local-llm-models`). Both downloaders preserve partial files for safe resumption and verify the final checksum.
 
