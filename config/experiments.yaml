@@ -18,9 +18,14 @@ tiers:
     max_context: 2048
     max_new_tokens: 128
   gpu:
-    question: Compare quantization and KV precision for a model that fits within observed free VRAM.
-    model: Qwen/Qwen3.5-9B
-    status: pending model/runtime compatibility and free-space check
+    question: Compare EXL3 2.5bpw throughput and memory on Qwen3.5-9B, then compare a compatible GGUF if available.
+    model: turboderp/Qwen3.5-9B-exl3
+    revision: d35e580c801b276c4d5ff97f27bd0fa79a0ef3b3
+    quant: EXL3 2.50bpw
+    context: 2048
+    warmups: 1
+    repetitions: 3
+    status: ExLlamaV3 CUDA installation passed; model download pending
   hybrid:
     question: Measure CPU/GPU layer offload with a 14B candidate.
     model: Qwen/Qwen2.5-Coder-14B-Instruct

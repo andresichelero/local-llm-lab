@@ -23,13 +23,13 @@ models:
     license: Apache-2.0
     context_claim: 262144
     tool_use: model-card capability; local tool-call behavior unmeasured
-    formats: [Transformers, community-GGUF]
-    candidate_quant: Q4_K_M
+    formats: [Transformers, community-GGUF, community-EXL3]
+    candidate_quant: EXL3 2.50bpw pinned; Q4_K_M GGUF comparison candidate
     estimated_weight_gib: 5.5
     realistic_context_tokens: 2048
-    status: tier1_candidate
+    status: exl3_download_in_progress
     purpose: all/mostly-GPU quantization and KV comparison
-    evidence: official-model-card
+    evidence: official model card and verified EXL3 repository commit, size and SHA-256 recorded in versions.lock
   - id: qwen3.8-27b
     repo: Qwen/Qwen3.8-27B
     params: 27B

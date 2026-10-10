@@ -7,8 +7,11 @@ runtimes:
     install: official source build with CUDA if the WSL toolkit can be added within the disk budget; otherwise use a verified upstream Windows CUDA release and mark the host difference.
   exllamav3:
     upstream: https://github.com/turboderp-org/exllamav3
-    status: candidate
-    rationale: EXL3, quantized cache, speculative decoding and CPU offload; recent upstream provides pinned CUDA/PyTorch wheels.
+    status: installed_cuda_smoke_pass
+    version: 1.6.0
+    torch: 2.10.0+cu128
+    python: 3.12
+    rationale: EXL3, quantized cache, speculative decoding and CPU offload; official CPython 3.12 CUDA 12.8/PyTorch 2.10 Linux wheel has a published SHA-256.
   transformers_torch:
     upstream: https://github.com/huggingface/transformers
     status: candidate

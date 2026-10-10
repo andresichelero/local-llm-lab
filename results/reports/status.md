@@ -23,6 +23,7 @@
 - Installed CUDA Toolkit 13.0 from NVIDIA's WSL repository, including compiler 13.0.88 and g++-12. The package plan contained no Linux NVIDIA driver packages. The host-provided driver remains 610.62.
 - Downloaded IBM Granite 4.1 3B GGUF Q4_K_M (2,099,501,664 bytes) to `E:\local-llm-models` and verified SHA-256 `662b0626cd58f443baea23559b469df6576a81d349649c59413b36a9fb32eb29`. Model remains outside Git.
 - Built llama.cpp v0.6.0 tag at commit `d81235049384534c167caea52b85a694f6103d14`; `llama-cli` and `llama-server` report build `0.6.0-dev`. CUDA 13.0, GNU 13.3, host compiler g++-12, architecture sm_86. Incremental target build completed with no compile errors; GNU Make continues to warn about clock skew on the Windows-mounted D: volume.
+- Installed ExLlamaV3 1.6.0 in `/mnt/e/local-llm-envs/exllamav3` with Python 3.12.3 and PyTorch 2.10.0+cu128. The 145 MB upstream Linux wheel SHA-256 matched the GitHub release metadata; the package dependency check passed and PyTorch reports CUDA 12.8 with the RTX 3070 visible. Torch, Triton, CUDA libraries and runtime files occupy about 6.8 GiB on E:, not in the WSL root filesystem. First import exposed missing declared dependencies because the wheel was initially installed with `--no-deps`; the installer now installs its declared non-Torch dependencies explicitly and the CUDA smoke passes.
 
 ## Executed / measured
 
@@ -38,4 +39,5 @@
 
 - The 6 GiB WSL memory cap and approximately 5 GiB free root space make full PyTorch, QLoRA, and 14–35B hybrid work uncertain. Those tiers remain untested; the WSL cap was not changed.
 - Free VRAM varied substantially with other Windows and WSL workloads: 4.6 GiB at first audit, 3.2–3.4 GiB during installation, and 7.2 GiB immediately before the successful smoke test.
-- Next: add a genuinely long prompt, then decide whether ExLlamaV3/training stacks fit storage and memory constraints. Harnesses, multiagent, router API tests, MoE and fine-tuning have not been installed or benchmarked.
+- ExLlamaV3 is installed and its CUDA import check passes. The pinned Qwen3.5-9B EXL3 2.5bpw snapshot has not yet downloaded or run; the full model weights are about 5.89 GB and fit the current free-space preflight on E:, but GPU/host-memory fit is still unknown. The test script now records deterministic greedy timing and process VRAM.
+- Next: download and load the EXL3 model, measure one warm-up plus three repetitions, and record any model-load or memory failures. Also add a genuinely long prompt to the GGUF path. Transformers-only inference, QLoRA, other formats, harnesses, multiagent, MoE and fine-tuning have not been installed or benchmarked.

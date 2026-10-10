@@ -45,3 +45,7 @@ See `results/reports/status.md` for the current ledger of what has been research
 
 The first Tier 0 target is IBM Granite 4.1 3B in GGUF Q4_K_M, served locally by llama.cpp. The pinned model was downloaded to `E:\local-llm-models` and verified against SHA-256 in `versions.lock`. A CLI smoke test and a clean-source three-repeat 2K-context server baseline completed; the clean baseline is in `results/raw/tier0-final.jsonl`, consolidated results are in `results/csv/summary.csv`, and a human-readable summary is in `results/reports/tier0-summary.md`. These are short-run throughput tests; model quality and larger-context behavior remain untested.
 
+## ExLlamaV3 / EXL3 tier
+
+ExLlamaV3 1.6.0 is installed in an isolated Python 3.12 environment under `/mnt/e/local-llm-envs/exllamav3`; CUDA 12.8 PyTorch detected the RTX 3070. To reproduce the pinned install, run `scripts/04_install_exllamav3.sh`. The next benchmark target is Qwen3.5-9B EXL3 2.50bpw; its immutable revision, expected size and weight checksum are in `versions.lock`. Check disk space with `scripts/07_download_exl3_model.sh --dry-run`, download explicitly by running that script without `--dry-run`, then run `scripts/09_benchmark_inference_exllama.sh`. The comparison with the Granite GGUF result is cross-model and must not be read as a runtime-only comparison.
+

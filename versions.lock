@@ -20,9 +20,14 @@ wsl.cuda_driver_api: 13.3
 wsl.cuda_toolkit_nvcc: unavailable
 runtime.llama_cpp: v0.6.0-dev; llama-cli and llama-server built successfully
 runtime.llama_cpp_target: v0.6.0; exact tag checkout=d81235049384534c167caea52b85a694f6103d14
-runtime.exllamav3: not installed
+runtime.exllamav3: v1.6.0; official wheel sha256=201a1c1c611cf96a9ebdfa1ae0a9d165a30399026160ca963970765a03f0dfbe
+runtime.exllamav3.python: 3.12.3
+runtime.exllamav3.torch: 2.10.0+cu128
 runtime.torch: not installed
 model.granite_4_1_3b_gguf: ibm-granite/granite-4.1-3b-GGUF@ab4701481089b58a082ef63cc1cee738887293ff
 model.granite_4_1_3b_gguf.file: granite-4.1-3b-Q4_K_M.gguf; size=2099501664; sha256=662b0626cd58f443baea23559b469df6576a81d349649c59413b36a9fb32eb29
 runtime.cuda: CUDA Toolkit 13.0.96 / nvcc 13.0.88, installed from NVIDIA WSL repository 2026-10-10
+model.qwen35_9b_exl3.repo: turboderp/Qwen3.5-9B-exl3
+model.qwen35_9b_exl3.revision: d35e580c801b276c4d5ff97f27bd0fa79a0ef3b3 (2.50bpw)
+model.qwen35_9b_exl3.file: model.safetensors; size=5889564052; sha256=19e38d592d439a19205469aba6f477355aaa17d81f1f516b222a2abc7ba76d23
 
