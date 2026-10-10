@@ -36,7 +36,7 @@ if [[ ! -x "$SERVER" ]]; then echo "llama-server missing: $SERVER" >&2; exit 1; 
 if [[ ! -f "$MODEL" ]]; then echo "Model file not found: $MODEL" >&2; exit 1; fi
 if curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then echo "Port $PORT already has a healthy server; refusing to benchmark an unknown process." >&2; exit 1; fi
 SHA="$(git -C "$ROOT" rev-parse HEAD)"
-if ! git -C "$ROOT" diff --quiet HEAD -- .; then SOURCE_DIRTY=true; else SOURCE_DIRTY=false; fi
+if ! git -C "$ROOT" diff --quiet HEAD -- . ':(exclude)results/**'; then SOURCE_DIRTY=true; else SOURCE_DIRTY=false; fi
 RUNTIME_COMMIT="$(git -C "$RUNTIME_SOURCE" rev-parse HEAD 2>/dev/null || echo unknown)"
 LOG="$ROOT/logs/llama-server-$PORT.log"
 python3 "$ROOT/benchmark/resource_sampler.py" --output "$RESOURCE_OUTPUT" --interval 1 &
