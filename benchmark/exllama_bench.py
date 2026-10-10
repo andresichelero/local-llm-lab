@@ -128,12 +128,13 @@ def main() -> int:
     parser.add_argument("--max-new-tokens", type=int, default=96)
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--repetitions", type=int, default=3)
+    parser.add_argument("--load-method", choices=["python", "mt_fread"], default="python")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if args.context < 256 or args.context % 256:
         parser.error("context must be a multiple of 256")
     if args.dry_run:
-        print(json.dumps({"model_dir": str(args.model_dir), "output": str(args.output), "context": args.context, "warmups": args.warmups, "repetitions": args.repetitions}, sort_keys=True))
+        print(json.dumps({"model_dir": str(args.model_dir), "output": str(args.output), "context": args.context, "warmups": args.warmups, "repetitions": args.repetitions, "load_method": args.load_method}, sort_keys=True))
         return 0
     weights = args.model_dir / "model.safetensors"
     if not weights.is_file():
@@ -141,7 +142,9 @@ def main() -> int:
 
     root = Path(__file__).resolve().parents[1]
     git_sha, source_dirty = git_metadata(root)
-    config = Config.from_directory(str(args.model_dir))
+    # The extension's deferred mt_fread path intermittently returned ENOMEM under this WSL
+    # memory cap. Python mode streams one tensor into GPU at a time and has lower host peak RAM.
+    config = Config.from_directory(str(args.model_dir), load_method=args.load_method)
     model = Model.from_config(config)
     cache = Cache(model, max_num_tokens=args.context, max_batch_size=1)
     model.load(progressbar=True)
@@ -152,13 +155,13 @@ def main() -> int:
     with args.output.open("a", encoding="utf-8") as output:
         for warmup_index in range(args.warmups):
             row = run_once(model, cache, tokenizer, args.context, args.max_new_tokens, warmup_index, True)
-            row.update(git_sha=git_sha, source_tree_dirty=source_dirty)
+            row.update(git_sha=git_sha, source_tree_dirty=source_dirty, load_method=args.load_method)
             print(json.dumps(row, sort_keys=True), file=output, flush=True)
             print(f"warmup {warmup_index + 1}: {row['generation_tps']} tok/s; TTFT {row['ttft_ms']} ms")
         torch.cuda.reset_peak_memory_stats()
         for repetition in range(1, args.repetitions + 1):
             row = run_once(model, cache, tokenizer, args.context, args.max_new_tokens, repetition, False)
-            row.update(git_sha=git_sha, source_tree_dirty=source_dirty)
+            row.update(git_sha=git_sha, source_tree_dirty=source_dirty, load_method=args.load_method)
             print(json.dumps(row, sort_keys=True), file=output, flush=True)
             print(f"run {repetition}/{args.repetitions}: {row['generation_tps']} tok/s; TTFT {row['ttft_ms']} ms")
             if not row["success"]:
