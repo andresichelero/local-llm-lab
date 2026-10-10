@@ -34,8 +34,37 @@ def git_metadata(root: Path) -> tuple[str | None, bool | None]:
         return None, None
 
 
-def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, max_context: int, max_new_tokens: int, repetition: int, warmup: bool) -> dict:
-    context_ids = tokenizer.encode(PROMPT, encode_special_tokens=True)
+def make_prompt(tokenizer: Tokenizer, target_tokens: int) -> str:
+    if target_tokens <= 25:
+        return PROMPT
+    prefix = "<|im_start|>user\nRead these fixed benchmark records, then answer the question at the end.\n"
+    suffix = (
+        "\nReturn exactly one short sentence explaining why a fixed random seed helps reproduce an inference benchmark."
+        "<|im_end|>\n<|im_start|>assistant\n"
+    )
+
+    def text_for(count: int) -> str:
+        records = "".join(
+            f"Reference record {i:04d}: cycle {i % 17}, seed 1234, tokens_per_second {40 + i % 71}.\n"
+            for i in range(count)
+        )
+        return prefix + records + suffix
+
+    low, high = 0, 1
+    while int(tokenizer.encode(text_for(high), encode_special_tokens=True).shape[-1]) < target_tokens:
+        low, high = high, high * 2
+    while low < high:
+        middle = (low + high) // 2
+        count = int(tokenizer.encode(text_for(middle), encode_special_tokens=True).shape[-1])
+        if count < target_tokens:
+            low = middle + 1
+        else:
+            high = middle
+    return text_for(low)
+
+
+def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, prompt: str, max_context: int, max_new_tokens: int, repetition: int, warmup: bool) -> dict:
+    context_ids = tokenizer.encode(prompt, encode_special_tokens=True)
     prompt_tokens = int(context_ids.shape[-1])
     if prompt_tokens + max_new_tokens > max_context:
         raise ValueError("prompt plus generation exceeds configured context")
@@ -83,7 +112,7 @@ def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, max_context: int,
     generation_seconds = max(end - (generation_start or end), 1e-9)
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "experiment": "exllamav3-qwen35-9b-exl3-2.5bpw",
+        "experiment": f"exllamav3-qwen35-9b-exl3-2.5bpw-prompt-{prompt_tokens}",
         "model": "Qwen3.5-9B",
         "model_repo": "turboderp/Qwen3.5-9B-exl3",
         "model_revision": MODEL_REVISION,
@@ -126,6 +155,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=Path("results/raw/exllama-qwen35-9b.jsonl"))
     parser.add_argument("--context", type=int, default=2048)
     parser.add_argument("--max-new-tokens", type=int, default=96)
+    parser.add_argument("--input-tokens", type=int, default=25)
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--load-method", choices=["python", "mt_fread"], default="python")
@@ -134,7 +164,7 @@ def main() -> int:
     if args.context < 256 or args.context % 256:
         parser.error("context must be a multiple of 256")
     if args.dry_run:
-        print(json.dumps({"model_dir": str(args.model_dir), "output": str(args.output), "context": args.context, "warmups": args.warmups, "repetitions": args.repetitions, "load_method": args.load_method}, sort_keys=True))
+        print(json.dumps({"model_dir": str(args.model_dir), "output": str(args.output), "context": args.context, "input_tokens": args.input_tokens, "warmups": args.warmups, "repetitions": args.repetitions, "load_method": args.load_method}, sort_keys=True))
         return 0
     weights = args.model_dir / "model.safetensors"
     if not weights.is_file():
@@ -149,18 +179,19 @@ def main() -> int:
     cache = Cache(model, max_num_tokens=args.context, max_batch_size=1)
     model.load(progressbar=True)
     tokenizer = Tokenizer.from_config(config)
+    prompt = make_prompt(tokenizer, args.input_tokens)
     torch.cuda.reset_peak_memory_stats()
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("a", encoding="utf-8") as output:
         for warmup_index in range(args.warmups):
-            row = run_once(model, cache, tokenizer, args.context, args.max_new_tokens, warmup_index, True)
+            row = run_once(model, cache, tokenizer, prompt, args.context, args.max_new_tokens, warmup_index, True)
             row.update(git_sha=git_sha, source_tree_dirty=source_dirty, load_method=args.load_method)
             print(json.dumps(row, sort_keys=True), file=output, flush=True)
             print(f"warmup {warmup_index + 1}: {row['generation_tps']} tok/s; TTFT {row['ttft_ms']} ms")
         torch.cuda.reset_peak_memory_stats()
         for repetition in range(1, args.repetitions + 1):
-            row = run_once(model, cache, tokenizer, args.context, args.max_new_tokens, repetition, False)
+            row = run_once(model, cache, tokenizer, prompt, args.context, args.max_new_tokens, repetition, False)
             row.update(git_sha=git_sha, source_tree_dirty=source_dirty, load_method=args.load_method)
             print(json.dumps(row, sort_keys=True), file=output, flush=True)
             print(f"run {repetition}/{args.repetitions}: {row['generation_tps']} tok/s; TTFT {row['ttft_ms']} ms")
