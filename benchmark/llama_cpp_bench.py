@@ -17,6 +17,39 @@ from pathlib import Path
 PROMPT = "Return exactly one short sentence explaining why a fixed random seed helps reproduce an inference benchmark."
 
 
+def long_prompt(url: str, target_tokens: int) -> tuple[str, int]:
+    prefix = "Read these fixed benchmark records, then answer the question at the end.\n"
+    suffix = "Return exactly one short sentence explaining why a fixed random seed helps reproduce an inference benchmark."
+
+    def make_text(record_count: int) -> str:
+        records = "".join(
+            f"Reference record {i:05d}: cycle {i % 17}, seed 1234, tokens_per_second {40 + i % 71}.\n"
+            for i in range(record_count)
+        )
+        return prefix + records + suffix
+
+    def count_tokens(content: str) -> int:
+        request = urllib.request.Request(
+            url.rstrip("/") + "/tokenize",
+            data=json.dumps({"content": content, "add_special": True}).encode(),
+            headers={"Content-Type": "application/json"}, method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return len(json.loads(response.read()).get("tokens", []))
+
+    low, high = 0, 1
+    while count_tokens(make_text(high)) < target_tokens:
+        low, high = high, high * 2
+    while low < high:
+        middle = (low + high) // 2
+        if count_tokens(make_text(middle)) < target_tokens:
+            low = middle + 1
+        else:
+            high = middle
+    content = make_text(low)
+    return content, count_tokens(content)
+
+
 def gpu_sample() -> dict[str, str | None]:
     query = "memory.used,utilization.gpu,temperature.gpu,clocks.gr,power.draw"
     try:
@@ -30,10 +63,10 @@ def gpu_sample() -> dict[str, str | None]:
         return {"vram_used_mb": None, "gpu_util_pct": None, "temperature_c": None, "gpu_clock_mhz": None, "power_w": None}
 
 
-def run_once(url: str, model: str, max_tokens: int, seed: int, repetition: int) -> dict:
+def run_once(url: str, model: str, max_tokens: int, seed: int, repetition: int, prompt: str, target_prompt_tokens: int | None) -> dict:
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": PROMPT}],
+        "messages": [{"role": "user", "content": prompt}],
         "temperature": 0,
         "seed": seed,
         "max_tokens": max_tokens,
@@ -113,6 +146,7 @@ def run_once(url: str, model: str, max_tokens: int, seed: int, repetition: int) 
         "seed": seed,
         "temperature": 0,
         "max_new_tokens": max_tokens,
+        "prompt_target_tokens": target_prompt_tokens,
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "ttft_ms": round(ttft * 1000, 2),
@@ -132,6 +166,7 @@ def main() -> int:
     parser.add_argument("--url", default="http://127.0.0.1:18180")
     parser.add_argument("--model", default="local")
     parser.add_argument("--max-tokens", type=int, default=64)
+    parser.add_argument("--input-tokens", type=int, default=0, help="Build deterministic long prompt near this token count (0 uses the short smoke prompt).")
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--warmups", type=int, default=1)
@@ -140,14 +175,17 @@ def main() -> int:
     args = parser.parse_args()
     if args.repetitions < 1 or args.warmups < 0:
         parser.error("repetitions must be >= 1 and warmups must be >= 0")
+    if args.input_tokens < 0:
+        parser.error("input-tokens must be >= 0")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     try:
+        prompt, target_prompt_tokens = long_prompt(args.url, args.input_tokens) if args.input_tokens else (PROMPT, None)
         for index in range(args.warmups):
-            run_once(args.url, args.model, args.max_tokens, args.seed, -index - 1)
+            run_once(args.url, args.model, args.max_tokens, args.seed, -index - 1, prompt, target_prompt_tokens)
             print(f"warm-up {index + 1}/{args.warmups} complete", file=sys.stderr)
         with args.output.open("a", encoding="utf-8") as output:
             for index in range(args.repetitions):
-                record = run_once(args.url, args.model, args.max_tokens, args.seed, index + 1)
+                record = run_once(args.url, args.model, args.max_tokens, args.seed, index + 1, prompt, target_prompt_tokens)
                 output.write(json.dumps(record, ensure_ascii=False) + "\n")
                 output.flush()
                 print(json.dumps(record, ensure_ascii=False))
