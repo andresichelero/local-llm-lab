@@ -109,6 +109,7 @@ def run_once(url: str, model: str, max_tokens: int, seed: int, repetition: int) 
         "batch_size": int(os.environ.get("LAB_BATCH_SIZE", "0")),
         "ubatch_size": int(os.environ.get("LAB_UBATCH_SIZE", "0")),
         "flash_attention": os.environ.get("LAB_FLASH_ATTN", "unknown"),
+        "reasoning": os.environ.get("LAB_REASONING", "auto"),
         "seed": seed,
         "temperature": 0,
         "max_new_tokens": max_tokens,
