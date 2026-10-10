@@ -14,7 +14,7 @@ models:
     realistic_context_tokens: 2048
     status: tier0_selected
     purpose: low-footprint CUDA and tool-call smoke baseline
-    evidence: official-model-card; parameter file size to be resolved before download
+    evidence: official model repository, immutable revision, filename, size and SHA-256 recorded in versions.lock
   - id: qwen3.5-9b
     repo: Qwen/Qwen3.5-9B
     params: 9B
@@ -154,17 +154,17 @@ models:
     repo: Qwen/Qwen3.5-27B
     params: 27B
     active_params: 27B
-    architecture: dense; verify exact card/revision
+    architecture: dense hybrid image-text model; config reports Qwen3.5 architecture
     license: Apache-2.0
-    context_claim: pending verification
-    tool_use: pending
+    context_claim: upstream model repository; verify exact card/config before any download
+    tool_use: upstream model card; locally unmeasured
     formats: [Transformers, community-GGUF]
     candidate_quant: IQ2 or Q2 family
     estimated_weight_gib: 8.0
     realistic_context_tokens: 2048
-    status: candidate; confirm exact current repository before download
+    status: candidate; official repository confirmed, quant/runtime support not yet selected
     purpose: large compressed dense-model boundary
-    evidence: official repo lookup pending
+    evidence: official Hugging Face model repository
   - id: bonsai-2-27b
     repo: prism-ml/Ternary-Bonsai-2-27B-gguf
     params: 27B

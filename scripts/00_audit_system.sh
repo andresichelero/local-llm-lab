@@ -15,7 +15,7 @@ FILE="$OUT/wsl-audit-$STAMP.txt"
   echo "=== block devices ==="; lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINTS,MODEL
   echo "=== NVIDIA ==="; nvidia-smi --query-gpu=name,driver_version,memory.total,memory.free,utilization.gpu,temperature.gpu,clocks.gr,clocks.mem,power.draw,power.limit --format=csv,noheader 2>&1 || true
   echo "=== tool versions ==="
-  for tool in python3 pip3 node npm pnpm cmake gcc g++ clang git nvcc uv ninja make; do
+  for tool in python3 pip3 node npm pnpm cmake gcc g++ clang git uv ninja make; do
     printf '%s: ' "$tool"
     if command -v "$tool" >/dev/null 2>&1; then
       command -v "$tool"
@@ -28,6 +28,8 @@ FILE="$OUT/wsl-audit-$STAMP.txt"
       echo unavailable
     fi
   done
+  printf 'nvcc: '
+  if [[ -x /usr/local/cuda/bin/nvcc ]]; then /usr/local/cuda/bin/nvcc --version | tail -1; elif command -v nvcc >/dev/null 2>&1; then nvcc --version | tail -1; else echo unavailable; fi
   echo "=== thermal zones ==="
   found=0
   for file in /sys/class/thermal/thermal_zone*/temp; do

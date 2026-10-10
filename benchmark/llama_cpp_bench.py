@@ -51,6 +51,7 @@ def run_once(url: str, model: str, max_tokens: int, seed: int, repetition: int) 
     completion_tokens = 0
     prompt_tokens = None
     chunks = 0
+    timings: dict[str, float | int] = {}
     content_parts: list[str] = []
     try:
         with urllib.request.urlopen(request, timeout=600) as response:
@@ -66,6 +67,8 @@ def run_once(url: str, model: str, max_tokens: int, seed: int, repetition: int) 
                 if usage:
                     prompt_tokens = usage.get("prompt_tokens", prompt_tokens)
                     completion_tokens = usage.get("completion_tokens", completion_tokens)
+                if isinstance(event.get("timings"), dict):
+                    timings = event["timings"]
                 choices = event.get("choices") or []
                 if choices:
                     delta = choices[0].get("delta") or {}
@@ -85,21 +88,37 @@ def run_once(url: str, model: str, max_tokens: int, seed: int, repetition: int) 
         completion_tokens = chunks
     ttft = first_token - start
     generation_time = end - first_token
+    prompt_ms = timings.get("prompt_ms")
+    predicted_ms = timings.get("predicted_ms")
+    prompt_count = prompt_tokens or timings.get("prompt_n")
+    generated_count = completion_tokens or timings.get("predicted_n")
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "experiment": "tier0_streaming_smoke",
+        "experiment": os.environ.get("LAB_EXPERIMENT", "tier0_streaming_smoke"),
         "repetition": repetition,
         "model": model,
         "quant": "GGUF Q4_K_M",
         "runtime": "llama.cpp",
         "git_sha": os.environ.get("LAB_GIT_SHA"),
+        "working_tree_dirty": os.environ.get("LAB_GIT_DIRTY", "unknown") == "true",
+        "runtime_commit": os.environ.get("LAB_RUNTIME_COMMIT"),
+        "context_tokens": int(os.environ.get("LAB_CTX_SIZE", "0")),
+        "kv_cache_k": os.environ.get("LAB_KV_TYPE_K", "f16"),
+        "kv_cache_v": os.environ.get("LAB_KV_TYPE_V", "f16"),
+        "gpu_layers": int(os.environ.get("LAB_GPU_LAYERS", "0")),
+        "batch_size": int(os.environ.get("LAB_BATCH_SIZE", "0")),
+        "ubatch_size": int(os.environ.get("LAB_UBATCH_SIZE", "0")),
+        "flash_attention": os.environ.get("LAB_FLASH_ATTN", "unknown"),
         "seed": seed,
         "temperature": 0,
         "max_new_tokens": max_tokens,
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "ttft_ms": round(ttft * 1000, 2),
-        "generation_tps": round(max(completion_tokens - 1, 0) / generation_time, 3) if generation_time > 0 else None,
+        "prompt_eval_ms": prompt_ms,
+        "prompt_tps": round(prompt_count / (prompt_ms / 1000), 3) if prompt_count and prompt_ms else None,
+        "generation_eval_ms": predicted_ms,
+        "generation_tps": round(generated_count / (predicted_ms / 1000), 3) if generated_count and predicted_ms else (round(max(completion_tokens - 1, 0) / generation_time, 3) if generation_time > 0 else None),
         "wall_time_s": round(end - start, 4),
         "gpu": gpu_sample(),
         "success": True,
@@ -115,6 +134,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--warmups", type=int, default=1)
+    parser.add_argument("--experiment", default="tier0_streaming_smoke")
     parser.add_argument("--output", type=Path, default=Path("results/raw/tier0.jsonl"))
     args = parser.parse_args()
     if args.repetitions < 1 or args.warmups < 0:

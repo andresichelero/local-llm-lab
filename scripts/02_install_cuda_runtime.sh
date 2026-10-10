@@ -8,6 +8,8 @@ for arg in "$@"; do
     *) echo "Unknown option: $arg" >&2; exit 2 ;;
   esac
 done
+NVCC="${CUDA_HOME:-/usr/local/cuda}/bin/nvcc"
+if [[ -x "$NVCC" ]]; then "$NVCC" --version; echo "CUDA compiler already present; no changes made."; exit 0; fi
 if command -v nvcc >/dev/null 2>&1; then nvcc --version; echo "CUDA compiler already present; no changes made."; exit 0; fi
 if ! command -v nvidia-smi >/dev/null 2>&1; then echo "No WSL NVIDIA driver interface found; refusing CUDA toolkit install." >&2; exit 1; fi
 FREE_KIB="$(df -Pk / | awk 'NR==2 {print $4}')"
@@ -42,5 +44,5 @@ if grep -Eiq 'nvidia-driver|nvidia-dkms|nvidia-kernel|nvidia-compute-[0-9]' <<<"
 fi
 if ((DRY_RUN)); then exit; fi
 apt-get install -y --no-install-recommends cuda-toolkit-13-0 g++-12
-nvcc --version
+"$NVCC" --version
 nvidia-smi

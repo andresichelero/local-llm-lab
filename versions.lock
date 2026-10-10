@@ -18,11 +18,11 @@ wsl.git: 2.43.0
 wsl.node: unavailable
 wsl.cuda_driver_api: 13.3
 wsl.cuda_toolkit_nvcc: unavailable
-runtime.llama_cpp: not installed
-runtime.llama_cpp_target: v0.6.0; upstream release commit=8345f333951c661d166b00e6f9362e553768f292
+runtime.llama_cpp: v0.6.0-dev; llama-cli and llama-server built successfully
+runtime.llama_cpp_target: v0.6.0; exact tag checkout=d81235049384534c167caea52b85a694f6103d14
 runtime.exllamav3: not installed
 runtime.torch: not installed
 model.granite_4_1_3b_gguf: ibm-granite/granite-4.1-3b-GGUF@ab4701481089b58a082ef63cc1cee738887293ff
 model.granite_4_1_3b_gguf.file: granite-4.1-3b-Q4_K_M.gguf; size=2099501664; sha256=662b0626cd58f443baea23559b469df6576a81d349649c59413b36a9fb32eb29
-runtime.cuda_target: CUDA Toolkit 13.0 from NVIDIA WSL repository; installation pending
+runtime.cuda: CUDA Toolkit 13.0.96 / nvcc 13.0.88, installed from NVIDIA WSL repository 2026-10-10
 

@@ -7,9 +7,9 @@ Reproducible experiments for local inference, quantization, fine-tuning, and age
 - Windows 10 Pro 22H2, Ryzen 5 5600X, 32 GiB physical RAM, RTX 3070 8 GiB, NVIDIA driver 610.62.
 - Ubuntu 24.04.5 in WSL2, kernel 6.18.40.1, CUDA device visible through `nvidia-smi`.
 - The current user `.wslconfig` limits WSL to 6 GiB RAM, 8 processors, and 4 GiB swap. This lab will not change that setting.
-- At audit time, roughly 4.6 GiB VRAM was free; Windows desktop processes use the same GPU.
-- WSL root has about 13 GiB free. E: has about 111 GiB free and F: about 157 GiB. Keep model storage outside Git and point `MODEL_DIR` to a suitable location before downloads.
-- CUDA toolkit compiler (`nvcc`) was not found in WSL. `nvidia-smi` reports the driver CUDA API level; this does not mean the CUDA toolkit is installed.
+- Free VRAM has varied from about 4.6 GiB during the first audit to 3.2–3.4 GiB while other WSL and Windows workloads were active; the desktop shares this GPU.
+- The WSL root filesystem started with about 13 GiB free. After installing the CUDA toolkit and clearing only its downloaded apt package archives, it has about 5 GiB free. E: had about 111 GiB free and F: about 157 GiB at audit time. Current disk space changes; check it before downloads/builds.
+- CUDA Toolkit 13.0 was installed from NVIDIA's WSL repository. `nvcc` 13.0.88 is available. The Windows driver remains 610.62; no Linux NVIDIA driver was installed into WSL.
 
 The host, WSL and GPU can change while the lab runs. Re-run the audit before interpreting later benchmarks.
 
@@ -43,5 +43,5 @@ See `results/reports/status.md` for the current ledger of what has been research
 
 ## Current first experiment
 
-The first Tier 0 target is IBM Granite 4.1 3B in GGUF Q4_K_M, served locally by llama.cpp. It was selected as a small, current, Apache-2.0 model with an upstream GGUF distribution. It should fit more realistically than the 9B+ candidates under the observed 6 GiB WSL memory cap and 4.6 GiB free VRAM. This is a hypothesis until the actual model loads and the benchmark completes.
+The first Tier 0 target is IBM Granite 4.1 3B in GGUF Q4_K_M, served locally by llama.cpp. The pinned model was downloaded to `E:\local-llm-models` and verified against SHA-256 in `versions.lock`. A CLI smoke test and a preliminary three-repeat 2K-context server series completed; the pre-checkpoint results are in `results/raw/` and summarized in `results/reports/tier0-summary.md`. Repeat from the clean checkpoint before using the numbers for comparisons; model quality and larger-context behavior remain untested.
 
