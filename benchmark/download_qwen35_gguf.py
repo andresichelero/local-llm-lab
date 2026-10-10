@@ -13,6 +13,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+
 MODEL = {
     "repo": "unsloth/Qwen3.5-9B-GGUF",
     "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
@@ -96,7 +98,7 @@ def download(model_dir: Path, record_path: Path, dry_run: bool) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", "/mnt/e/local-llm-models")))
+    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", str(ROOT / "models"))))
     parser.add_argument("--record", type=Path, default=Path(__file__).resolve().parents[1] / "results/raw/model-downloads.jsonl")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

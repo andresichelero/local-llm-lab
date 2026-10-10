@@ -1,6 +1,6 @@
 # Local LLM Lab
 
-Reproducible experiments for local inference, quantization, fine-tuning, and agent harnesses on this Windows 10 + WSL2 host. The machine audit is stored under `results/system-audit/`; run results must be recorded separately from upstream claims.
+Reproducible experiments for local inference, quantization, fine-tuning, and agent harnesses on this Windows 10 + WSL2 host. The machine audit is written locally under `results/system-audit/` and is gitignored, because the raw dumps contain account names, install paths and disk layout; run results must be recorded separately from upstream claims.
 
 ## Machine facts that constrain this lab
 
@@ -8,22 +8,32 @@ Reproducible experiments for local inference, quantization, fine-tuning, and age
 - Ubuntu 24.04.5 in WSL2, kernel 6.18.40.1, CUDA device visible through `nvidia-smi`.
 - The current user `.wslconfig` limits WSL to 6 GiB RAM, 8 processors, and 4 GiB swap. This lab will not change that setting.
 - Free VRAM has varied from about 4.6 GiB during the first audit to 3.2–3.4 GiB while other WSL and Windows workloads were active; the desktop shares this GPU.
-- The WSL root filesystem started with about 13 GiB free. After installing the CUDA toolkit and clearing only its downloaded apt package archives, it has about 5 GiB free. E: had about 111 GiB free and F: about 157 GiB at audit time. Current disk space changes; check it before downloads/builds.
+- The WSL root filesystem started with about 13 GiB free. After installing the CUDA toolkit and clearing only its downloaded apt package archives, it has about 5 GiB free. The model volume had about 111 GiB free and a second volume about 157 GiB at audit time. Current disk space changes; check it before downloads/builds.
 - CUDA Toolkit 13.0 was installed from NVIDIA's WSL repository. `nvcc` 13.0.88 is available. The Windows driver remains 610.62; no Linux NVIDIA driver was installed into WSL.
 
 The host, WSL and GPU can change while the lab runs. Re-run the audit before interpreting later benchmarks.
 
+## Local configuration (never committed)
+
+Machine-specific paths live in `config/local.env`, which is gitignored. Copy the template and fill in your own locations:
+
+```bash
+cp config/local.env.example config/local.env
+```
+
+If it is absent, models, caches and environments default to `models/`, `cache/` and `envs/` inside the clone (all gitignored). The wrappers load these values through `scripts/lib_env.sh`. Nothing in the repository contains a username, IP address, network share or drive letter.
+
 ## Quick start
 
 ```bash
-cd /mnt/d/Usuario/Downloads/LLM/local-llm-lab
+cd <path-to-clone>
 bash scripts/00_audit_system.sh
 ```
 
 The audit is read-only. Model downloads require an explicit tier and check free space before writing:
 
 ```bash
-MODEL_DIR=/mnt/e/local-llm-models bash scripts/07_download_models.sh --tier small --dry-run
+MODEL_DIR=$MODEL_DIR bash scripts/07_download_models.sh --tier small --dry-run
 ```
 
 Do not use `--tier all` until the model matrix has been reviewed and each download's size is known. Existing model directories are never cleaned by these scripts.
@@ -43,11 +53,11 @@ See `results/reports/status.md` for the current ledger of what has been research
 
 ## Current first experiment
 
-The first Tier 0 target is IBM Granite 4.1 3B in GGUF Q4_K_M, served locally by llama.cpp. The pinned model was downloaded to `E:\local-llm-models` and verified against SHA-256 in `versions.lock`. A CLI smoke test and a clean-source three-repeat 2K-context server baseline completed; the clean baseline is in `results/raw/tier0-final.jsonl`, consolidated results are in `results/csv/summary.csv`, and a human-readable summary is in `results/reports/tier0-summary.md`. These are short-run throughput tests; model quality and larger-context behavior remain untested.
+The first Tier 0 target is IBM Granite 4.1 3B in GGUF Q4_K_M, served locally by llama.cpp. The pinned model was downloaded to `$MODEL_DIR` and verified against SHA-256 in `versions.lock`. A CLI smoke test and a clean-source three-repeat 2K-context server baseline completed; the clean baseline is in `results/raw/tier0-final.jsonl`, consolidated results are in `results/csv/summary.csv`, and a human-readable summary is in `results/reports/tier0-summary.md`. These are short-run throughput tests; model quality and larger-context behavior remain untested.
 
 ## ExLlamaV3 / EXL3 tier
 
-ExLlamaV3 1.6.0 is installed in an isolated Python 3.12 environment under `/mnt/e/local-llm-envs/exllamav3`; CUDA 12.8 PyTorch detected the RTX 3070. To reproduce the pinned install, run `scripts/04_install_exllamav3.sh`. Qwen3.5-9B EXL3 2.50bpw has been measured through 64K context using chunked prefill and 4-bit K/V cache; see `results/raw/exllama-qwen35-9b.jsonl` and the execution status. Its same-family GGUF Q4_K_M counterpart has now been downloaded and verified for a runtime comparison. The GGUF and EXL3 measurements use different quantization formats and bit budgets, so any speed difference is not attributable to runtime alone.
+ExLlamaV3 1.6.0 is installed in an isolated Python 3.12 environment under `$EXLLAMA_ENV_DIR`; CUDA 12.8 PyTorch detected the RTX 3070. To reproduce the pinned install, run `scripts/04_install_exllamav3.sh`. Qwen3.5-9B EXL3 2.50bpw has been measured through 64K context using chunked prefill and 4-bit K/V cache; see `results/raw/exllama-qwen35-9b.jsonl` and the execution status. Its same-family GGUF Q4_K_M counterpart has now been downloaded and verified for a runtime comparison. The GGUF and EXL3 measurements use different quantization formats and bit budgets, so any speed difference is not attributable to runtime alone.
 
-Reproduce the pinned GGUF download with `scripts/07_download_qwen35_gguf.sh --dry-run`, then omit `--dry-run` to download to `MODEL_DIR` (default `/mnt/e/local-llm-models`). Both downloaders preserve partial files for safe resumption and verify the final checksum. The cache-controlled short-prompt comparison shows 64.13 tok/s median for llama.cpp Q4_K_M versus 62.51 tok/s for ExLlamaV3 EXL3 2.50bpw, with respective TTFT medians 64.32 ms and 47.24 ms. llama.cpp Q4_K_M completed cold prompts up to 28,695 tokens in 32K context with q4_0 K/V at 1,820 tok/s prefill, 54.41 tok/s generation, and 6,147 MiB sampled VRAM. These are different quantization formats and serving templates, so treat them as configuration measurements, not a controlled runtime-only ranking. Cold-prefill runs set `CACHE_PROMPT=off` (the default). See `results/reports/status.md` and raw JSONL for scope and details.
+Reproduce the pinned GGUF download with `scripts/07_download_qwen35_gguf.sh --dry-run`, then omit `--dry-run` to download to `MODEL_DIR` (default `$MODEL_DIR`). Both downloaders preserve partial files for safe resumption and verify the final checksum. The cache-controlled short-prompt comparison shows 64.13 tok/s median for llama.cpp Q4_K_M versus 62.51 tok/s for ExLlamaV3 EXL3 2.50bpw, with respective TTFT medians 64.32 ms and 47.24 ms. llama.cpp Q4_K_M completed cold prompts up to 28,695 tokens in 32K context with q4_0 K/V at 1,820 tok/s prefill, 54.41 tok/s generation, and 6,147 MiB sampled VRAM. These are different quantization formats and serving templates, so treat them as configuration measurements, not a controlled runtime-only ranking. Cold-prefill runs set `CACHE_PROMPT=off` (the default). See `results/reports/status.md` and raw JSONL for scope and details.
 

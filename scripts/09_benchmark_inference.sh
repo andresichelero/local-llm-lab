@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/lib_env.sh"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MODEL="${MODEL_PATH:-${MODEL_DIR:-/mnt/e/local-llm-models}/granite-4.1-3b-Q4_K_M.gguf}"
+MODEL="${MODEL_PATH:-$MODEL_DIR/granite-4.1-3b-Q4_K_M.gguf}"
 SERVER="${LLAMA_SERVER:-$ROOT/tools/llama.cpp/build/bin/llama-server}"
 RUNTIME_SOURCE="${LLAMA_CPP_SOURCE:-$ROOT/tools/llama.cpp}"
 PORT="${PORT:-18180}"

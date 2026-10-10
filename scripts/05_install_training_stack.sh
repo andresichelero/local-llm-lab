@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/lib_env.sh"
 
-ENV_DIR="${TRAINING_ENV_DIR:-/mnt/e/local-llm-envs/training}"
-CACHE_DIR="${UV_CACHE_DIR:-/mnt/e/local-llm-cache}"
+ENV_DIR="$TRAINING_ENV_DIR"
+CACHE_DIR="$UV_CACHE_DIR"
 PYTHON="${TRAINING_PYTHON:-python3.12}"
 DRY_RUN=0
 while (($#)); do

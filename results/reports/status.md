@@ -14,17 +14,17 @@
 - Host: Windows 10 Pro 22H2 build 19045, Ryzen 5 5600X, 31.9 GiB physical RAM, RTX 3070 8192 MiB, driver 610.62, reported CUDA API 13.3.
 - WSL: Ubuntu 24.04.5, kernel 6.18.40.1, 8 visible vCPUs, 5.8 GiB RAM, 4 GiB swap, GPU visible in nvidia-smi.
 - User .wslconfig sets memory=6GB, processors=8, swap=4GB. Not changed.
-- WSL root filesystem: 49 GiB total, initially about 13 GiB free and now about 5 GiB after the CUDA toolkit install and clearing downloaded apt archives. E: about 109 GiB free at the latest check; F: about 157 GiB free during the initial audit.
+- WSL root filesystem: 49 GiB total, initially about 13 GiB free and now about 5 GiB after the CUDA toolkit install and clearing downloaded apt archives. Model volume about 109 GiB free at the latest check; a second volume about 157 GiB free during the initial audit.
 - WSL Python 3.12.3, pip 24.0, CMake 3.28.3, GCC 13.3, Git 2.43.0. WSL Node is unavailable. Windows Node/npm/pnpm/Git and Python were detected.
 - WSL GPU visibility was checked with nvidia-smi. This does not establish that a CUDA inference backend or model works.
 
 ## Installed / downloaded
 
 - Installed CUDA Toolkit 13.0 from NVIDIA's WSL repository, including compiler 13.0.88 and g++-12. The package plan contained no Linux NVIDIA driver packages. The host-provided driver remains 610.62.
-- Downloaded IBM Granite 4.1 3B GGUF Q4_K_M (2,099,501,664 bytes) to `E:\local-llm-models` and verified SHA-256 `662b0626cd58f443baea23559b469df6576a81d349649c59413b36a9fb32eb29`. Model remains outside Git.
-- Built llama.cpp v0.6.0 tag at commit `d81235049384534c167caea52b85a694f6103d14`; `llama-cli` and `llama-server` report build `0.6.0-dev`. CUDA 13.0, GNU 13.3, host compiler g++-12, architecture sm_86. Incremental target build completed with no compile errors; GNU Make continues to warn about clock skew on the Windows-mounted D: volume.
-- Installed ExLlamaV3 1.6.0 in `/mnt/e/local-llm-envs/exllamav3` with Python 3.12.3 and PyTorch 2.10.0+cu128. The 145 MB upstream Linux wheel SHA-256 matched the GitHub release metadata; the package dependency check passed and PyTorch reports CUDA 12.8 with the RTX 3070 visible. Torch, Triton, CUDA libraries and runtime files occupy about 6.8 GiB on E:, not in the WSL root filesystem. First import exposed missing declared dependencies because the wheel was initially installed with `--no-deps`; the installer now installs its declared non-Torch dependencies explicitly and the CUDA smoke passes.
-- Downloaded Qwen3.5-9B GGUF Q4_K_M to E: (5,680,522,464 bytes), pinned to revision `3885219b6810b007914f3a7950a8d1b469d598a5`, and verified SHA-256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8`. The conversion is from the community Unsloth repository; the official Qwen model card is a separate source.
+- Downloaded IBM Granite 4.1 3B GGUF Q4_K_M (2,099,501,664 bytes) to `$MODEL_DIR` and verified SHA-256 `662b0626cd58f443baea23559b469df6576a81d349649c59413b36a9fb32eb29`. Model remains outside Git.
+- Built llama.cpp v0.6.0 tag at commit `d81235049384534c167caea52b85a694f6103d14`; `llama-cli` and `llama-server` report build `0.6.0-dev`. CUDA 13.0, GNU 13.3, host compiler g++-12, architecture sm_86. Incremental target build completed with no compile errors; GNU Make continues to warn about clock skew on the Windows-mounted volume.
+- Installed ExLlamaV3 1.6.0 in `$EXLLAMA_ENV_DIR` with Python 3.12.3 and PyTorch 2.10.0+cu128. The 145 MB upstream Linux wheel SHA-256 matched the GitHub release metadata; the package dependency check passed and PyTorch reports CUDA 12.8 with the RTX 3070 visible. Torch, Triton, CUDA libraries and runtime files occupy about 6.8 GiB on the model volume, not in the WSL root filesystem. First import exposed missing declared dependencies because the wheel was initially installed with `--no-deps`; the installer now installs its declared non-Torch dependencies explicitly and the CUDA smoke passes.
+- Downloaded Qwen3.5-9B GGUF Q4_K_M to the model volume (5,680,522,464 bytes), pinned to revision `3885219b6810b007914f3a7950a8d1b469d598a5`, and verified SHA-256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8`. The conversion is from the community Unsloth repository; the official Qwen model card is a separate source.
 
 ## Executed / measured
 

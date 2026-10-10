@@ -11,6 +11,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+
 MODEL = {
     "repo": "turboderp/Qwen3.5-9B-exl3",
     "revision": "d35e580c801b276c4d5ff97f27bd0fa79a0ef3b3",
@@ -49,7 +51,7 @@ def download(model_dir: Path, dry_run: bool) -> None:
     from huggingface_hub import snapshot_download
 
     target.mkdir(parents=True, exist_ok=True)
-    cache_dir = Path(os.environ.get("HF_HOME", "/mnt/e/local-llm-cache/huggingface"))
+    cache_dir = Path(os.environ.get("HF_HOME", str(ROOT / "cache" / "huggingface")))
     snapshot_download(
         repo_id=MODEL["repo"],
         revision=MODEL["revision"],
@@ -77,7 +79,7 @@ def download(model_dir: Path, dry_run: bool) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", "/mnt/e/local-llm-models/exllama")))
+    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", str(ROOT / "models" / "exllama"))))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     args.model_dir.mkdir(parents=True, exist_ok=True)

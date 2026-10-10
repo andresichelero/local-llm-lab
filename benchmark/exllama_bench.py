@@ -11,6 +11,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+
 import torch
 from exllamav3 import Cache, CacheLayer_quant, Config, GreedySampler, Model, Tokenizer
 
@@ -157,7 +159,7 @@ def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, prompt: str, max_
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", "/mnt/e/local-llm-models/exllama/Qwen3.5-9B-exl3-2.5bpw")))
+    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", str(ROOT / "models" / "exllama" / "Qwen3.5-9B-exl3-2.5bpw"))))
     parser.add_argument("--output", type=Path, default=Path("results/raw/exllama-qwen35-9b.jsonl"))
     parser.add_argument("--context", type=int, default=2048)
     parser.add_argument("--max-new-tokens", type=int, default=96)

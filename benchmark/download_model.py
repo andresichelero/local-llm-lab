@@ -13,6 +13,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+
 MODEL = {
     "repo": "ibm-granite/granite-4.1-3b-GGUF",
     "revision": "ab4701481089b58a082ef63cc1cee738887293ff",
@@ -88,7 +90,7 @@ def download(destination: Path, dry_run: bool) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", "/mnt/e/local-llm-models")))
+    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", str(ROOT / "models"))))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     try:

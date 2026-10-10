@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/lib_env.sh"
 
-ENV_DIR="${EXLLAMA_ENV_DIR:-/mnt/e/local-llm-envs/exllamav3}"
-CACHE_DIR="${UV_CACHE_DIR:-/mnt/e/local-llm-cache}"
+ENV_DIR="$EXLLAMA_ENV_DIR"
+CACHE_DIR="$UV_CACHE_DIR"
 PYTHON="${EXLLAMA_PYTHON:-python3.12}"
 WHEEL_URL="https://github.com/turboderp-org/exllamav3/releases/download/v1.6.0/exllamav3-1.6.0+cu128.torch2.10.0-cp312-cp312-linux_x86_64.whl"
 WHEEL_SHA256="201a1c1c611cf96a9ebdfa1ae0a9d165a30399026160ca963970765a03f0dfbe"

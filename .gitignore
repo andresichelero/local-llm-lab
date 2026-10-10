@@ -29,3 +29,7 @@ dist/
 *.tar.gz
 *.zip
 
+
+# Machine-specific local data: never commit (see config/local.env.example)
+config/local.env
+results/system-audit/
