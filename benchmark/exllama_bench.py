@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
-from exllamav3 import Cache, Config, GreedySampler, Model, Tokenizer
+from exllamav3 import Cache, CacheLayer_quant, Config, GreedySampler, Model, Tokenizer
 
 PROMPT = (
     "<|im_start|>user\nReturn exactly one short sentence explaining why a fixed random seed "
@@ -63,7 +63,7 @@ def make_prompt(tokenizer: Tokenizer, target_tokens: int) -> str:
     return text_for(low)
 
 
-def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, prompt: str, max_context: int, max_new_tokens: int, repetition: int, warmup: bool) -> dict:
+def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, prompt: str, max_context: int, max_new_tokens: int, kv_bits: str, repetition: int, warmup: bool) -> dict:
     context_ids = tokenizer.encode(prompt, encode_special_tokens=True)
     prompt_tokens = int(context_ids.shape[-1])
     if prompt_tokens + max_new_tokens > max_context:
@@ -112,7 +112,7 @@ def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, prompt: str, max_
     generation_seconds = max(end - (generation_start or end), 1e-9)
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "experiment": f"exllamav3-qwen35-9b-exl3-2.5bpw-prompt-{prompt_tokens}",
+        "experiment": f"exllamav3-qwen35-9b-exl3-2.5bpw-kv-{kv_bits}-prompt-{prompt_tokens}",
         "model": "Qwen3.5-9B",
         "model_repo": "turboderp/Qwen3.5-9B-exl3",
         "model_revision": MODEL_REVISION,
@@ -123,9 +123,9 @@ def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, prompt: str, max_
         "cuda": torch.version.cuda,
         "gpu": torch.cuda.get_device_name(0),
         "context_tokens": max_context,
-        "kv_cache": "fp16 default",
-        "kv_cache_k": "fp16",
-        "kv_cache_v": "fp16",
+        "kv_cache": "fp16 default" if kv_bits == "fp16" else f"quantized {kv_bits}-bit K/V",
+        "kv_cache_k": kv_bits,
+        "kv_cache_v": kv_bits,
         "gpu_layers": "all (runtime placement)",
         "flash_attention": True,
         "prompt_tokens": prompt_tokens,
@@ -156,6 +156,7 @@ def main() -> int:
     parser.add_argument("--context", type=int, default=2048)
     parser.add_argument("--max-new-tokens", type=int, default=96)
     parser.add_argument("--input-tokens", type=int, default=25)
+    parser.add_argument("--kv-bits", choices=["fp16", "2", "3", "4", "5", "6", "7", "8"], default="fp16")
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--load-method", choices=["python", "mt_fread"], default="python")
@@ -164,7 +165,7 @@ def main() -> int:
     if args.context < 256 or args.context % 256:
         parser.error("context must be a multiple of 256")
     if args.dry_run:
-        print(json.dumps({"model_dir": str(args.model_dir), "output": str(args.output), "context": args.context, "input_tokens": args.input_tokens, "warmups": args.warmups, "repetitions": args.repetitions, "load_method": args.load_method}, sort_keys=True))
+        print(json.dumps({"model_dir": str(args.model_dir), "output": str(args.output), "context": args.context, "input_tokens": args.input_tokens, "kv_bits": args.kv_bits, "warmups": args.warmups, "repetitions": args.repetitions, "load_method": args.load_method}, sort_keys=True))
         return 0
     weights = args.model_dir / "model.safetensors"
     if not weights.is_file():
@@ -176,7 +177,17 @@ def main() -> int:
     # memory cap. Python mode streams one tensor into GPU at a time and has lower host peak RAM.
     config = Config.from_directory(str(args.model_dir), load_method=args.load_method)
     model = Model.from_config(config)
-    cache = Cache(model, max_num_tokens=args.context, max_batch_size=1)
+    if args.kv_bits == "fp16":
+        cache = Cache(model, max_num_tokens=args.context, max_batch_size=1)
+    else:
+        cache = Cache(
+            model,
+            max_num_tokens=args.context,
+            max_batch_size=1,
+            layer_type=CacheLayer_quant,
+            k_bits=int(args.kv_bits),
+            v_bits=int(args.kv_bits),
+        )
     model.load(progressbar=True)
     tokenizer = Tokenizer.from_config(config)
     prompt = make_prompt(tokenizer, args.input_tokens)
@@ -185,13 +196,13 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("a", encoding="utf-8") as output:
         for warmup_index in range(args.warmups):
-            row = run_once(model, cache, tokenizer, prompt, args.context, args.max_new_tokens, warmup_index, True)
+            row = run_once(model, cache, tokenizer, prompt, args.context, args.max_new_tokens, args.kv_bits, warmup_index, True)
             row.update(git_sha=git_sha, source_tree_dirty=source_dirty, load_method=args.load_method)
             print(json.dumps(row, sort_keys=True), file=output, flush=True)
             print(f"warmup {warmup_index + 1}: {row['generation_tps']} tok/s; TTFT {row['ttft_ms']} ms")
         torch.cuda.reset_peak_memory_stats()
         for repetition in range(1, args.repetitions + 1):
-            row = run_once(model, cache, tokenizer, prompt, args.context, args.max_new_tokens, repetition, False)
+            row = run_once(model, cache, tokenizer, prompt, args.context, args.max_new_tokens, args.kv_bits, repetition, False)
             row.update(git_sha=git_sha, source_tree_dirty=source_dirty, load_method=args.load_method)
             print(json.dumps(row, sort_keys=True), file=output, flush=True)
             print(f"run {repetition}/{args.repetitions}: {row['generation_tps']} tok/s; TTFT {row['ttft_ms']} ms")
