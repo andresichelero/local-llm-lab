@@ -15,6 +15,7 @@ BATCH_SIZE="${BATCH_SIZE:-256}"
 UBATCH_SIZE="${UBATCH_SIZE:-128}"
 FLASH_ATTN="${FLASH_ATTN:-on}"
 REASONING="${REASONING:-auto}"
+CACHE_PROMPT="${CACHE_PROMPT:-off}"
 KV_TYPE_K="${KV_TYPE_K:-f16}"
 KV_TYPE_V="${KV_TYPE_V:-f16}"
 REPETITIONS="${REPETITIONS:-3}"
@@ -26,7 +27,7 @@ if [[ "${1:-}" == "--help" ]]; then
 Run one local llama.cpp inference series (one warm-up, then repeated prompts).
 Environment: MODEL_PATH, PORT, OUTPUT, RESOURCE_OUTPUT, EXPERIMENT, CTX_SIZE,
 GPU_LAYERS, BATCH_SIZE, UBATCH_SIZE, FLASH_ATTN=on|off, KV_TYPE_K/V,
-REASONING=auto|on|off, INPUT_TOKENS, MAX_NEW_TOKENS, REPETITIONS, WARMUPS,
+REASONING=auto|on|off, CACHE_PROMPT=on|off, INPUT_TOKENS, MAX_NEW_TOKENS, REPETITIONS, WARMUPS,
 LLAMA_SERVER.
 KV types: f16, bf16, q8_0, q4_0. Build-time support varies by backend.
 EOF
@@ -45,7 +46,7 @@ RUNTIME_COMMIT="$(git -C "$RUNTIME_SOURCE" rev-parse HEAD 2>/dev/null || echo un
 LOG="$ROOT/logs/llama-server-$PORT.log"
 python3 "$ROOT/benchmark/resource_sampler.py" --output "$RESOURCE_OUTPUT" --interval 1 &
 SAMPLER_PID=$!
-"$SERVER" --model "$MODEL" --host 127.0.0.1 --port "$PORT" --ctx-size "$CTX_SIZE" --n-gpu-layers "$GPU_LAYERS" --batch-size "$BATCH_SIZE" --ubatch-size "$UBATCH_SIZE" --flash-attn "$FLASH_ATTN" --cache-type-k "$KV_TYPE_K" --cache-type-v "$KV_TYPE_V" --reasoning "$REASONING" >"$LOG" 2>&1 &
+"$SERVER" --model "$MODEL" --host 127.0.0.1 --port "$PORT" --ctx-size "$CTX_SIZE" --n-gpu-layers "$GPU_LAYERS" --batch-size "$BATCH_SIZE" --ubatch-size "$UBATCH_SIZE" --flash-attn "$FLASH_ATTN" --cache-type-k "$KV_TYPE_K" --cache-type-v "$KV_TYPE_V" --reasoning "$REASONING" --cache-prompt "$CACHE_PROMPT" >"$LOG" 2>&1 &
 PID=$!
 cleanup() { kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; kill "$SAMPLER_PID" 2>/dev/null || true; wait "$SAMPLER_PID" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
@@ -56,4 +57,4 @@ for _ in $(seq 1 90); do
   sleep 1
 done
 if ((READY == 0)); then tail -100 "$LOG" >&2; exit 1; fi
-LAB_GIT_SHA="$SHA" LAB_SOURCE_DIRTY="$SOURCE_DIRTY" LAB_RUNTIME_COMMIT="$RUNTIME_COMMIT" LAB_EXPERIMENT="$EXPERIMENT" LAB_CTX_SIZE="$CTX_SIZE" LAB_KV_TYPE_K="$KV_TYPE_K" LAB_KV_TYPE_V="$KV_TYPE_V" LAB_GPU_LAYERS="$GPU_LAYERS" LAB_BATCH_SIZE="$BATCH_SIZE" LAB_UBATCH_SIZE="$UBATCH_SIZE" LAB_FLASH_ATTN="$FLASH_ATTN" LAB_REASONING="$REASONING" python3 "$ROOT/benchmark/llama_cpp_bench.py" --url "http://127.0.0.1:$PORT" --model "$MODEL_ID" --repetitions "$REPETITIONS" --warmups "$WARMUPS" --max-tokens "$MAX_NEW_TOKENS" --input-tokens "$INPUT_TOKENS" --output "$OUTPUT" --experiment "$EXPERIMENT"
+LAB_GIT_SHA="$SHA" LAB_SOURCE_DIRTY="$SOURCE_DIRTY" LAB_RUNTIME_COMMIT="$RUNTIME_COMMIT" LAB_EXPERIMENT="$EXPERIMENT" LAB_CTX_SIZE="$CTX_SIZE" LAB_KV_TYPE_K="$KV_TYPE_K" LAB_KV_TYPE_V="$KV_TYPE_V" LAB_GPU_LAYERS="$GPU_LAYERS" LAB_BATCH_SIZE="$BATCH_SIZE" LAB_UBATCH_SIZE="$UBATCH_SIZE" LAB_FLASH_ATTN="$FLASH_ATTN" LAB_REASONING="$REASONING" LAB_CACHE_PROMPT="$CACHE_PROMPT" python3 "$ROOT/benchmark/llama_cpp_bench.py" --url "http://127.0.0.1:$PORT" --model "$MODEL_ID" --repetitions "$REPETITIONS" --warmups "$WARMUPS" --max-tokens "$MAX_NEW_TOKENS" --input-tokens "$INPUT_TOKENS" --output "$OUTPUT" --experiment "$EXPERIMENT"
