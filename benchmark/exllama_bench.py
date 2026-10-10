@@ -76,7 +76,7 @@ def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, max_context: int,
 
     torch.cuda.synchronize()
     end = time.perf_counter()
-    output_text = tokenizer.decode(generated, decode_special_tokens=False)
+    output_text = tokenizer.decode(torch.tensor(generated, dtype=torch.long), decode_special_tokens=False)
     generated_tokens = len(generated)
     generation_seconds = max(end - (generation_start or end), 1e-9)
     record = {
