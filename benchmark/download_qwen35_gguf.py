@@ -31,7 +31,15 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def download(model_dir: Path, dry_run: bool) -> None:
+def record_success(record_path: Path, target: Path) -> None:
+    record_path.parent.mkdir(parents=True, exist_ok=True)
+    record = {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+              "model": MODEL, "destination": str(target), "verified": True}
+    with record_path.open("a", encoding="utf-8") as output:
+        output.write(json.dumps(record, sort_keys=True) + "\n")
+
+
+def download(model_dir: Path, record_path: Path, dry_run: bool) -> None:
     directory = model_dir / "Qwen3.5-9B-GGUF"
     target = directory / MODEL["filename"]
     part = target.with_suffix(target.suffix + ".part")
@@ -39,6 +47,8 @@ def download(model_dir: Path, dry_run: bool) -> None:
     if target.exists():
         if target.stat().st_size == MODEL["size_bytes"] and sha256(target) == MODEL["sha256"]:
             print(f"Already verified: {target}")
+            if not dry_run:
+                record_success(record_path, target)
             return
         raise RuntimeError(f"Refusing to overwrite an existing unverified file: {target}")
     free = shutil.disk_usage(directory).free
@@ -81,17 +91,17 @@ def download(model_dir: Path, dry_run: bool) -> None:
         raise RuntimeError(f"SHA-256 mismatch: expected {MODEL['sha256']}, received {actual_hash}; partial preserved.")
     part.replace(target)
     print(f"Verified and saved: {target}")
-    print(json.dumps({"timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                      "model": MODEL, "destination": str(target), "verified": True}, sort_keys=True))
+    record_success(record_path, target)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", "/mnt/e/local-llm-models")))
+    parser.add_argument("--record", type=Path, default=Path(__file__).resolve().parents[1] / "results/raw/model-downloads.jsonl")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     try:
-        download(args.model_dir.expanduser(), args.dry_run)
+        download(args.model_dir.expanduser(), args.record.expanduser(), args.dry_run)
     except (OSError, RuntimeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
