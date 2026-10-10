@@ -32,9 +32,10 @@
 - KV A/B completed at 2K: q4_0 K/V median 125.97 tok/s and 3,202 MiB max per-call VRAM sample; q8_0 K/V median 127.60 tok/s and 3,242 MiB. The f16 baseline measured 129.13 tok/s and 3,308 MiB. These are three repeats each with a short prompt; this does not establish quality retention.
 - Context allocation sweep completed: f16 at 8K and 32K, q4_0 K/V at 16K and 64K. Every series completed 3/3 calls with all layers on GPU. Highest per-call VRAM samples were 3,795 MiB (8K f16), 5,721 MiB (32K f16), 3,541 MiB (16K q4_0), and 4,729 MiB (64K q4_0). The benchmark prompt itself is only 25 tokens, so these test cache reservation/runtime stability rather than long-prompt throughput or attention quality.
 - Quality smoke test on the same model passed both structured JSON validation (`{"ok": true, "count": 3}`) and an actual `add(19, 23)` tool round trip, returning 42 with 1 tool call, 0 failures and 0 retries. Combined tool round trip took 0.429 s. This is a hand-written one-tool harness test, not a comparison of Pi/OpenCode/Codex/Claude/Hermes/TrueForge.
+- Repeated the JSON and tool smoke after checkpoint `9d1b83e`; both passed with `source_tree_dirty=false`. Clean run records are in `results/raw/tier0-quality-final.jsonl` and the monitor samples in the matching `*-resources.jsonl` file.
 
 ## Current constraints and next steps
 
 - The 6 GiB WSL memory cap and approximately 5 GiB free root space make full PyTorch, QLoRA, and 14–35B hybrid work uncertain. Those tiers remain untested; the WSL cap was not changed.
 - Free VRAM varied substantially with other Windows and WSL workloads: 4.6 GiB at first audit, 3.2–3.4 GiB during installation, and 7.2 GiB immediately before the successful smoke test.
-- Next: rerun the quality smoke test with commit metadata and add a genuinely long prompt, then decide whether ExLlamaV3/training stacks fit storage and memory constraints. Harnesses, multiagent, router API tests, MoE and fine-tuning have not been installed or benchmarked.
+- Next: add a genuinely long prompt, then decide whether ExLlamaV3/training stacks fit storage and memory constraints. Harnesses, multiagent, router API tests, MoE and fine-tuning have not been installed or benchmarked.
