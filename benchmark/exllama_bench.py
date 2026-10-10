@@ -63,7 +63,7 @@ def make_prompt(tokenizer: Tokenizer, target_tokens: int) -> str:
     return text_for(low)
 
 
-def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, prompt: str, max_context: int, max_new_tokens: int, kv_bits: str, repetition: int, warmup: bool) -> dict:
+def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, prompt: str, max_context: int, max_new_tokens: int, kv_bits: str, prefill_chunk_size: int, repetition: int, warmup: bool) -> dict:
     context_ids = tokenizer.encode(prompt, encode_special_tokens=True)
     prompt_tokens = int(context_ids.shape[-1])
     if prompt_tokens + max_new_tokens > max_context:
@@ -72,7 +72,12 @@ def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, prompt: str, max_
     torch.cuda.synchronize()
     start = time.perf_counter()
     if prompt_tokens > 1:
-        model.prefill(input_ids=context_ids[:, :-1], params=params)
+        prefill_end_index = prompt_tokens - 1
+        chunk_size = prefill_chunk_size or prefill_end_index
+        for chunk_start in range(0, prefill_end_index, chunk_size):
+            params["past_len"] = chunk_start
+            chunk_end = min(chunk_start + chunk_size, prefill_end_index)
+            model.prefill(input_ids=context_ids[:, chunk_start:chunk_end], params=params)
     torch.cuda.synchronize()
     prefill_end = time.perf_counter()
     recurrent_states = params.get("recurrent_states")
@@ -126,6 +131,7 @@ def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, prompt: str, max_
         "kv_cache": "fp16 default" if kv_bits == "fp16" else f"quantized {kv_bits}-bit K/V",
         "kv_cache_k": kv_bits,
         "kv_cache_v": kv_bits,
+        "prefill_chunk_size": prefill_chunk_size or max(prompt_tokens - 1, 0),
         "gpu_layers": "all (runtime placement)",
         "flash_attention": True,
         "prompt_tokens": prompt_tokens,
@@ -157,6 +163,7 @@ def main() -> int:
     parser.add_argument("--max-new-tokens", type=int, default=96)
     parser.add_argument("--input-tokens", type=int, default=25)
     parser.add_argument("--kv-bits", choices=["fp16", "2", "3", "4", "5", "6", "7", "8"], default="fp16")
+    parser.add_argument("--prefill-chunk-size", type=int, default=0, help="Process prompt in chunks; 0 uses a single prefill pass.")
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--load-method", choices=["python", "mt_fread"], default="python")
@@ -164,8 +171,10 @@ def main() -> int:
     args = parser.parse_args()
     if args.context < 256 or args.context % 256:
         parser.error("context must be a multiple of 256")
+    if args.prefill_chunk_size < 0:
+        parser.error("prefill chunk size must be zero or positive")
     if args.dry_run:
-        print(json.dumps({"model_dir": str(args.model_dir), "output": str(args.output), "context": args.context, "input_tokens": args.input_tokens, "kv_bits": args.kv_bits, "warmups": args.warmups, "repetitions": args.repetitions, "load_method": args.load_method}, sort_keys=True))
+        print(json.dumps({"model_dir": str(args.model_dir), "output": str(args.output), "context": args.context, "input_tokens": args.input_tokens, "kv_bits": args.kv_bits, "prefill_chunk_size": args.prefill_chunk_size, "warmups": args.warmups, "repetitions": args.repetitions, "load_method": args.load_method}, sort_keys=True))
         return 0
     weights = args.model_dir / "model.safetensors"
     if not weights.is_file():
@@ -196,13 +205,13 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("a", encoding="utf-8") as output:
         for warmup_index in range(args.warmups):
-            row = run_once(model, cache, tokenizer, prompt, args.context, args.max_new_tokens, args.kv_bits, warmup_index, True)
+            row = run_once(model, cache, tokenizer, prompt, args.context, args.max_new_tokens, args.kv_bits, args.prefill_chunk_size, warmup_index, True)
             row.update(git_sha=git_sha, source_tree_dirty=source_dirty, load_method=args.load_method)
             print(json.dumps(row, sort_keys=True), file=output, flush=True)
             print(f"warmup {warmup_index + 1}: {row['generation_tps']} tok/s; TTFT {row['ttft_ms']} ms")
         torch.cuda.reset_peak_memory_stats()
         for repetition in range(1, args.repetitions + 1):
-            row = run_once(model, cache, tokenizer, prompt, args.context, args.max_new_tokens, args.kv_bits, repetition, False)
+            row = run_once(model, cache, tokenizer, prompt, args.context, args.max_new_tokens, args.kv_bits, args.prefill_chunk_size, repetition, False)
             row.update(git_sha=git_sha, source_tree_dirty=source_dirty, load_method=args.load_method)
             print(json.dumps(row, sort_keys=True), file=output, flush=True)
             print(f"run {repetition}/{args.repetitions}: {row['generation_tps']} tok/s; TTFT {row['ttft_ms']} ms")
