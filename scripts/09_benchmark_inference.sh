@@ -36,7 +36,7 @@ if [[ ! -x "$SERVER" ]]; then echo "llama-server missing: $SERVER" >&2; exit 1; 
 if [[ ! -f "$MODEL" ]]; then echo "Model file not found: $MODEL" >&2; exit 1; fi
 if curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then echo "Port $PORT already has a healthy server; refusing to benchmark an unknown process." >&2; exit 1; fi
 SHA="$(git -C "$ROOT" rev-parse HEAD)"
-if [[ -n "$(git -C "$ROOT" status --porcelain)" ]]; then GIT_DIRTY=true; else GIT_DIRTY=false; fi
+if ! git -C "$ROOT" diff --quiet HEAD -- .; then SOURCE_DIRTY=true; else SOURCE_DIRTY=false; fi
 RUNTIME_COMMIT="$(git -C "$RUNTIME_SOURCE" rev-parse HEAD 2>/dev/null || echo unknown)"
 LOG="$ROOT/logs/llama-server-$PORT.log"
 python3 "$ROOT/benchmark/resource_sampler.py" --output "$RESOURCE_OUTPUT" --interval 1 &
@@ -52,4 +52,4 @@ for _ in $(seq 1 90); do
   sleep 1
 done
 if ((READY == 0)); then tail -100 "$LOG" >&2; exit 1; fi
-LAB_GIT_SHA="$SHA" LAB_GIT_DIRTY="$GIT_DIRTY" LAB_RUNTIME_COMMIT="$RUNTIME_COMMIT" LAB_EXPERIMENT="$EXPERIMENT" LAB_CTX_SIZE="$CTX_SIZE" LAB_KV_TYPE_K="$KV_TYPE_K" LAB_KV_TYPE_V="$KV_TYPE_V" LAB_GPU_LAYERS="$GPU_LAYERS" LAB_BATCH_SIZE="$BATCH_SIZE" LAB_UBATCH_SIZE="$UBATCH_SIZE" LAB_FLASH_ATTN="$FLASH_ATTN" python3 "$ROOT/benchmark/llama_cpp_bench.py" --url "http://127.0.0.1:$PORT" --model "$MODEL_ID" --repetitions "$REPETITIONS" --warmups "$WARMUPS" --output "$OUTPUT" --experiment "$EXPERIMENT"
+LAB_GIT_SHA="$SHA" LAB_SOURCE_DIRTY="$SOURCE_DIRTY" LAB_RUNTIME_COMMIT="$RUNTIME_COMMIT" LAB_EXPERIMENT="$EXPERIMENT" LAB_CTX_SIZE="$CTX_SIZE" LAB_KV_TYPE_K="$KV_TYPE_K" LAB_KV_TYPE_V="$KV_TYPE_V" LAB_GPU_LAYERS="$GPU_LAYERS" LAB_BATCH_SIZE="$BATCH_SIZE" LAB_UBATCH_SIZE="$UBATCH_SIZE" LAB_FLASH_ATTN="$FLASH_ATTN" python3 "$ROOT/benchmark/llama_cpp_bench.py" --url "http://127.0.0.1:$PORT" --model "$MODEL_ID" --repetitions "$REPETITIONS" --warmups "$WARMUPS" --output "$OUTPUT" --experiment "$EXPERIMENT"

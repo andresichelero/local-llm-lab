@@ -100,7 +100,7 @@ def run_once(url: str, model: str, max_tokens: int, seed: int, repetition: int) 
         "quant": "GGUF Q4_K_M",
         "runtime": "llama.cpp",
         "git_sha": os.environ.get("LAB_GIT_SHA"),
-        "working_tree_dirty": os.environ.get("LAB_GIT_DIRTY", "unknown") == "true",
+        "source_tree_dirty": os.environ.get("LAB_SOURCE_DIRTY", "unknown") == "true",
         "runtime_commit": os.environ.get("LAB_RUNTIME_COMMIT"),
         "context_tokens": int(os.environ.get("LAB_CTX_SIZE", "0")),
         "kv_cache_k": os.environ.get("LAB_KV_TYPE_K", "f16"),
