@@ -13,10 +13,20 @@ all_rows = []
 for source in sorted(source_dir.glob("*.jsonl")) if source_dir.exists() else []:
     if source.name.endswith("-resources.jsonl"):
         continue
+    resource_path = source.with_name(source.stem + "-resources.jsonl")
+    monitor_rows = []
+    if resource_path.exists():
+        for line in resource_path.read_text(encoding="utf-8").splitlines():
+            try:
+                sample = json.loads(line)
+                if isinstance(sample, dict): monitor_rows.append(sample)
+            except json.JSONDecodeError:
+                continue
     for line in source.read_text(encoding="utf-8").splitlines():
         try:
             item = json.loads(line)
             if isinstance(item, dict) and "ttft_ms" in item:
+                item["_monitor_rows"] = monitor_rows
                 all_rows.append(item)
         except json.JSONDecodeError:
             continue
@@ -33,7 +43,7 @@ for row in all_rows:
 csv_path = root / "results/csv/summary.csv"
 csv_path.parent.mkdir(parents=True, exist_ok=True)
 metric_names = ("ttft_ms", "prompt_tps", "generation_tps", "wall_time_s")
-fieldnames = list(group_keys) + [f"{metric}_{stat}" for metric in metric_names for stat in ("mean", "median", "stddev", "min", "max", "p95")] + ["gpu_vram_max_sampled_mb", "power_avg_sampled_w", "runs"]
+fieldnames = list(group_keys) + [f"{metric}_{stat}" for metric in metric_names for stat in ("mean", "median", "stddev", "min", "max", "p95")] + ["gpu_vram_max_sampled_mb", "power_avg_sampled_w", "gpu_vram_peak_process_mb", "runs"]
 clean_groups = {}
 with csv_path.open("w", newline="", encoding="utf-8") as output:
     writer = csv.DictWriter(output, fieldnames=fieldnames)
@@ -51,10 +61,13 @@ with csv_path.open("w", newline="", encoding="utf-8") as output:
                 "p95": sorted(numbers)[min(len(numbers)-1, int(0.95 * (len(numbers)-1)))] if numbers else "",
             }
             for name, value in calculated.items(): row[f"{metric}_{name}"] = value
-        vram = [int(item["gpu"]["vram_used_mb"]) for item in values if str(item.get("gpu", {}).get("vram_used_mb", "")).isdigit()]
-        power = [float(item["gpu"]["power_w"]) for item in values if str(item.get("gpu", {}).get("power_w", "")).replace(".", "", 1).isdigit()]
+        samples = [sample for item in values for sample in item.get("_monitor_rows", [])]
+        vram = [int(sample["gpu"]["vram_used_mb"]) for sample in samples if str(sample.get("gpu", {}).get("vram_used_mb", "")).isdigit()]
+        power = [float(sample["gpu"]["power_w"]) for sample in samples if str(sample.get("gpu", {}).get("power_w", "")).replace(".", "", 1).isdigit()]
+        process_vram = [int(item["vram_peak_process_mb"]) for item in values if isinstance(item.get("vram_peak_process_mb"), (int, float))]
         row["gpu_vram_max_sampled_mb"] = max(vram) if vram else ""
         row["power_avg_sampled_w"] = statistics.mean(power) if power else ""
+        row["gpu_vram_peak_process_mb"] = max(process_vram) if process_vram else ""
         row["runs"] = len(values)
         writer.writerow(row)
         if values[0].get("source_tree_dirty") is False:
@@ -75,13 +88,14 @@ for key, values in sorted(clean_groups.items(), key=lambda item: str(item[0])):
     def median(metric):
         numbers = [float(item[metric]) for item in values if isinstance(item.get(metric), (int, float))]
         return f"{statistics.median(numbers):.2f}" if numbers else "—"
-    vram = [int(item["gpu"]["vram_used_mb"]) for item in values if str(item.get("gpu", {}).get("vram_used_mb", "")).isdigit()]
+    samples = [sample for item in values for sample in item.get("_monitor_rows", [])]
+    vram = [int(sample["gpu"]["vram_used_mb"]) for sample in samples if str(sample.get("gpu", {}).get("vram_used_mb", "")).isdigit()]
     lines.append(f"| {experiment} | {context} | {kv} | {len(values)} | {median('ttft_ms')} | {median('prompt_tps')} | {median('generation_tps')} | {max(vram) if vram else '—'} |")
 text = [
     *lines,
     "",
     f"Per-run means, standard deviations, ranges and approximate p95 values: `{csv_path.relative_to(root)}`.",
-    "VRAM values are the highest per-request samples. The separate `*-resources.jsonl` files contain low-frequency system/GPU time-series samples.",
+    "VRAM values in the table are peaks from the paired low-frequency system/GPU time-series samples. The CSV also records the Torch allocator's per-process peak separately where available.",
     "The short prompt does not validate reasoning, tool use or quality under long-context load.",
     "",
 ]

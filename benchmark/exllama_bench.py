@@ -44,6 +44,8 @@ def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, max_context: int,
     start = time.perf_counter()
     if prompt_tokens > 1:
         model.prefill(input_ids=context_ids[:, :-1], params=params)
+    torch.cuda.synchronize()
+    prefill_end = time.perf_counter()
     recurrent_states = params.get("recurrent_states")
     sampler = GreedySampler()
     stop_ids = set(model.config.eos_token_id_list)
@@ -91,16 +93,19 @@ def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, max_context: int,
         "torch": torch.__version__,
         "cuda": torch.version.cuda,
         "gpu": torch.cuda.get_device_name(0),
-        "context": max_context,
+        "context_tokens": max_context,
         "kv_cache": "fp16 default",
+        "kv_cache_k": "fp16",
+        "kv_cache_v": "fp16",
         "gpu_layers": "all (runtime placement)",
         "flash_attention": True,
         "prompt_tokens": prompt_tokens,
+        "prompt_tps": round(max(prompt_tokens - 1, 0) / max(prefill_end - start, 1e-9), 3),
         "completion_tokens": generated_tokens,
         "max_new_tokens": max_new_tokens,
         "ttft_ms": round(first_token_ms or 0, 3),
         "generation_tps": round(generated_tokens / generation_seconds, 3),
-        "wall_seconds": round(end - start, 4),
+        "wall_time_s": round(end - start, 4),
         "vram_peak_process_mb": round(torch.cuda.max_memory_reserved() / 1024**2, 1),
         "warmup": warmup,
         "repetition": repetition,
