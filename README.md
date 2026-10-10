@@ -43,5 +43,5 @@ See `results/reports/status.md` for the current ledger of what has been research
 
 ## Current first experiment
 
-The first Tier 0 target is IBM Granite 4.1 3B in GGUF Q4_K_M, served locally by llama.cpp. The pinned model was downloaded to `E:\local-llm-models` and verified against SHA-256 in `versions.lock`. A CLI smoke test and a preliminary three-repeat 2K-context server series completed; the pre-checkpoint results are in `results/raw/` and summarized in `results/reports/tier0-summary.md`. Repeat from the clean checkpoint before using the numbers for comparisons; model quality and larger-context behavior remain untested.
+The first Tier 0 target is IBM Granite 4.1 3B in GGUF Q4_K_M, served locally by llama.cpp. The pinned model was downloaded to `E:\local-llm-models` and verified against SHA-256 in `versions.lock`. A CLI smoke test and a clean-source three-repeat 2K-context server baseline completed; the clean baseline is in `results/raw/tier0-final.jsonl`, consolidated results are in `results/csv/summary.csv`, and a human-readable summary is in `results/reports/tier0-summary.md`. These are short-run throughput tests; model quality and larger-context behavior remain untested.
 

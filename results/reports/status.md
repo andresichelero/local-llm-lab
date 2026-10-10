@@ -28,9 +28,10 @@
 
 - CLI smoke test loaded the model with 99 GPU layers at 2K context and returned exactly `READY`; its console-reported short-run generation was 53.3 tokens/s. Log: `logs/tier0-smoke.log`.
 - Preliminary server series completed: one warm-up plus 3 measured calls at 2K context, f16 KV, Flash Attention on, 99 GPU layers. TTFT median 13.01 ms (12.40–13.36), prompt processing median 2,990 tok/s (2,947–3,059), server-reported generation median 127.27 tok/s (125.67–127.79), sampled VRAM use 3,146 MiB. Fixed 25-token prompt, 22 generated tokens per call. These are short-run throughput measurements, not a quality ranking; records were created before the instrumentation checkpoint and have the prior Git HEAD.
+- Clean-source baseline completed after checkpoint `3cabe88`: one warm-up plus 3 measured calls at 2K context, f16 KV, Flash Attention on and 99 GPU layers. TTFT median 12.34 ms, prompt median 3,059 tok/s, generation median 129.13 tok/s (range 125.18–132.83), wall median 0.183 s, with 3,308 MiB sampled VRAM. All three responses matched. The benchmark record contains `source_tree_dirty=false`; the short 22-token generation is only a smoke throughput measurement.
 
 ## Current constraints and next steps
 
 - The 6 GiB WSL memory cap and approximately 5 GiB free root space make full PyTorch, QLoRA, and 14–35B hybrid work uncertain. Those tiers remain untested; the WSL cap was not changed.
 - Free VRAM varied substantially with other Windows and WSL workloads: 4.6 GiB at first audit, 3.2–3.4 GiB during installation, and 7.2 GiB immediately before the successful smoke test.
-- Next: checkpoint source and preliminary artifacts on `feat/tier0-runtime`, repeat the Tier 0 series from a clean commit, test quantized KV and context sizes, then decide whether ExLlamaV3/training stacks fit storage and memory constraints. Harnesses, multiagent, router API tests, MoE and fine-tuning have not been installed or benchmarked.
+- Next: test quantized KV and longer contexts, then decide whether ExLlamaV3/training stacks fit storage and memory constraints. Harnesses, multiagent, router API tests, MoE and fine-tuning have not been installed or benchmarked.

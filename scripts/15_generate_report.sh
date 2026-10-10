@@ -9,15 +9,16 @@ from pathlib import Path
 root = Path(sys.argv[1])
 source_dir = root / "results/raw"
 target = root / "results/reports/tier0-summary.md"
-rows = []
+all_rows = []
 for source in sorted(source_dir.glob("*.jsonl")) if source_dir.exists() else []:
     if source.name.endswith("-resources.jsonl"):
         continue
     for line in source.read_text(encoding="utf-8").splitlines():
         try:
-            rows.append(json.loads(line))
+            all_rows.append(json.loads(line))
         except json.JSONDecodeError:
             continue
+rows = [row for row in all_rows if row.get("source_tree_dirty") is False]
 if not rows:
     target.write_text("# Tier 0 summary\n\nNo completed benchmark records yet.\n", encoding="utf-8")
     print(target)
@@ -34,9 +35,9 @@ def stats(key):
         "max": f"{max(values):.3f}",
         "p95": f"{sorted(values)[min(len(values)-1, int(0.95 * (len(values)-1)))]:.3f}",
     }
-group_keys = ("experiment", "model", "quant", "runtime", "git_sha", "runtime_commit", "context_tokens", "kv_cache_k", "kv_cache_v", "flash_attention")
+group_keys = ("experiment", "model", "quant", "runtime", "git_sha", "source_tree_dirty", "runtime_commit", "context_tokens", "kv_cache_k", "kv_cache_v", "flash_attention")
 groups = {}
-for row in rows:
+for row in all_rows:
     key = tuple(row.get(field, "") for field in group_keys)
     groups.setdefault(key, []).append(row)
 csv_path = root / "results/csv/summary.csv"
@@ -70,6 +71,7 @@ text = [
     f"Successful measured runs: {len(rows)}",
     f"Model: {rows[0].get('model')} ({rows[0].get('quant')})",
     f"Runtime: {rows[0].get('runtime')}",
+    f"Preliminary or dirty-source runs excluded from this summary: {len(all_rows) - len(rows)} (retained and separated in CSV by experiment and commit)",
     f"TTFT ms: {report_stats('ttft_ms')}",
     f"Prompt tokens/s: {report_stats('prompt_tps')}",
     f"Generation tokens/s: {report_stats('generation_tps')}",
