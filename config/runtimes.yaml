@@ -1,0 +1,24 @@
+schema_version: 1
+runtimes:
+  llama_cpp:
+    upstream: https://github.com/ggml-org/llama.cpp
+    status: candidate
+    rationale: Broad GGUF support, explicit CUDA offload, KV cache formats, CPU/GPU hybrid execution.
+    install: official source build with CUDA if the WSL toolkit can be added within the disk budget; otherwise use a verified upstream Windows CUDA release and mark the host difference.
+  exllamav3:
+    upstream: https://github.com/turboderp-org/exllamav3
+    status: candidate
+    rationale: EXL3, quantized cache, speculative decoding and CPU offload; recent upstream provides pinned CUDA/PyTorch wheels.
+  transformers_torch:
+    upstream: https://github.com/huggingface/transformers
+    status: candidate
+    rationale: Reference path for model support, QLoRA and quality checks; large dependencies under current WSL memory/disk constraints.
+  bitsandbytes:
+    upstream: https://github.com/bitsandbytes-foundation/bitsandbytes
+    status: deferred
+    rationale: Validate CUDA wheel and training compatibility after a small PyTorch baseline works.
+  unsloth:
+    upstream: https://github.com/unslothai/unsloth
+    status: deferred
+    rationale: Compare with PEFT only after the 6 GiB WSL limit is addressed by an authorized environment change or a suitably small recipe.
+

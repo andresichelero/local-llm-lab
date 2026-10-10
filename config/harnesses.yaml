@@ -1,0 +1,14 @@
+schema_version: 1
+harnesses:
+  pi: {upstream: https://github.com/badlogic/pi-mono, status: candidate}
+  opencode: {upstream: https://github.com/anomalyco/opencode, status: candidate}
+  codex: {upstream: https://github.com/openai/codex, status: installed_on_host, parity: host CLI only; local model provider not established}
+  claude_code: {upstream: https://github.com/anthropics/claude-code, status: not_detected_on_path}
+  hermes: {upstream: https://github.com/NousResearch/hermes-agent, status: installed_on_host, parity: existing user installation; inspect before changing}
+  mistral_vibe: {upstream: https://github.com/mistralai/mistral-vibe, status: candidate}
+  trueforge: {upstream: https://github.com/TrueForge, status: unverified_candidate}
+  deepseek_harness: {status: explicitly_excluded_for_this_round}
+notes:
+  - Do not install duplicate host CLIs without inspecting their current versions/configuration.
+  - Compare harnesses only when model endpoint, task, tools and limits match.
+
