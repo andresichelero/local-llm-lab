@@ -27,6 +27,10 @@ for source in sorted(source_dir.glob("*.jsonl")) if source_dir.exists() else []:
         try:
             item = json.loads(line)
             if isinstance(item, dict) and "ttft_ms" in item:
+                if "prompt_cache" not in item:
+                    item["prompt_cache"] = "on" if item.get("runtime") == "llama.cpp" else "n/a"
+                if "reasoning" not in item:
+                    item["reasoning"] = "auto" if item.get("runtime") == "llama.cpp" else "n/a"
                 try:
                     ended = datetime.fromisoformat(item["timestamp"].replace("Z", "+00:00"))
                     started = ended - timedelta(seconds=float(item.get("wall_time_s", 0)))
@@ -60,7 +64,7 @@ with csv_path.open("w", newline="", encoding="utf-8") as output:
     for key, values in sorted(groups.items(), key=lambda item: str(item[0])):
         row = dict(zip(group_keys, key))
         for metric in metric_names:
-            numbers = [float(item[metric]) for item in values if isinstance(item.get(metric), (int, float))]
+            numbers = [] if metric == "prompt_tps" and any(item.get("prompt_cache") == "on" for item in values) else [float(item[metric]) for item in values if isinstance(item.get(metric), (int, float))]
             calculated = {
                 "mean": statistics.mean(numbers) if numbers else "",
                 "median": statistics.median(numbers) if numbers else "",
@@ -99,6 +103,8 @@ for key, values in sorted(clean_groups.items(), key=lambda item: str(item[0])):
     cache = values[0].get("prompt_cache", "unknown")
     reasoning = values[0].get("reasoning", "unknown")
     def median(metric):
+        if metric == "prompt_tps" and cache == "on":
+            return "—"
         numbers = [float(item[metric]) for item in values if isinstance(item.get(metric), (int, float))]
         return f"{statistics.median(numbers):.2f}" if numbers else "—"
     samples = [sample for item in values for sample in item.get("_monitor_rows", [])]
