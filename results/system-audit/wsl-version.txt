@@ -1,0 +1,16 @@
+Vers�o do WSL: 3.0.1.0
+
+Vers�o do kernel: 6.18.40.1-1
+
+Vers�o do WSLg: 1.0.79
+
+Vers�o do MSRDC: 1.2.7214
+
+Vers�o do Direct3D: 1.611.1-81528511
+
+Vers�o do DXCore: 10.0.26100.1-240331-1435.ge-release
+
+Vers�o do Windows: 10.0.19045.7725
+
+
+

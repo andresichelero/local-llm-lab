@@ -1,0 +1,197 @@
+schema_version: 1
+models:
+  - id: granite-4.1-3b
+    repo: ibm-granite/granite-4.1-3b-GGUF
+    params: 3B
+    active_params: 3B
+    architecture: dense; Granite 4.1
+    license: Apache-2.0
+    context_claim: 131072 (upstream base family)
+    tool_use: upstream says improved tool calling; validate locally
+    formats: [GGUF]
+    candidate_quant: Q4_K_M
+    estimated_weight_gib: 2.0
+    realistic_context_tokens: 2048
+    status: tier0_selected
+    purpose: low-footprint CUDA and tool-call smoke baseline
+    evidence: official model repository, immutable revision, filename, size and SHA-256 recorded in versions.lock
+  - id: qwen3.5-9b
+    repo: Qwen/Qwen3.5-9B
+    params: 9B
+    active_params: 9B
+    architecture: dense hybrid attention/linear attention; verify exact card config
+    license: Apache-2.0
+    context_claim: 262144
+    tool_use: model-card capability; local tool-call behavior unmeasured
+    formats: [Transformers, community-GGUF, community-EXL3]
+    candidate_quant: EXL3 2.50bpw pinned; Q4_K_M GGUF comparison candidate
+    estimated_weight_gib: 5.5
+    realistic_context_tokens: 2048
+    status: exl3_download_in_progress
+    purpose: all/mostly-GPU quantization and KV comparison
+    evidence: official model card and verified EXL3 repository commit, size and SHA-256 recorded in versions.lock
+  - id: qwen3.8-27b
+    repo: Qwen/Qwen3.8-27B
+    params: 27B
+    active_params: 27B
+    architecture: dense hybrid DeltaNet/attention; MTP trained
+    license: Apache-2.0
+    context_claim: 262144 native; card says extensible to 1M
+    tool_use: official agent-execution and tool support claims; measure independently
+    formats: [Transformers, community-GGUF, community-EXL3]
+    candidate_quant: IQ2/Q2 or EXL3 2.5-3.0 bpw; format support must be verified
+    estimated_weight_gib: 8.0
+    realistic_context_tokens: 2048
+    status: hybrid_or_specialized-format_candidate
+    purpose: test highly compressed large dense models; not assumed usable
+    evidence: official-model-card; community formats need separate review
+  - id: qwen3.6-35b-a3b
+    repo: Qwen/Qwen3.6-35B-A3B
+    params: 35B
+    active_params: 3B
+    architecture: MoE; hybrid attention/linear attention
+    license: Apache-2.0
+    context_claim: 262144
+    tool_use: official Qwen-Agent / Qwen Code examples and MTP guidance
+    formats: [Transformers, community-GGUF]
+    candidate_quant: IQ4_XS or Q4_K_M; verify implementation support
+    estimated_weight_gib: 19.0
+    realistic_context_tokens: 2048
+    status: tier4_deferred_by_wsl_ram
+    purpose: MoE expert offload/cache and MTP
+    evidence: official-model-card
+  - id: granite-4.1-8b
+    repo: ibm-granite/granite-4.1-8b-GGUF
+    params: 8B
+    active_params: 8B
+    architecture: dense; Granite 4.1
+    license: Apache-2.0
+    context_claim: 131072
+    tool_use: official model-card claims
+    formats: [GGUF, Transformers]
+    candidate_quant: Q4_K_M
+    estimated_weight_gib: 4.8
+    realistic_context_tokens: 2048
+    status: tier1_candidate
+    purpose: small dense coding and agent baseline
+    evidence: official Hugging Face collection and model cards
+  - id: phi-4-mini-instruct
+    repo: microsoft/Phi-4-mini-instruct
+    params: 3.8B
+    active_params: 3.8B
+    architecture: dense
+    license: MIT
+    context_claim: 128000
+    tool_use: model-card reports structured interaction; verify actual tool calls
+    formats: [Transformers, ONNX, community-GGUF]
+    candidate_quant: Q4_K_M
+    estimated_weight_gib: 2.5
+    realistic_context_tokens: 2048
+    status: candidate
+    purpose: alternate compact model and structured output
+    evidence: official-model-card
+  - id: gemma-3-4b-it
+    repo: google/gemma-3-4b-it
+    params: 4B
+    active_params: 4B
+    architecture: dense multimodal
+    license: Gemma Terms of Use (acceptance required)
+    context_claim: 128000
+    tool_use: not a primary tool-use candidate
+    formats: [Transformers, community-GGUF]
+    candidate_quant: Q4_K_M
+    estimated_weight_gib: 2.8
+    realistic_context_tokens: 2048
+    status: candidate; access may require acceptance
+    purpose: image-capable compact baseline
+    evidence: official-model-card
+  - id: gemma-3-12b-it
+    repo: google/gemma-3-12b-it
+    params: 12B
+    active_params: 12B
+    architecture: dense multimodal
+    license: Gemma Terms of Use (acceptance required)
+    context_claim: 128000
+    tool_use: not a primary tool-use candidate
+    formats: [Transformers, community-GGUF]
+    candidate_quant: Q3_K_M or Q4_K_M
+    estimated_weight_gib: 7.5
+    realistic_context_tokens: 2048
+    status: hybrid candidate; limited by WSL RAM
+    purpose: quality/quant tradeoff
+    evidence: official-model-card
+  - id: qwen2.5-coder-7b
+    repo: Qwen/Qwen2.5-Coder-7B-Instruct
+    params: 7B
+    active_params: 7B
+    architecture: dense
+    license: Apache-2.0
+    context_claim: 32768
+    tool_use: no native agent harness assumed
+    formats: [Transformers, community-GGUF, GPTQ, AWQ]
+    candidate_quant: Q4_K_M
+    estimated_weight_gib: 4.3
+    realistic_context_tokens: 2048
+    status: candidate
+    purpose: code-generation baseline with deterministic tests
+    evidence: official-model-card
+  - id: qwen2.5-coder-14b
+    repo: Qwen/Qwen2.5-Coder-14B-Instruct
+    params: 14B
+    active_params: 14B
+    architecture: dense
+    license: Apache-2.0
+    context_claim: 32768
+    tool_use: no native agent harness assumed
+    formats: [Transformers, community-GGUF, GPTQ, AWQ]
+    candidate_quant: Q3_K_M or EXL3 3.0-3.5 bpw
+    estimated_weight_gib: 8.0
+    realistic_context_tokens: 2048
+    status: hybrid candidate; blocked by 6 GiB WSL RAM pending evidence
+    purpose: hybrid inference and CPU offload
+    evidence: official-model-card
+  - id: qwen3.5-27b
+    repo: Qwen/Qwen3.5-27B
+    params: 27B
+    active_params: 27B
+    architecture: dense hybrid image-text model; config reports Qwen3.5 architecture
+    license: Apache-2.0
+    context_claim: upstream model repository; verify exact card/config before any download
+    tool_use: upstream model card; locally unmeasured
+    formats: [Transformers, community-GGUF]
+    candidate_quant: IQ2 or Q2 family
+    estimated_weight_gib: 8.0
+    realistic_context_tokens: 2048
+    status: candidate; official repository confirmed, quant/runtime support not yet selected
+    purpose: large compressed dense-model boundary
+    evidence: official Hugging Face model repository
+  - id: bonsai-2-27b
+    repo: prism-ml/Ternary-Bonsai-2-27B-gguf
+    params: 27B
+    active_params: 27B
+    architecture: ternary compressed Qwen3.8 derivative
+    license: Apache-2.0 (verify repo license at pinned revision)
+    context_claim: inherited architecture; practical limit unmeasured
+    tool_use: unmeasured
+    formats: [PQ2_0, PTQ1_0]
+    candidate_quant: PQ2_0
+    estimated_weight_gib: 7.6
+    realistic_context_tokens: 1024
+    status: deferred; specialized activation transform/fork required
+    purpose: evaluate extreme quant only if correct runtime is available
+    evidence: community model-card; stock llama.cpp can produce incorrect output silently
+  - id: qwen3.9
+    repo: null
+    params: unknown
+    active_params: unknown
+    architecture: unknown
+    license: unknown
+    context_claim: unknown
+    tool_use: unknown
+    formats: []
+    candidate_quant: unknown
+    estimated_weight_gib: unknown
+    realistic_context_tokens: unknown
+    status: not found in official lookup on 2026-10-10; do not download
+    purpose: recheck only if an official release appears
+    evidence: search; absence is not proof of nonexistence

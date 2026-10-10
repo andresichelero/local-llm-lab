@@ -1,0 +1,38 @@
+schema_version: 1
+runtimes:
+  llama_cpp:
+    upstream: https://github.com/ggml-org/llama.cpp
+    status: candidate
+    rationale: Broad GGUF support, explicit CUDA offload, KV cache formats, CPU/GPU hybrid execution.
+    install: official source build with CUDA if the WSL toolkit can be added within the disk budget; otherwise use a verified upstream Windows CUDA release and mark the host difference.
+  exllamav3:
+    upstream: https://github.com/turboderp-org/exllamav3
+    status: installed_cuda_smoke_pass
+    version: 1.6.0
+    torch: 2.10.0+cu128
+    python: 3.12
+    rationale: EXL3, quantized cache, speculative decoding and CPU offload; official CPython 3.12 CUDA 12.8/PyTorch 2.10 Linux wheel has a published SHA-256.
+  transformers_torch:
+    upstream: https://github.com/huggingface/transformers
+    status: candidate_install_pinned
+    rationale: Reference path for model support, QLoRA and quality checks; large dependencies under current WSL memory/disk constraints.
+  bitsandbytes:
+    upstream: https://github.com/bitsandbytes-foundation/bitsandbytes
+    status: candidate_install_pinned
+    version: 0.50.2
+    rationale: Official Linux CUDA 12.8 wheels include sm86; isolate from ExLlama and run a real 4-bit training smoke.
+  peft:
+    upstream: https://github.com/huggingface/peft
+    status: candidate_install_pinned
+    version: 0.21.2
+    rationale: Current release supports recent Transformers 5.x and LoRA/QLoRA adapter training.
+  trl:
+    upstream: https://github.com/huggingface/trl
+    status: candidate_install_pinned
+    version: 1.14.1
+    rationale: Optional SFT training interface; first baseline uses a small deterministic local dataset.
+  unsloth:
+    upstream: https://github.com/unslothai/unsloth
+    status: defer_until_peft_baseline
+    rationale: Upstream supports PyTorch 2.10 and CUDA 12.8, but install only after standard QLoRA validates under this WSL memory cap.
+
