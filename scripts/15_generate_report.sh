@@ -4,6 +4,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 python3 - "$ROOT" <<'PY'
 import csv, json, statistics
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 root = Path(sys.argv[1])
@@ -26,7 +27,15 @@ for source in sorted(source_dir.glob("*.jsonl")) if source_dir.exists() else []:
         try:
             item = json.loads(line)
             if isinstance(item, dict) and "ttft_ms" in item:
-                item["_monitor_rows"] = monitor_rows
+                try:
+                    ended = datetime.fromisoformat(item["timestamp"].replace("Z", "+00:00"))
+                    started = ended - timedelta(seconds=float(item.get("wall_time_s", 0)))
+                    item["_monitor_rows"] = [
+                        sample for sample in monitor_rows
+                        if started - timedelta(seconds=1) <= datetime.fromisoformat(sample["timestamp"].replace("Z", "+00:00")) <= ended + timedelta(seconds=1)
+                    ]
+                except (KeyError, TypeError, ValueError):
+                    item["_monitor_rows"] = monitor_rows
                 all_rows.append(item)
         except json.JSONDecodeError:
             continue
