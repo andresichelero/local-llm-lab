@@ -15,7 +15,9 @@ for source in sorted(source_dir.glob("*.jsonl")) if source_dir.exists() else []:
         continue
     for line in source.read_text(encoding="utf-8").splitlines():
         try:
-            all_rows.append(json.loads(line))
+            item = json.loads(line)
+            if isinstance(item, dict) and "ttft_ms" in item:
+                all_rows.append(item)
         except json.JSONDecodeError:
             continue
 rows = [row for row in all_rows if row.get("source_tree_dirty") is False]
@@ -23,18 +25,6 @@ if not rows:
     target.write_text("# Tier 0 summary\n\nNo completed benchmark records yet.\n", encoding="utf-8")
     print(target)
     raise SystemExit(0)
-def stats(key):
-    values = [float(row[key]) for row in rows if isinstance(row.get(key), (int, float))]
-    if not values:
-        return {"mean": "", "median": "", "stddev": "", "min": "", "max": "", "p95": ""}
-    return {
-        "mean": f"{statistics.mean(values):.3f}",
-        "median": f"{statistics.median(values):.3f}",
-        "stddev": f"{statistics.stdev(values):.3f}" if len(values) > 1 else "0.000",
-        "min": f"{min(values):.3f}",
-        "max": f"{max(values):.3f}",
-        "p95": f"{sorted(values)[min(len(values)-1, int(0.95 * (len(values)-1)))]:.3f}",
-    }
 group_keys = ("experiment", "model", "quant", "runtime", "git_sha", "source_tree_dirty", "runtime_commit", "context_tokens", "kv_cache_k", "kv_cache_v", "flash_attention")
 groups = {}
 for row in all_rows:
@@ -43,7 +33,8 @@ for row in all_rows:
 csv_path = root / "results/csv/summary.csv"
 csv_path.parent.mkdir(parents=True, exist_ok=True)
 metric_names = ("ttft_ms", "prompt_tps", "generation_tps", "wall_time_s")
-fieldnames = list(group_keys) + [f"{metric}_{stat}" for metric in metric_names for stat in ("mean", "median", "stddev", "min", "max", "p95")] + ["runs"]
+fieldnames = list(group_keys) + [f"{metric}_{stat}" for metric in metric_names for stat in ("mean", "median", "stddev", "min", "max", "p95")] + ["gpu_vram_max_sampled_mb", "power_avg_sampled_w", "runs"]
+clean_groups = {}
 with csv_path.open("w", newline="", encoding="utf-8") as output:
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
@@ -60,25 +51,38 @@ with csv_path.open("w", newline="", encoding="utf-8") as output:
                 "p95": sorted(numbers)[min(len(numbers)-1, int(0.95 * (len(numbers)-1)))] if numbers else "",
             }
             for name, value in calculated.items(): row[f"{metric}_{name}"] = value
+        vram = [int(item["gpu"]["vram_used_mb"]) for item in values if str(item.get("gpu", {}).get("vram_used_mb", "")).isdigit()]
+        power = [float(item["gpu"]["power_w"]) for item in values if str(item.get("gpu", {}).get("power_w", "")).replace(".", "", 1).isdigit()]
+        row["gpu_vram_max_sampled_mb"] = max(vram) if vram else ""
+        row["power_avg_sampled_w"] = statistics.mean(power) if power else ""
         row["runs"] = len(values)
         writer.writerow(row)
-def report_stats(key):
-    summary = stats(key)
-    return ", ".join(f"{name} {value}" for name, value in summary.items() if value)
-text = [
+        if values[0].get("source_tree_dirty") is False:
+            clean_groups[key] = values
+lines = [
     "# Tier 0 summary",
     "",
-    f"Successful measured runs: {len(rows)}",
-    f"Model: {rows[0].get('model')} ({rows[0].get('quant')})",
-    f"Runtime: {rows[0].get('runtime')}",
-    f"Preliminary or dirty-source runs excluded from this summary: {len(all_rows) - len(rows)} (retained and separated in CSV by experiment and commit)",
-    f"TTFT ms: {report_stats('ttft_ms')}",
-    f"Prompt tokens/s: {report_stats('prompt_tps')}",
-    f"Generation tokens/s: {report_stats('generation_tps')}",
-    f"Wall seconds: {report_stats('wall_time_s')}",
-    f"Consolidated CSV: `{csv_path.relative_to(root)}`",
+    f"Clean-source measured runs: {len(rows)} across {len(clean_groups)} configurations.",
+    f"Preliminary or dirty-source runs excluded from the table: {len(all_rows) - len(rows)} (all records remain separated by experiment and commit in the CSV).",
     "",
-    "These results measure throughput and latency only; they do not establish model quality.",
+    "| Experiment | Context | KV K/V | Runs | TTFT median (ms) | Prompt median (tok/s) | Generation median (tok/s) | Max sampled VRAM (MiB) |",
+    "|---|---:|---|---:|---:|---:|---:|---:|",
+]
+for key, values in sorted(clean_groups.items(), key=lambda item: str(item[0])):
+    experiment = values[0].get("experiment", "")
+    context = values[0].get("context_tokens", "")
+    kv = f"{values[0].get('kv_cache_k', '')}/{values[0].get('kv_cache_v', '')}"
+    def median(metric):
+        numbers = [float(item[metric]) for item in values if isinstance(item.get(metric), (int, float))]
+        return f"{statistics.median(numbers):.2f}" if numbers else "—"
+    vram = [int(item["gpu"]["vram_used_mb"]) for item in values if str(item.get("gpu", {}).get("vram_used_mb", "")).isdigit()]
+    lines.append(f"| {experiment} | {context} | {kv} | {len(values)} | {median('ttft_ms')} | {median('prompt_tps')} | {median('generation_tps')} | {max(vram) if vram else '—'} |")
+text = [
+    *lines,
+    "",
+    f"Per-run means, standard deviations, ranges and approximate p95 values: `{csv_path.relative_to(root)}`.",
+    "VRAM values are the highest per-request samples. The separate `*-resources.jsonl` files contain low-frequency system/GPU time-series samples.",
+    "The short prompt does not validate reasoning, tool use or quality under long-context load.",
     "",
 ]
 target.write_text("\n".join(text), encoding="utf-8")
