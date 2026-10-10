@@ -44,9 +44,17 @@ SHA="$(git -C "$ROOT" rev-parse HEAD)"
 if ! git -C "$ROOT" diff --quiet HEAD -- . ':(exclude)results/**'; then SOURCE_DIRTY=true; else SOURCE_DIRTY=false; fi
 RUNTIME_COMMIT="$(git -C "$RUNTIME_SOURCE" rev-parse HEAD 2>/dev/null || echo unknown)"
 LOG="$ROOT/logs/llama-server-$PORT.log"
+if [[ "$CACHE_PROMPT" == on ]]; then
+  CACHE_PROMPT_ARG=--cache-prompt
+elif [[ "$CACHE_PROMPT" == off ]]; then
+  CACHE_PROMPT_ARG=--no-cache-prompt
+else
+  echo "CACHE_PROMPT must be on or off" >&2
+  exit 2
+fi
 python3 "$ROOT/benchmark/resource_sampler.py" --output "$RESOURCE_OUTPUT" --interval 1 &
 SAMPLER_PID=$!
-"$SERVER" --model "$MODEL" --host 127.0.0.1 --port "$PORT" --ctx-size "$CTX_SIZE" --n-gpu-layers "$GPU_LAYERS" --batch-size "$BATCH_SIZE" --ubatch-size "$UBATCH_SIZE" --flash-attn "$FLASH_ATTN" --cache-type-k "$KV_TYPE_K" --cache-type-v "$KV_TYPE_V" --reasoning "$REASONING" --cache-prompt "$CACHE_PROMPT" >"$LOG" 2>&1 &
+"$SERVER" --model "$MODEL" --host 127.0.0.1 --port "$PORT" --ctx-size "$CTX_SIZE" --n-gpu-layers "$GPU_LAYERS" --batch-size "$BATCH_SIZE" --ubatch-size "$UBATCH_SIZE" --flash-attn "$FLASH_ATTN" --cache-type-k "$KV_TYPE_K" --cache-type-v "$KV_TYPE_V" --reasoning "$REASONING" "$CACHE_PROMPT_ARG" >"$LOG" 2>&1 &
 PID=$!
 cleanup() { kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; kill "$SAMPLER_PID" 2>/dev/null || true; wait "$SAMPLER_PID" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
