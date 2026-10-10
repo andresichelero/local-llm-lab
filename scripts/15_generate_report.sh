@@ -44,7 +44,7 @@ if not rows:
     target.write_text("# Tier 0 summary\n\nNo completed benchmark records yet.\n", encoding="utf-8")
     print(target)
     raise SystemExit(0)
-group_keys = ("experiment", "model", "quant", "runtime", "git_sha", "source_tree_dirty", "runtime_commit", "context_tokens", "kv_cache_k", "kv_cache_v", "flash_attention")
+group_keys = ("experiment", "model", "quant", "runtime", "git_sha", "source_tree_dirty", "runtime_commit", "context_tokens", "prompt_tokens", "max_new_tokens", "prefill_chunk_size", "kv_cache_k", "kv_cache_v", "flash_attention")
 groups = {}
 for row in all_rows:
     key = tuple(row.get(field, "") for field in group_keys)
@@ -87,19 +87,21 @@ lines = [
     f"Clean-source measured runs: {len(rows)} across {len(clean_groups)} configurations.",
     f"Preliminary or dirty-source runs excluded from the table: {len(all_rows) - len(rows)} (all records remain separated by experiment and commit in the CSV).",
     "",
-    "| Experiment | Context | KV K/V | Runs | TTFT median (ms) | Prompt median (tok/s) | Generation median (tok/s) | Max sampled VRAM (MiB) |",
-    "|---|---:|---|---:|---:|---:|---:|---:|",
+    "| Experiment | Context | Prompt | Max output | KV K/V | Runs | TTFT median (ms) | Prompt median (tok/s) | Generation median (tok/s) | Max sampled VRAM (MiB) |",
+    "|---|---:|---:|---:|---|---:|---:|---:|---:|---:|",
 ]
 for key, values in sorted(clean_groups.items(), key=lambda item: str(item[0])):
     experiment = values[0].get("experiment", "")
     context = values[0].get("context_tokens", "")
+    prompt = values[0].get("prompt_tokens", "")
+    max_new = values[0].get("max_new_tokens", "")
     kv = f"{values[0].get('kv_cache_k', '')}/{values[0].get('kv_cache_v', '')}"
     def median(metric):
         numbers = [float(item[metric]) for item in values if isinstance(item.get(metric), (int, float))]
         return f"{statistics.median(numbers):.2f}" if numbers else "—"
     samples = [sample for item in values for sample in item.get("_monitor_rows", [])]
     vram = [int(sample["gpu"]["vram_used_mb"]) for sample in samples if str(sample.get("gpu", {}).get("vram_used_mb", "")).isdigit()]
-    lines.append(f"| {experiment} | {context} | {kv} | {len(values)} | {median('ttft_ms')} | {median('prompt_tps')} | {median('generation_tps')} | {max(vram) if vram else '—'} |")
+    lines.append(f"| {experiment} | {context} | {prompt} | {max_new} | {kv} | {len(values)} | {median('ttft_ms')} | {median('prompt_tps')} | {median('generation_tps')} | {max(vram) if vram else '—'} |")
 text = [
     *lines,
     "",
