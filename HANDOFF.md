@@ -4,13 +4,16 @@
 
 Continue the reproducible RTX 3070 / WSL2 lab. The HDD-versus-SSD QLoRA storage comparison is complete; resume the broader inference and harness experiments with active assets on the SSD and model archives on E:.
 
+Latest checkpoint: the pinned Qwen3.5-9B GGUF Q4_K_M was tested from the C:-hosted WSL ext4 filesystem at 2K and 16K, and the llama.cpp runtime bundle was staged to the same SSD. Three 2K startup log measurements showed 4.39 s median on SSD versus 41.47 s on E:, with uncontrolled OS file-cache state. Warm generation remained near 63–66 tok/s. A C-only runtime series completed, but Windows GPU sharing raised VRAM use and reduced throughput; treat it as contention-affected. See `results/reports/ssd-inference-comparison.md`.
+
 ## Host and storage state
 
 - Windows 10 Pro 22H2, Ryzen 5 5600X, 32 GiB RAM, RTX 3070 8 GiB.
 - Ubuntu-24.04 WSL2, 8 GiB RAM limit, 8 vCPUs, 4 GiB swap, 90 GiB virtual disk (88 GiB filesystem). The WSL VHD is under `C:\Users\Andre\AppData\Local\wsl`, on the Samsung 970 EVO Plus SSD.
-- Current Linux filesystem free space is about 34 GiB after staging. Recheck before copying any more assets.
+- Current Linux filesystem free space is about 34 GiB after archiving the tested Qwen GGUF to E: while keeping the runtime and QLoRA assets on SSD. Recheck before copying more assets.
 - Docker, containerd, snapd, Immich and other nonessential services remain stopped/disabled for this test window.
 - C: is the SSD; E: is a 1 TB HDD. Keep the source/archive model on E:; run active tests from WSL-native ext4 on C:.
+- D: is also a 1 TB HDD; the source checkout/runtime is on D:. `scripts/17_stage_llamacpp_to_ssd.sh` stages the runtime bundle to C: and validates its dependencies. `scripts/18_stage_qwen35_gguf_to_ssd.sh` restages the pinned GGUF from E: after an SSD test copy has been archived. Use `LLAMA_SERVER=/home/foxtrot/local-llm-benchmark/tools/llama-bin/llama-server`, `LD_LIBRARY_PATH=/home/foxtrot/local-llm-benchmark/tools/llama-bin`, and `RUNTIME_STORAGE_PROFILE=ssd-wsl-ext4-c` for C:-only llama.cpp runs.
 
 ## QLoRA evidence
 
@@ -26,6 +29,6 @@ Continue the reproducible RTX 3070 / WSL2 lab. The HDD-versus-SSD QLoRA storage 
 
 ## Next actions
 
-1. Push the verified commits on the existing feature branch. Never add model weights, adapters, environments, or other large assets to Git.
-2. Resume the broader lab with carefully selected inference comparisons, placing active models, caches, environments, and outputs on the SSD and retaining verified originals on E:.
+1. Continue the broader lab on the existing feature branch; publish checkpoints after each experiment. Never add model weights, adapters, environments, or other large assets to Git.
+2. Resume the broader lab with carefully selected inference comparisons, placing active models, runtimes, caches, environments, and outputs on the SSD and retaining verified originals on E:.
 3. Continue with harness, context, MoE, and training experiments only after each runtime/model is researched and its storage requirements are checked.
