@@ -11,6 +11,7 @@ try:
     from benchmark.harness_runner import (
         build_command,
         parse_server_prompt_eval_tokens,
+        resolve_task,
         _isolated_environment,
         _preflight,
         _prepare_run,
@@ -20,6 +21,7 @@ try:
 except ImportError:
     build_command = None  # type: ignore[assignment]
     parse_server_prompt_eval_tokens = None  # type: ignore[assignment]
+    resolve_task = None  # type: ignore[assignment]
     _isolated_environment = None  # type: ignore[assignment]
     _preflight = None  # type: ignore[assignment]
     _prepare_run = None  # type: ignore[assignment]
@@ -28,6 +30,17 @@ except ImportError:
 
 
 class HarnessRunnerTests(unittest.TestCase):
+    def test_task_registry_resolves_distinct_fixture_and_prompt(self) -> None:
+        self.assertTrue(callable(resolve_task), "harness task registry is not implemented")
+        fixture, prompt = resolve_task("whitespace_normalization")
+        self.assertEqual(fixture, Path(__file__).resolve().parents[1] / "benchmark/fixtures/harness_whitespace")
+        self.assertEqual(prompt, fixture / "TASK.md")
+
+    def test_task_registry_rejects_unknown_task(self) -> None:
+        self.assertTrue(callable(resolve_task), "harness task registry is not implemented")
+        with self.assertRaisesRegex(ValueError, "Unsupported task"):
+            resolve_task("arbitrary-task")
+
     def test_preflight_rejects_non_ssd_log_or_result_destinations(self) -> None:
         self.assertTrue(callable(_preflight), "harness SSD preflight is not implemented")
         with tempfile.TemporaryDirectory() as temp:
@@ -73,6 +86,37 @@ class HarnessRunnerTests(unittest.TestCase):
             self.assertFalse((run_dir / "workspace/opencode.json").exists())
             self.assertTrue((run_dir / "home/.config/opencode/opencode.json").is_file())
             self.assertFalse((run_dir / "workspace/src/__pycache__").exists())
+
+    def test_prepare_run_copies_selected_task_fixture(self) -> None:
+        self.assertTrue(callable(_prepare_run), "harness workspace preparation is not implemented")
+        import shutil
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            repo = root / "repo"
+            fixture = repo / "benchmark/fixtures/harness_whitespace"
+            fixture.parent.mkdir(parents=True)
+            shutil.copytree(
+                Path(__file__).resolve().parents[1] / "benchmark/fixtures/harness_whitespace",
+                fixture,
+            )
+            configs = repo / "benchmark/configs/harnesses"
+            configs.mkdir(parents=True)
+            shutil.copy2(
+                Path(__file__).resolve().parents[1] / "benchmark/configs/harnesses/opencode.json",
+                configs / "opencode.json",
+            )
+            run_dir = root / "ssd-run"
+            run_dir.mkdir()
+            with patch("benchmark.harness_runner.REPO_ROOT", repo):
+                _prepare_run("opencode", run_dir, root, "Do the whitespace task.", fixture=fixture)
+
+            self.assertTrue((run_dir / "workspace/src/text_utils.py").is_file())
+            self.assertFalse((run_dir / "workspace/src/calculator.py").exists())
+            self.assertEqual(
+                (run_dir / "workspace/TASK.md").read_text(encoding="utf-8"),
+                (fixture / "TASK.md").read_text(encoding="utf-8"),
+            )
 
     def test_prepare_run_uses_requested_local_model_and_ssd_endpoint(self) -> None:
         self.assertTrue(callable(_prepare_run), "harness workspace preparation is not implemented")
