@@ -1,0 +1,38 @@
+0.00.074.389 I srv  llama_server: initializing ...
+0.00.074.404 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.074.737 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.077.043 I srv    load_model: loading model '/home/foxtrot/local-llm-benchmark/models/gguf/ornith-1.0-9b/ornith-1.0-9b-Q4_K_M.gguf'
+0.03.804.470 I cmn          init: llama threadpool init, n_threads = 4
+0.03.912.959 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 2048, kv_unified = 'true'
+0.03.916.201 W srv          init: chat template supports preserving reasoning, it is enabled by default (may use more tokens, disable via --no-reasoning-preserve)
+0.03.916.254 I srv  llama_server: model loaded
+0.03.916.273 I srv  llama_server: listening on http://127.0.0.1:18340
+0.04.906.213 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = -1
+0.04.906.279 I slot launch_slot_: id  3 | task 0 | processing task, is_child = 0
+0.05.569.245 I slot print_timing: id  3 | task 0 | prompt eval time =     191.50 ms /   156 tokens (    1.23 ms per token,   814.61 tokens per second)
+0.05.569.266 I slot print_timing: id  3 | task 0 |        eval time =     471.35 ms /    28 tokens (   17.46 ms per token,    57.28 tokens per second)
+0.05.569.268 I slot print_timing: id  3 | task 0 |       total time =     662.85 ms /   184 tokens
+0.05.569.274 I slot print_timing: id  3 | task 0 |    graphs reused =         27
+0.05.569.324 I slot      release: id  3 | task 0 | stop processing: n_tokens = 183, truncated = 0
+0.05.618.141 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, f_sim_best = 1.000 (> 0.100 thold), f_keep = 0.852
+0.05.618.204 I slot launch_slot_: id  3 | task 31 | processing task, is_child = 0
+0.06.224.565 I slot print_timing: id  3 | task 31 | prompt eval time =     138.32 ms /   156 tokens (    0.89 ms per token,  1127.81 tokens per second)
+0.06.224.581 I slot print_timing: id  3 | task 31 |        eval time =     467.99 ms /    28 tokens (   17.33 ms per token,    57.69 tokens per second)
+0.06.224.582 I slot print_timing: id  3 | task 31 |       total time =     606.31 ms /   184 tokens
+0.06.224.582 I slot print_timing: id  3 | task 31 |    graphs reused =         53
+0.06.224.599 I slot      release: id  3 | task 31 | stop processing: n_tokens = 183, truncated = 0
+0.06.267.436 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, f_sim_best = 1.000 (> 0.100 thold), f_keep = 0.852
+0.06.267.497 I slot launch_slot_: id  3 | task 62 | processing task, is_child = 0
+0.06.849.613 I slot print_timing: id  3 | task 62 | prompt eval time =     135.48 ms /   156 tokens (    0.87 ms per token,  1151.50 tokens per second)
+0.06.849.629 I slot print_timing: id  3 | task 62 |        eval time =     446.59 ms /    28 tokens (   16.54 ms per token,    60.46 tokens per second)
+0.06.849.630 I slot print_timing: id  3 | task 62 |       total time =     582.07 ms /   184 tokens
+0.06.849.631 I slot print_timing: id  3 | task 62 |    graphs reused =         79
+0.06.849.648 I slot      release: id  3 | task 62 | stop processing: n_tokens = 183, truncated = 0
+0.06.892.909 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, f_sim_best = 1.000 (> 0.100 thold), f_keep = 0.852
+0.06.892.972 I slot launch_slot_: id  3 | task 93 | processing task, is_child = 0
+0.07.457.030 I slot print_timing: id  3 | task 93 | prompt eval time =     125.56 ms /   156 tokens (    0.80 ms per token,  1242.47 tokens per second)
+0.07.457.046 I slot print_timing: id  3 | task 93 |        eval time =     438.45 ms /    28 tokens (   16.24 ms per token,    61.58 tokens per second)
+0.07.457.046 I slot print_timing: id  3 | task 93 |       total time =     564.01 ms /   184 tokens
+0.07.457.047 I slot print_timing: id  3 | task 93 |    graphs reused =        105
+0.07.457.064 I slot      release: id  3 | task 93 | stop processing: n_tokens = 183, truncated = 0
+0.07.506.411 I srv    operator(): operator(): cleaning up before exit...

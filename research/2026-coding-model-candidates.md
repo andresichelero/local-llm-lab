@@ -1,11 +1,11 @@
 # Additional 2026 coding-model candidates
 
-Research snapshot: 2026-10-11. These are catalog candidates, not locally benchmarked models. No model weights were downloaded for this research pass; all experiments remain SSD-only.
+Research snapshot: 2026-10-11. FrogNano and MiMo Distill remain untested candidates. Ornith was selected after verifying an official publisher GGUF, staged only to the SSD, and given the limited local smoke tests documented below. All inference measurements remain SSD-only.
 
 | Model | Evidence and possible value | Fit and caveats | Lab decision |
 |---|---|---|---|
 | [Microsoft FrogNano-4B-2609](https://huggingface.co/microsoft/FrogNano-4B-2609) | Microsoft describes a Qwen3.5-4B-derived, 4.66B hybrid model post-trained for repository coding with its five-tool Leaf harness. The card reports evaluations at about 131K combined context and 61.5% Avg@3 on SWE-bench Verified. | Its BF16 checkpoint is 9.34 GB, before runtime/KV memory. The repository metadata says MIT but the model card's license table says Apache-2.0. Its narrow English/Python-heavy evaluation is explicitly Leaf/harness-dependent. | **Do not download yet.** Resolve the license discrepancy and identify a verified quantized format plus compatible runtime first. If resolved, it is the most interesting compact specialized coding-agent candidate. |
-| [Ornith-1.0-9B](https://huggingface.co/ornith-ai/Ornith-1.0-9B) | The MIT model card describes agentic coding post-training, native tool-call markup and a hybrid DeltaNet/attention layout. The publisher also supplies an official [GGUF Q4_K_M](https://huggingface.co/ornith-ai/Ornith-1.0-9B-GGUF) that llama.cpp can load. | Official Q4_K_M is 5,629,108,704 bytes; exact revision and SHA are pinned in `versions.lock`. The BF16 card serving recipes require recent Transformers/vLLM/SGLang plus reasoning/tool parsers. Reported evaluations use long contexts and substantially more CPU/RAM than this machine. | **Selected for the next SSD probe.** The GGUF has been pinned; download, load, and local quality remain pending. Vendor benchmark scores are not local evidence. |
+| [Ornith-1.0-9B](https://huggingface.co/ornith-ai/Ornith-1.0-9B) | The MIT model card describes agentic coding post-training, native tool-call markup and a hybrid DeltaNet/attention layout. The publisher also supplies an official [GGUF Q4_K_M](https://huggingface.co/ornith-ai/Ornith-1.0-9B-GGUF) that llama.cpp can load. | Official Q4_K_M is 5,629,108,704 bytes; exact revision and SHA are pinned in `versions.lock`. The BF16 card serving recipes require recent Transformers/vLLM/SGLang plus reasoning/tool parsers. Reported evaluations use long contexts and substantially more CPU/RAM than this machine. | **Limited SSD smoke passed:** 3/3 exact JSON, 3/3 real tool round trips, and 3 streaming repetitions. Repository coding-agent quality and compaction remain untested. |
 | [Xiaomi MiMo-V2.6-Distill-Qwen-9B](https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Distill-Qwen-9B) | Official Xiaomi repository declares MIT metadata and labels the model for agentic, code and tool-use tasks; this is a promising 9B distillation control against Qwen3.5-9B. | The repository lists 18.8 GB of BF16 weights. The reviewed source did not establish an applicable context length, a pinned quantization, or full support in the lab's current runtime. | **Candidate only.** Require a verified SSD-hosted quantized artifact and a small architecture/tool-call smoke before a benchmark series. |
 
 ## Evidence handling
@@ -14,7 +14,7 @@ These quality and capability statements come from model authors' cards. The cite
 
 FrogNano's license conflict is visible within the same official repository: the Hugging Face repository metadata labels the license MIT, while the model card's summary table states Apache-2.0. Treat the license as unresolved until the publisher clarifies it.
 
-The active SSD has about 21 GiB free at this snapshot. Since all three official BF16 repositories are large and the test must use SSD-backed storage, this pass records them as candidates without staging full-precision weights. Any future download must first confirm the pinned quantized artifact's exact size and available SSD space. E: remains archival storage only; it is not used for performance tests.
+At selection time, the WSL ext4 filesystem had about 21 GiB free. The verified 5.63 GB Ornith Q4_K_M was staged to SSD; after staging, about 16 GiB remained. No BF16 weights were staged. E: remains archival storage only and is not used for performance tests.
 
 ## Sources
 
@@ -23,3 +23,11 @@ The active SSD has about 21 GiB free at this snapshot. Since all three official 
 - Xiaomi MiMo-V2.6-Distill-Qwen-9B official repository, observed revision `2367e86`: [model card and files](https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Distill-Qwen-9B/tree/main).
 
 Full retrieval dates, claim scope, and caveats are recorded in [`source-ledger.csv`](source-ledger.csv); candidates and non-download decisions are recorded in [`../config/models.yaml`](../config/models.yaml).
+
+## Local SSD result
+
+The pinned official Ornith Q4_K_M model loaded with 99 GPU layers at 2K context using llama.cpp on the C-backed WSL ext4 SSD. One warm-up and three measured strict-JSON probes passed 3/3; the actual `add(19,23)` function-tool round trip passed 3/3 with no failed calls or retries. Median wall time was 0.3286 s for strict JSON and 1.4072 s for the tool round trip.
+
+A separate one-warm-up/three-measurement streaming probe used a deterministic 156-token prompt, 64-token cap, temperature 0, seed 1234, FP16 K/V, Flash Attention and disabled prompt cache. Median generation speed was 62.697 tokens/s, TTFT 137.3 ms, and prompt processing 1,151.495 tokens/s. Server startup-to-ready was 5.046 s in all three measured runs. One-second system samples peaked at 6,021 MiB VRAM, 1,315 MiB WSL RAM and 48 C; system VRAM includes the Windows desktop. These fixed short probes show runtime compatibility and basic tool reliability, not repository coding quality or the model card's long-context benchmark claims.
+
+Compared with the matching Qwen3.5-9B Q4_K_M short quality probe in the same runtime/configuration, Ornith also passed both tested contracts. Its median was lower for these exact prompts, but repetition counts differ (3 vs. 5) and this does not establish general task superiority. Raw measurements and consolidated data are in [`../results/raw/`](../results/raw/), [`../results/csv/ornith-q4-quality-repeats.csv`](../results/csv/ornith-q4-quality-repeats.csv), [`../results/csv/ornith-q4-inference-summary.csv`](../results/csv/ornith-q4-inference-summary.csv), and [`../results/reports/ornith-q4-ssd-smoke.md`](../results/reports/ornith-q4-ssd-smoke.md).

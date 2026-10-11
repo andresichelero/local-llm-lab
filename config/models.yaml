@@ -241,7 +241,7 @@ models:
     candidate_quant: official Q4_K_M; 5629108704 bytes; SHA-256 5720d1f671b4996481274fffe01868c3c36e87c135cc8538471cc7bd6087b106
     estimated_weight_gib: 5.24
     realistic_context_tokens: 2048 until quantized runtime and memory are tested
-    status: SSD candidate selected; official Q4_K_M available; local benchmark pending
+    status: SSD inference and tool smoke passed 3/3; limited 2K-context quality/performance baseline, not a coding benchmark
     purpose: compare agentic coding post-training against Qwen3.5-9B using matched SSD tests
     evidence: official model card and official publisher GGUF repository; author benchmarks use large contexts and 32 CPUs/48 GB RAM or more
   - id: mimo-v2.6-distill-qwen-9b
