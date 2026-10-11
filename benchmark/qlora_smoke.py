@@ -70,8 +70,12 @@ def load_rows(dataset: Path, tokenizer: object, max_length: int) -> list[dict[st
         messages = row.get("messages")
         if not isinstance(messages, list) or len(messages) < 2 or messages[-1].get("role") != "assistant":
             raise ValueError(f"Invalid conversational training example at line {line_number}")
-        prompt_ids = tokenizer.apply_chat_template(messages[:-1], tokenize=True, add_generation_prompt=True)
-        full_ids = tokenizer.apply_chat_template(messages, tokenize=True, add_generation_prompt=False)
+        prompt_ids = tokenizer.apply_chat_template(
+            messages[:-1], tokenize=True, add_generation_prompt=True
+        )["input_ids"]
+        full_ids = tokenizer.apply_chat_template(
+            messages, tokenize=True, add_generation_prompt=False
+        )["input_ids"]
         full_ids = full_ids[:max_length]
         if full_ids[: len(prompt_ids)] != prompt_ids[: len(full_ids)]:
             raise ValueError(f"Prompt/completion token boundary does not match the chat template at line {line_number}")
@@ -183,7 +187,7 @@ def main() -> int:
             tokenize=True,
             add_generation_prompt=True,
             return_tensors="pt",
-        ).to("cuda")
+        )["input_ids"].to("cuda")
         model.eval()
         with torch.inference_mode():
             output = model.generate(prompt, max_new_tokens=64, do_sample=False, pad_token_id=tokenizer.pad_token_id)
