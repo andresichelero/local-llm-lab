@@ -23,8 +23,11 @@ def read_jsonl(path: Path) -> list[dict]:
 
 def summarize(raw_dir: Path, repo_raw_dir: Path) -> list[dict]:
     summaries = []
-    rank_files = sorted(raw_dir.glob("train-r*-rep-1.jsonl"))
-    ranks = [int(match.group(1)) for path in rank_files if (match := re.fullmatch(r"train-r(\d+)-rep-1\.jsonl", path.name))]
+    ranks = sorted(
+        int(match.group(1))
+        for path in raw_dir.glob("train-r*-rep-1.jsonl")
+        if (match := re.fullmatch(r"train-r(\d+)-rep-1\.jsonl", path.name))
+    )
     if not ranks:
         raise ValueError(f"No rank sweep records found in {raw_dir}")
     for rank in ranks:
