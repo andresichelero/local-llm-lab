@@ -1,0 +1,15 @@
+active_model = "Qwen3.5-9B-Q4_K_M"
+
+[[providers]]
+name = "llamacpp"
+api_base = "http://127.0.0.1:8080/v1"
+api_key_env_var = ""
+
+[[models]]
+name = "qwen35-local"
+provider = "llamacpp"
+alias = "Qwen3.5-9B-Q4_K_M"
+temperature = 0.0
+thinking = "off"
+max_context_length = 16384
+auto_compact_threshold = 15000

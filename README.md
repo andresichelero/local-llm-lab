@@ -6,9 +6,9 @@ Reproducible experiments for local inference, quantization, fine-tuning, and age
 
 - Windows 10 Pro 22H2, Ryzen 5 5600X, 32 GiB physical RAM, RTX 3070 8 GiB, NVIDIA driver 610.62.
 - Ubuntu 24.04.5 in WSL2, kernel 6.18.40.1, CUDA device visible through `nvidia-smi`.
-- The current user `.wslconfig` sets WSL to 8 GiB RAM, 8 processors, 4 GiB swap, and a 90 GiB default virtual disk. The previous file is backed up outside the repository.
+- The current user `.wslconfig` sets WSL to 8 GiB RAM, 8 processors, 4 GiB swap, and a 70 GB default virtual disk. The existing Ubuntu VHD was separately expanded from 70 to 90 GB; the previous config is backed up outside the repository.
 - Free VRAM has varied from about 4.6 GiB during the first audit to 3.2–3.4 GiB while other WSL and Windows workloads were active; the desktop shares this GPU.
-- The Ubuntu virtual disk is 90 GiB (88 GiB filesystem) with 34 GiB free in the latest check, after archiving the tested Qwen GGUF back to E:. Its VHD is stored on the C: Samsung 970 EVO Plus SSD. D: and E: are HDDs; verified model archives remain on E:, while active models, runtimes, and benchmark outputs go under `/home/foxtrot/local-llm-benchmark` in WSL ext4 on C:. Current free space changes, so check before downloads/builds.
+- The Ubuntu virtual disk is 90 GB (88 GiB filesystem) with 45 GiB free after the 2026-10-11 harness cleanup and WSL restart. Its VHD is stored on the C: Samsung 970 EVO Plus SSD. D: and E: are HDDs; verified model archives remain on E:, while active models, runtimes, and benchmark outputs go under `/home/foxtrot/local-llm-benchmark` in WSL ext4 on C:. Current free space changes, so check before downloads/builds.
 - CUDA Toolkit 13.0 was installed from NVIDIA's WSL repository. `nvcc` 13.0.88 is available. The Windows driver remains 610.62; no Linux NVIDIA driver was installed into WSL.
 
 The host, WSL and GPU can change while the lab runs. Re-run the audit before interpreting later benchmarks.
@@ -68,4 +68,14 @@ The 16K run processed a 14,380-token prompt using Q4 K/V with 3/3 successful out
 After testing, keep the hash-verified archive on E: and remove only the temporary SSD copy when it is no longer needed. Run `bash scripts/18_stage_qwen35_gguf_to_ssd.sh --dry-run`, then omit `--dry-run` to restage it for the next Qwen series.
 
 The benchmark helper `scripts/17_stage_llamacpp_to_ssd.sh` copies the built runtime to WSL ext4 without deleting the D: source, checks that files match, compares the build version, and verifies that llama/ggml libraries resolve from the SSD copy. `scripts/18_stage_qwen35_gguf_to_ssd.sh` restages the pinned GGUF from E: and refuses to overwrite a different destination. `scripts/09_benchmark_inference.sh` now records model/runtime paths, storage profiles, model revision, and server startup-to-ready time. GPU sharing with the Windows desktop produced a later lower-throughput run with higher baseline VRAM use; it is reported separately rather than attributed to the drive.
+
+## Local coding-harness comparison
+
+Pi 1.1.0, OpenCode 1.19.0, and Mistral Vibe 2.26.1 each ran one warm-up and three measured repeats against the same deterministic coding task and local Qwen3.5-9B Q4_K_M endpoint. The server used llama.cpp `d81235049`, 16K context, Q4_0 KV, and the WSL-native SSD. All nine valid measured runs passed the five unit tests, independent behavior probe, and change-scope check; each harness passed 3/3.
+
+Pi had the lowest measured context overhead and shortest median wall time for this task: 1,709 first-prompt tokens, 11,189 total prompt tokens, and 14.71 s median. OpenCode used 7,550 first-prompt tokens and 50,549 total, with 23.14 s median. Vibe used 8,088 first-prompt tokens and 53,495 total, with 23.03 s median. Peak VRAM stayed around 6.3–6.4 GiB; Pi and Vibe used less RAM than OpenCode in these runs. These results support Pi as the leanest harness for this particular single-agent coding workload. All three had the same task success, and the experiment did not test subagents, MCP, long-context compaction, or general coding ability.
+
+Reproduce with llama-server already running at `http://127.0.0.1:8080` against the pinned Qwen3.5-9B Q4_K_M GGUF and the three isolated harness installs present: `./scripts/19_benchmark_harnesses.sh --harness all --warmup`, followed by `./scripts/19_benchmark_harnesses.sh --harness all --repeat 3`. Generate the consolidated files with `python3 benchmark/summarize_harness_results.py`. Raw per-run output, quality checks, and hardware samples are stored under `results/raw/harness-run-summary.jsonl` and the SSD-side run directories listed in each record; two early OpenCode setup-invalid records remain preserved and are excluded from the CSV and Markdown summary. See `results/reports/harness-evaluation.md`.
+
+TrueForge 0.178.0 is installed and its isolated local UI returned the exact expected text from the same llama.cpp endpoint. This was a text-only smoke: the UI exposed zero tools, and startup reported that the local sandbox fallback needs `bubblewrap` and `socat`. No coding/tool result is claimed for TrueForge; see `results/raw/trueforge-smoke.jsonl`.
 
