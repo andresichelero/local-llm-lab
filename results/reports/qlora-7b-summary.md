@@ -1,6 +1,6 @@
 # QLoRA 7B capacity smoke summary
 
-Runs are grouped by storage location and source cleanliness. Keep the HDD archive-backed and SSD ext4-backed series separate.
+Active capacity results are based on the SSD-backed WSL ext4 runs. The older E:-backed rows below are preserved as historical records only; no new HDD performance tests are planned, and those values are not used to rank active configurations.
 
 | Storage | Git revision | Clean source | Runs | Passed | Median load (s) | Median train (s) | Median total (s) | Peak sampled VRAM (MiB) | Peak RAM (MiB) |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
