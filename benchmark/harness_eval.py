@@ -45,6 +45,8 @@ def grade_workspace(
     """Run tests and behavior probes, then check task scope and preserved helpers."""
     if task == "whitespace_normalization":
         return _grade_whitespace_normalization(workspace, baseline)
+    if task == "dotenv_line_parser":
+        return _grade_env_parser(workspace, baseline)
     if task != "calculator_division":
         raise ValueError(f"Unsupported task: {task}")
 
@@ -196,6 +198,93 @@ def _grade_whitespace_normalization(workspace: Path, baseline: Path) -> dict[str
         "test_empty_input",
         "test_collapses_mixed_whitespace",
         "test_preserves_unicode_text",
+    } <= test_names
+    unit_tests_passed = test_run.returncode == 0
+    behavioral_probe_passed = probe_run.returncode == 0
+    success = all(
+        (
+            unit_tests_passed,
+            behavioral_probe_passed,
+            required_tests_present,
+            unchanged_helpers,
+            changes_scoped,
+        )
+    )
+    return {
+        "success": success,
+        "unit_tests_passed": unit_tests_passed,
+        "behavioral_probe_passed": behavioral_probe_passed,
+        "required_tests_present": required_tests_present,
+        "unchanged_helpers": unchanged_helpers,
+        "changes_scoped": changes_scoped,
+        "changed_files": changed_files,
+        "test_output": f"{test_run.stdout}{test_run.stderr}",
+        "behavioral_probe_stderr": probe_run.stderr,
+    }
+
+
+def _grade_env_parser(workspace: Path, baseline: Path) -> dict[str, Any]:
+    workspace = workspace.resolve()
+    baseline = baseline.resolve()
+    test_run = subprocess.run(
+        [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        timeout=45,
+    )
+    probe_code = (
+        "from src.config_parser import normalize_key, parse_assignment\n"
+        "assert parse_assignment('  api_key = a=b  ') == ('api_key', 'a=b')\n"
+        "assert parse_assignment('name=\"two words\"') == ('name', 'two words')\n"
+        "assert parse_assignment(\"name='two words'\") == ('name', 'two words')\n"
+        "assert parse_assignment('  # ignored=x') is None\n"
+        "assert parse_assignment(' = empty key') is None\n"
+        "assert normalize_key(' api_key ') == 'API_KEY'\n"
+    )
+    probe_env = os.environ.copy()
+    probe_env["PYTHONPATH"] = str(workspace)
+    probe_run = subprocess.run(
+        [sys.executable, "-c", probe_code],
+        cwd=workspace,
+        env=probe_env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    try:
+        candidate_source = (workspace / "src/config_parser.py").read_text(encoding="utf-8")
+        original_source = (baseline / "src/config_parser.py").read_text(encoding="utf-8")
+        candidate_tests = ast.parse(
+            (workspace / "tests/test_config_parser.py").read_text(encoding="utf-8")
+        )
+        test_names = {
+            node.name
+            for node in ast.walk(candidate_tests)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        unchanged_helpers = _functions(candidate_source, {"normalize_key"}) == _functions(
+            original_source, {"normalize_key"}
+        )
+    except (OSError, SyntaxError):
+        test_names = set()
+        unchanged_helpers = False
+
+    original_files = _source_files(baseline)
+    candidate_files = _source_files(workspace)
+    changed_files = sorted(
+        path
+        for path in original_files.keys() | candidate_files.keys()
+        if original_files.get(path) != candidate_files.get(path)
+    )
+    changes_scoped = bool(changed_files) and set(changed_files) <= {
+        "src/config_parser.py",
+        "tests/test_config_parser.py",
+    }
+    required_tests_present = {
+        "test_ignores_blank_and_comment_lines",
+        "test_splits_on_first_equals_and_trims",
+        "test_strips_matching_quotes",
     } <= test_names
     unit_tests_passed = test_run.returncode == 0
     behavioral_probe_passed = probe_run.returncode == 0

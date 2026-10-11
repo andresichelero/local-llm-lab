@@ -14,6 +14,7 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "benchmark" / "fixtures" / "harness_task"
 WHITESPACE_FIXTURE = ROOT / "benchmark" / "fixtures" / "harness_whitespace"
+ENV_PARSER_FIXTURE = ROOT / "benchmark" / "fixtures" / "harness_env_parser"
 
 
 class HarnessEvaluationTests(unittest.TestCase):
@@ -128,6 +129,63 @@ class HarnessEvaluationTests(unittest.TestCase):
             self.implement_normalize_whitespace(workspace, canonical_names=False)
 
             result = grade_workspace(workspace, WHITESPACE_FIXTURE, task="whitespace_normalization")
+
+        self.assertTrue(result["unit_tests_passed"])
+        self.assertTrue(result["behavioral_probe_passed"])
+        self.assertFalse(result["required_tests_present"])
+        self.assertFalse(result["success"])
+
+    def implement_env_parser(self, workspace: Path, canonical_names: bool = True) -> None:
+        (workspace / "src" / "config_parser.py").write_text(
+            "def normalize_key(key: str) -> str:\n"
+            "    return key.strip().upper()\n\n\n"
+            "def parse_assignment(line: str) -> tuple[str, str] | None:\n"
+            "    stripped = line.strip()\n"
+            "    if not stripped or stripped.startswith('#') or '=' not in stripped:\n"
+            "        return None\n"
+            "    key, value = stripped.split('=', 1)\n"
+            "    key, value = key.strip(), value.strip()\n"
+            "    if not key:\n"
+            "        return None\n"
+            "    if len(value) >= 2 and value[0] == value[-1] and value[0] in '\\\"\\'':\n"
+            "        value = value[1:-1]\n"
+            "    return key, value\n",
+            encoding="utf-8",
+        )
+        if canonical_names:
+            return
+        tests = workspace / "tests" / "test_config_parser.py"
+        tests.write_text(
+            "import unittest\nfrom src.config_parser import parse_assignment\n"
+            "class ConfigParserTests(unittest.TestCase):\n"
+            "    def test_comments(self): self.assertIsNone(parse_assignment('# x'))\n"
+            "    def test_splits(self): self.assertEqual(parse_assignment('a=b'), ('a','b'))\n"
+            "    def test_quotes(self): self.assertEqual(parse_assignment('a=\"b\"'), ('a','b'))\n",
+            encoding="utf-8",
+        )
+
+    def test_env_parser_task_checks_behavior_scope_and_preserved_helper(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp) / "workspace"
+            shutil.copytree(ENV_PARSER_FIXTURE, workspace)
+            self.implement_env_parser(workspace)
+
+            result = grade_workspace(workspace, ENV_PARSER_FIXTURE, task="dotenv_line_parser")
+
+        self.assertTrue(result["unit_tests_passed"])
+        self.assertTrue(result["behavioral_probe_passed"])
+        self.assertTrue(result["required_tests_present"])
+        self.assertTrue(result["unchanged_helpers"])
+        self.assertTrue(result["changes_scoped"])
+        self.assertTrue(result["success"])
+
+    def test_env_parser_task_rejects_noncanonical_test_names(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp) / "workspace"
+            shutil.copytree(ENV_PARSER_FIXTURE, workspace)
+            self.implement_env_parser(workspace, canonical_names=False)
+
+            result = grade_workspace(workspace, ENV_PARSER_FIXTURE, task="dotenv_line_parser")
 
         self.assertTrue(result["unit_tests_passed"])
         self.assertTrue(result["behavioral_probe_passed"])

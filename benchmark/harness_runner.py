@@ -38,6 +38,10 @@ TASK_PATHS = {
         Path("benchmark/fixtures/harness_whitespace"),
         Path("benchmark/fixtures/harness_whitespace/TASK.md"),
     ),
+    "dotenv_line_parser": (
+        Path("benchmark/fixtures/harness_env_parser"),
+        Path("benchmark/fixtures/harness_env_parser/TASK.md"),
+    ),
 }
 
 
