@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import unittest
+import os
 import tempfile
+import unittest
 from pathlib import Path
 from unittest.mock import patch
 
@@ -59,6 +60,24 @@ class HarnessRunnerTests(unittest.TestCase):
             workspace.mkdir(parents=True)
             env = _isolated_environment("opencode", root / "run", root, workspace)
             self.assertEqual(env["PWD"], str(workspace))
+
+    def test_isolated_environment_does_not_inherit_credentials_or_parent_config(self) -> None:
+        self.assertTrue(callable(_isolated_environment), "isolated environment builder is not implemented")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            workspace = root / "run" / "workspace"
+            workspace.mkdir(parents=True)
+            with patch.dict(os.environ, {
+                "GITHUB_TOKEN": "must-not-leak",
+                "AWS_SECRET_ACCESS_KEY": "must-not-leak",
+                "OPENAI_API_KEY": "must-not-leak",
+                "GIT_CONFIG_GLOBAL": "/sensitive/config",
+            }, clear=False):
+                env = _isolated_environment("opencode", root / "run", root, workspace)
+            self.assertIn(str(root / "runtimes/node-v22.23.3-linux-x64/bin"), env["PATH"])
+            self.assertEqual(env["TMPDIR"], str(root / "run/tmp"))
+            for key in ("GITHUB_TOKEN", "AWS_SECRET_ACCESS_KEY", "OPENAI_API_KEY", "GIT_CONFIG_GLOBAL"):
+                self.assertNotIn(key, env)
 
     def test_build_command_targets_local_model_for_each_harness(self) -> None:
         self.assertTrue(callable(build_command), "harness command builder is not implemented")

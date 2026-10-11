@@ -223,22 +223,22 @@ def _preflight(install_root: Path, model: str, context: int) -> dict[str, Any]:
 def _isolated_environment(
     harness: str, run_dir: Path, install_root: Path, workspace: Path
 ) -> dict[str, str]:
-    env = os.environ.copy()
-    for key in tuple(env):
-        if key.endswith("_API_KEY") or key in {
-            "HF_TOKEN", "HUGGINGFACEHUB_API_TOKEN", "CODEX_OSS_BASE_URL",
-            "OPENAI_BASE_URL", "OPENAI_API_BASE", "ANTHROPIC_BASE_URL",
-        }:
-            env.pop(key, None)
     node_bin = install_root / "runtimes/node-v22.23.3-linux-x64/bin"
-    env["PATH"] = ":".join(
-        ["/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin", "/usr/lib/wsl/lib", str(node_bin)]
-    )
-    env["HOME"] = str(run_dir / "home")
-    env["PWD"] = str(workspace)
-    env["XDG_CONFIG_HOME"] = str(run_dir / "home/.config")
-    env["XDG_DATA_HOME"] = str(run_dir / "home/.local/share")
-    env["XDG_CACHE_HOME"] = str(run_dir / "home/.cache")
+    env = {
+        "PATH": ":".join(
+            [
+                "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
+                "/sbin", "/bin", "/usr/lib/wsl/lib", str(node_bin),
+            ]
+        ),
+        "HOME": str(run_dir / "home"),
+        "PWD": str(workspace),
+        "XDG_CONFIG_HOME": str(run_dir / "home/.config"),
+        "XDG_DATA_HOME": str(run_dir / "home/.local/share"),
+        "XDG_CACHE_HOME": str(run_dir / "home/.cache"),
+        "TMPDIR": str(run_dir / "tmp"),
+        "LANG": os.environ.get("LANG", "C.UTF-8"),
+    }
     if harness == "vibe":
         env["VIBE_HOME"] = str(run_dir / "home")
     return env
@@ -295,6 +295,7 @@ def run_one(
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     run_dir = install_root / "results/harness-runs" / f"{timestamp}-{harness}"
     run_dir.mkdir(parents=True, exist_ok=False)
+    (run_dir / "tmp").mkdir()
     prompt = (REPO_ROOT / "benchmark/configs/harnesses/task_prompt.md").read_text(encoding="utf-8").strip()
     prompt_file = _prepare_run(harness, run_dir, install_root, prompt)
     workspace = run_dir / "workspace"
