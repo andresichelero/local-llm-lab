@@ -7,11 +7,12 @@ runtimes:
     install: official source build with CUDA if the WSL toolkit can be added within the disk budget; otherwise use a verified upstream Windows CUDA release and mark the host difference.
   exllamav3:
     upstream: https://github.com/turboderp-org/exllamav3
-    status: installed_cuda_smoke_pass
-    version: 1.6.0
+    status: installed_on_ssd_inference_smoke_passed
+    version: 1.6.1+cu128.torch2.10.0
     torch: 2.10.0+cu128
     python: 3.12
-    rationale: EXL3, quantized cache, speculative decoding and CPU offload; official CPython 3.12 CUDA 12.8/PyTorch 2.10 Linux wheel has a published SHA-256.
+    storage_root: ${BENCH_STORAGE_ROOT}/envs/exllamav3
+    rationale: EXL3, quantized cache, speculative decoding and CPU offload; official CPython 3.12 CUDA 12.8/PyTorch 2.10 Linux wheel is pinned by the GitHub release API digest and passed SSD inference at 2K, 8K and 16K.
   transformers_torch:
     upstream: https://github.com/huggingface/transformers
     status: candidate_install_pinned
@@ -33,6 +34,15 @@ runtimes:
     rationale: Optional SFT training interface; first baseline uses a small deterministic local dataset.
   unsloth:
     upstream: https://github.com/unslothai/unsloth
-    status: defer_until_peft_baseline
-    rationale: Upstream supports PyTorch 2.10 and CUDA 12.8, but install only after standard QLoRA validates under this WSL memory cap.
+    status: installed_ssd_smoke_passed
+    version: 2026.10.3
+    python: 3.12
+    torch: 2.10.0+cu128
+    transformers: 5.17.0
+    trl: 1.13.0
+    peft: 0.21.2
+    bitsandbytes: 0.50.2
+    xformers: 0.0.34
+    storage_root: ${BENCH_STORAGE_ROOT}/envs/unsloth
+    rationale: Isolated C:-SSD WSL env passed 0.5B repeated tests and a three-run 7B QLoRA capacity smoke on RTX 3070. The 7B run used about 26.5% less Torch-allocated VRAM than PEFT, with a lower but unpaired training-time median. Dropout 0.05 disables fused LoRA kernels; dropout 0 enabled fused QKV/O kernels but yielded only a small within-Unsloth speed difference on 0.5B.
 

@@ -20,9 +20,11 @@ wsl.cuda_driver_api: 13.3
 wsl.cuda_toolkit_nvcc: 13.0.88
 runtime.llama_cpp: v0.6.0-dev; llama-cli and llama-server built successfully
 runtime.llama_cpp_target: v0.6.0; exact tag checkout=d81235049384534c167caea52b85a694f6103d14
-runtime.exllamav3: v1.6.0; official wheel sha256=201a1c1c611cf96a9ebdfa1ae0a9d165a30399026160ca963970765a03f0dfbe
+runtime.exllamav3: v1.6.1; official CPython 3.12 CUDA 12.8 / Torch 2.10 wheel sha256=8ff5e579afae47773cbedbf03f174d7696d4ea6f258ec6e8579bde92fc52e39e; SHA confirmed from GitHub release API 2026-10-11 after release page listed stale digest
 runtime.exllamav3.python: 3.12.3
 runtime.exllamav3.torch: 2.10.0+cu128
+runtime.exllamav3.distribution_version: 1.6.1+cu128.torch2.10.0
+runtime.exllamav3.install_status: installed on C: SSD; RTX 3070 inference passed at 2K, 8K and 16K; results/raw/exllama-qwen35-9b.jsonl records ExLlama 1.6.1+cu128.torch2.10.0 and clean source commit
 runtime.torch: not installed
 model.granite_4_1_3b_gguf: ibm-granite/granite-4.1-3b-GGUF@ab4701481089b58a082ef63cc1cee738887293ff
 model.granite_4_1_3b_gguf.file: granite-4.1-3b-Q4_K_M.gguf; size=2099501664; sha256=662b0626cd58f443baea23559b469df6576a81d349649c59413b36a9fb32eb29
@@ -30,6 +32,7 @@ runtime.cuda: CUDA Toolkit 13.0.96 / nvcc 13.0.88, installed from NVIDIA WSL rep
 model.qwen35_9b_exl3.repo: turboderp/Qwen3.5-9B-exl3
 model.qwen35_9b_exl3.revision: d35e580c801b276c4d5ff97f27bd0fa79a0ef3b3 (2.50bpw)
 model.qwen35_9b_exl3.file: model.safetensors; size=5889564052; sha256=19e38d592d439a19205469aba6f477355aaa17d81f1f516b222a2abc7ba76d23
+model.qwen35_9b_exl3.archive: E:\local-llm-models\exllama\Qwen3.5-9B-exl3-2.5bpw; SHA-256 verified after SSD runs; active C: copy removed
 model.qwen35_9b_gguf.repo: unsloth/Qwen3.5-9B-GGUF
 model.qwen35_9b_gguf.revision: 3885219b6810b007914f3a7950a8d1b469d598a5
 model.qwen35_9b_gguf.file: Qwen3.5-9B-Q4_K_M.gguf; size=5680522464; sha256=03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8; license=Apache-2.0
@@ -42,6 +45,17 @@ training.peft: 0.21.2
 training.bitsandbytes: 0.50.2
 training.accelerate: 1.15.0
 training.trl: 1.14.1
+training.unsloth: 2026.10.3
+training.unsloth_zoo: 2026.10.3
+training.unsloth.python: 3.12.3; isolated at /home/foxtrot/local-llm-benchmark/envs/unsloth
+training.unsloth.torch: 2.10.0+cu128
+training.unsloth.transformers: 5.17.0
+training.unsloth.peft: 0.21.2
+training.unsloth.bitsandbytes: 0.50.2
+training.unsloth.xformers: 0.0.34
+training.unsloth.triton: 3.6.0
+training.unsloth.cuda: 12.8; GPU RTX 3070 sm_86
+training.unsloth.install: isolated SSD WSL env; Unsloth 2026.10.3, Transformers 5.17.0, TRL 1.13.0, PyTorch 2.10.0+cu128
 model.qwen25_coder_7b_instruct.repo: Qwen/Qwen2.5-Coder-7B-Instruct
 model.qwen25_coder_7b_instruct.revision: c03e6d358207e414f1eca0bb1891e29f1db0e242
 model.qwen25_coder_7b_instruct.license: Apache-2.0
@@ -54,6 +68,10 @@ model.qwen25_coder_7b_instruct.weight_shard_4: model-00004-of-00004.safetensors;
 model.qwen25_coder_7b_instruct.config: config.json; size=663; blob_sha1=1a2ea88621f4248fccfb575beaf64c1ea5d9587f
 model.qwen25_coder_7b_instruct.tokenizer: tokenizer.json; size=7031645; blob_sha1=443909a61d429dff23010e5bddd28ff530edda00
 model.qwen25_coder_7b_instruct.index: model.safetensors.index.json; size=27752; blob_sha1=6ca5084b88f1a95fef37f1b94c6e87ff69422bb7
+model.qwen25_coder_14b_gguf.repo: Qwen/Qwen2.5-Coder-14B-Instruct-GGUF
+model.qwen25_coder_14b_gguf.revision: d0a692ef765eefbf2fabb130b3cb2e8917e3d225
+model.qwen25_coder_14b_gguf.file: qwen2.5-coder-14b-instruct-q4_k_m.gguf; size=8988110272; sha256=c1e659736d89ac1065fb495330fb824d94001974a4bfa78e7270e43476a8d940; license=Apache-2.0; source=official Qwen repository
+model.qwen25_coder_14b_gguf.archive: E:/local-llm-models/hybrid/qwen2.5-coder-14b-instruct-q4_k_m.gguf; same size and SHA-256 as pinned source
 runtime.node_wsl: 22.23.3 linux-x64; npm=10.9.9; sha256=df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de; path=/home/foxtrot/local-llm-benchmark/runtimes/node-v22.23.3-linux-x64
 harness.pi: @earendil-works/pi-coding-agent 1.1.0; npm isolated under envs/node-harnesses/pi
 harness.opencode: opencode-ai 1.19.0; npm isolated under envs/node-harnesses/opencode

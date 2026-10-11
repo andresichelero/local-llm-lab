@@ -20,10 +20,11 @@ if str(ROOT) not in sys.path:
 
 from benchmark.provenance import git_provenance
 
-DEFAULT_MODEL = Path(os.environ.get("TRAINING_MODEL_DIR", "/mnt/e/local-llm-models/Qwen2.5-Coder-0.5B-Instruct"))
+BENCH_STORAGE_ROOT = Path(os.environ.get("BENCH_STORAGE_ROOT", Path.home() / "local-llm-benchmark"))
+DEFAULT_MODEL = Path(os.environ.get("TRAINING_MODEL_DIR", BENCH_STORAGE_ROOT / "models/Qwen2.5-Coder-0.5B-Instruct"))
 DEFAULT_DATASET = ROOT / "benchmark/data/qlora-smoke.jsonl"
-DEFAULT_OUTPUT = Path(os.environ.get("QLORA_OUTPUT_ROOT", "/mnt/e/local-llm-results/qlora"))
-DEFAULT_RESULT = ROOT / "results/raw/qlora-smoke.jsonl"
+DEFAULT_OUTPUT = Path(os.environ.get("QLORA_OUTPUT_ROOT", BENCH_STORAGE_ROOT / "results/qlora"))
+DEFAULT_RESULT = Path(os.environ.get("QLORA_RESULT_JSONL", BENCH_STORAGE_ROOT / "results/raw/qlora-smoke.jsonl"))
 DEFAULT_MODEL_ID = os.environ.get("TRAINING_MODEL_ID", "Qwen/Qwen2.5-Coder-0.5B-Instruct")
 DEFAULT_MODEL_PARAMETERS = os.environ.get("TRAINING_MODEL_PARAMETERS", "0.49B")
 PROBE_PROMPT = "Write a Python function called add(a, b) that returns their sum. Output only Python code."

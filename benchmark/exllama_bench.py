@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from importlib.metadata import PackageNotFoundError, version
 import json
 import os
 import subprocess
@@ -20,6 +21,13 @@ PROMPT = (
 )
 MODEL_REVISION = "d35e580c801b276c4d5ff97f27bd0fa79a0ef3b3"
 WEIGHT_SHA256 = "19e38d592d439a19205469aba6f477355aaa17d81f1f516b222a2abc7ba76d23"
+
+
+def runtime_version() -> str:
+    try:
+        return version("exllamav3")
+    except PackageNotFoundError:
+        return "unknown"
 
 
 def git_metadata(root: Path) -> tuple[str | None, bool | None]:
@@ -123,7 +131,7 @@ def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, prompt: str, max_
         "model_revision": MODEL_REVISION,
         "model_weights_sha256": WEIGHT_SHA256,
         "quant": "EXL3 2.50bpw",
-        "runtime": "ExLlamaV3 1.6.0",
+        "runtime": f"ExLlamaV3 {runtime_version()}",
         "torch": torch.__version__,
         "cuda": torch.version.cuda,
         "gpu": torch.cuda.get_device_name(0),
@@ -157,8 +165,9 @@ def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, prompt: str, max_
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", "/mnt/e/local-llm-models/exllama/Qwen3.5-9B-exl3-2.5bpw")))
-    parser.add_argument("--output", type=Path, default=Path("results/raw/exllama-qwen35-9b.jsonl"))
+    bench_storage_root = Path(os.environ.get("BENCH_STORAGE_ROOT", Path.home() / "local-llm-benchmark"))
+    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", bench_storage_root / "models/exllama/Qwen3.5-9B-exl3-2.5bpw")))
+    parser.add_argument("--output", type=Path, default=Path(os.environ.get("EXLLAMA_RESULT_JSONL", bench_storage_root / "results/raw/exllama-qwen35-9b.jsonl")))
     parser.add_argument("--context", type=int, default=2048)
     parser.add_argument("--max-new-tokens", type=int, default=96)
     parser.add_argument("--input-tokens", type=int, default=25)

@@ -1,25 +1,31 @@
 # Tier 0 summary
 
-Clean-source measured runs: 91 across 28 configurations.
-Preliminary or dirty-source runs excluded from the table: 9 (all records remain separated by experiment and commit in the CSV).
+Clean-source measured runs: 103 across 34 configurations.
+Warm-ups and preliminary or dirty-source records remain in raw JSONL but are excluded from measured-run statistics.
 
 | Experiment | Context | Prompt | Max output | KV K/V | Prompt cache | Reasoning | Runs | TTFT median (ms) | Prompt median (tok/s) | Generation median (tok/s) | Max sampled VRAM (MiB) |
 |---|---:|---:|---:|---|---|---|---:|---:|---:|---:|---:|
-| exllamav3-qwen35-9b-exl3-2.5bpw |  | 25 | 96 | / | n/a | n/a | 4 | 46.74 | — | 61.76 | — |
-| exllamav3-qwen35-9b-exl3-2.5bpw | 2048 | 25 | 96 | fp16/fp16 | n/a | n/a | 4 | 47.79 | 755.05 | 61.47 | 4256 |
-| exllamav3-qwen35-9b-exl3-2.5bpw-kv-4-prompt-57346 | 65536 | 57346 | 64 | 4/4 | n/a | n/a | 4 | 30447.88 | 1884.61 | 49.64 | 4639 |
-| exllamav3-qwen35-9b-exl3-2.5bpw-kv-fp16-prompt-25 | 2048 | 25 | 64 | fp16/fp16 | n/a | n/a | 4 | 49.47 | 719.03 | 61.69 | 3749 |
-| exllamav3-qwen35-9b-exl3-2.5bpw-kv-fp16-prompt-25 | 2048 | 25 | 96 | fp16/fp16 | n/a | n/a | 4 | 49.09 | 731.10 | 60.89 | 3749 |
-| exllamav3-qwen35-9b-exl3-2.5bpw-prompt-14340 | 16384 | 14340 | 96 | fp16/fp16 | n/a | n/a | 4 | 5298.81 | 2714.98 | 59.24 | 6316 |
-| exllamav3-qwen35-9b-exl3-2.5bpw-prompt-1796 | 2048 | 1796 | 96 | fp16/fp16 | n/a | n/a | 4 | 691.26 | 2666.56 | 61.59 | 4535 |
-| exllamav3-qwen35-9b-exl3-2.5bpw-prompt-28674 | 32768 | 28674 | 64 | fp16/fp16 | n/a | n/a | 4 | 13431.40 | 2140.97 | 49.70 | 7906 |
-| exllamav3-qwen35-9b-exl3-2.5bpw-prompt-7171 | 8192 | 7171 | 96 | fp16/fp16 | n/a | n/a | 4 | 2538.59 | 2844.33 | 60.85 | 5357 |
+| exllamav3-qwen35-9b-exl3-2.5bpw-kv-4-prompt-14340 | 16384 | 14340 | 32 | 4/4 | n/a | n/a | 3 | 5837.91 | 2465.50 | 53.72 | 5713 |
+| exllamav3-qwen35-9b-exl3-2.5bpw-kv-8-prompt-14340 | 16384 | 14340 | 32 | 8/8 | n/a | n/a | 3 | 6385.98 | 2252.22 | 52.59 | 6115 |
+| exllamav3-qwen35-9b-exl3-2.5bpw-kv-fp16-prompt-148 | 2048 | 148 | 32 | fp16/fp16 | n/a | n/a | 3 | 168.16 | 980.09 | 56.78 | 4100 |
+| exllamav3-qwen35-9b-exl3-2.5bpw-kv-fp16-prompt-25 | 2048 | 25 | 32 | fp16/fp16 | n/a | n/a | 3 | 55.71 | 655.48 | 54.10 | 4259 |
+| exllamav3-qwen35-9b-exl3-2.5bpw-kv-fp16-prompt-7171 | 8192 | 7171 | 64 | fp16/fp16 | n/a | n/a | 3 | 2793.06 | 2584.35 | 55.22 | 5098 |
 | llama-cpp-qwen35-9b-gguf-q4km-2k | 2048 | 29 | 64 | f16/f16 | on | off | 3 | 62.93 | — | 67.11 | 5794 |
 | llama-cpp-qwen35-9b-gguf-q4km-2k-nocache | 2048 | 29 | 64 | f16/f16 | off | off | 3 | 64.32 | 462.78 | 64.13 | 5801 |
 | llama-cpp-qwen35-9b-gguf-q4km-long-16k-q4kv | 16384 | 14352 | 64 | q4_0/q4_0 | off | off | 3 | 7289.00 | 1971.38 | 61.85 | 5935 |
 | llama-cpp-qwen35-9b-gguf-q4km-long-32k-q4kv | 32768 | 28695 | 64 | q4_0/q4_0 | off | off | 3 | 15781.85 | 1820.07 | 54.41 | 6147 |
 | llama-cpp-qwen35-9b-gguf-q4km-long-8k | 8192 | 7206 | 64 | f16/f16 | on | off | 3 | 65.39 | — | 64.90 | 5999 |
 | llama-cpp-qwen35-9b-gguf-q4km-long-8k-nocache | 8192 | 7206 | 64 | f16/f16 | off | off | 3 | 3474.49 | 2077.56 | 64.98 | 6000 |
+| llama-cpp-qwen35-ssd-context-16384-q4_0-kv | 16384 | 14352 | 64 | q4_0/q4_0 | off | off | 3 | 7307.04 | 1966.50 | 59.37 | 6142 |
+| llama-cpp-qwen35-ssd-context-32768-q4_0-kv | 32768 | 28695 | 64 | q4_0/q4_0 | off | off | 3 | 15856.39 | 1811.48 | 53.18 | 6356 |
+| llama-cpp-qwen35-ssd-context-recall-16384-f16 | 16384 | 14023 |  | f16/f16 | on | auto | 4 | 7056.17 | — | — | 6472 |
+| llama-cpp-qwen35-ssd-context-recall-16384-q4_0 | 16384 | 14023 |  | q4_0/q4_0 | on | auto | 4 | 7117.65 | — | — | 6134 |
+| llama-cpp-qwen35-ssd-context-recall-16384-q8_0 | 16384 | 14023 |  | q8_0/q8_0 | on | auto | 4 | 7155.50 | — | — | 6260 |
+| llama-cpp-qwen35-ssd-kv-16384-f16-kv | 16384 | 14352 | 64 | f16/f16 | off | off | 3 | 7248.50 | 1982.40 | 59.52 | 6456 |
+| llama-cpp-qwen35-ssd-kv-16384-q8_0-kv | 16384 | 14352 | 64 | q8_0/q8_0 | off | off | 3 | 7408.30 | 1939.72 | 61.99 | 6264 |
+| llamacpp-qwen35-9b-gguf-q4km-2k-sameprompt | 2048 | 29 | 32 | f16/f16 | off | off | 3 | 68.77 | 433.51 | 58.38 | 6086 |
+| qwen25coder14b-q4km-hybrid-2k-layers32 | 2048 | 46 | 64 | f16/f16 | off | off | 3 | 349.74 | 132.77 | 11.73 | 6731 |
+| qwen25coder14b-q4km-hybrid-2k-layers36 | 2048 | 46 | 64 | f16/f16 | off | off | 3 | 288.80 | 161.25 | 13.92 | 7366 |
 | qwen35_9b_gguf_16k_q4kv_ssd | 16384 | 14380 | 64 | q4_0/q4_0 | off | off | 3 | 7324.97 | 1965.55 | 62.04 | 6191 |
 | qwen35_9b_gguf_2k_full_ssd_runtime | 2048 | 29 | 64 | f16/f16 | off | off | 3 | 85.27 | 351.08 | 52.75 | 6700 |
 | qwen35_9b_gguf_2k_ssd_profiled | 2048 | 29 | 64 | f16/f16 | off | off | 3 | 71.34 | 418.94 | 65.51 | 6212 |

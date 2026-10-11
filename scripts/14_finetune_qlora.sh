@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TRAINING_ENV_DIR="${TRAINING_ENV_DIR:-/mnt/e/local-llm-envs/training}"
+BENCH_STORAGE_ROOT="${BENCH_STORAGE_ROOT:-${HOME}/local-llm-benchmark}"
+TRAINING_ENV_DIR="${TRAINING_ENV_DIR:-$BENCH_STORAGE_ROOT/envs/training}"
 PYTHON="${TRAINING_PYTHON_BIN:-$TRAINING_ENV_DIR/bin/python}"
-MODEL_DIR="${TRAINING_MODEL_DIR:-${MODEL_DIR:-/mnt/e/local-llm-models}/Qwen2.5-Coder-0.5B-Instruct}"
+MODEL_DIR="${TRAINING_MODEL_DIR:-${MODEL_DIR:-$BENCH_STORAGE_ROOT/models}/Qwen2.5-Coder-0.5B-Instruct}"
 MODEL_ID="${TRAINING_MODEL_ID:-Qwen/Qwen2.5-Coder-0.5B-Instruct}"
 MODEL_PARAMETERS="${TRAINING_MODEL_PARAMETERS:-0.49B}"
-OUTPUT_ROOT="${QLORA_OUTPUT_ROOT:-/mnt/e/local-llm-results/qlora}"
-RESULT_JSONL="${QLORA_RESULT_JSONL:-$ROOT/results/raw/qlora-smoke.jsonl}"
-RESOURCE_JSONL="${QLORA_RESOURCE_JSONL:-$ROOT/results/raw/qlora-smoke-resources.jsonl}"
-LOG_PATH="${QLORA_LOG_PATH:-$ROOT/logs/qlora-smoke-$(date -u +%Y%m%dT%H%M%SZ).log}"
+OUTPUT_ROOT="${QLORA_OUTPUT_ROOT:-$BENCH_STORAGE_ROOT/results/qlora}"
+RESULT_JSONL="${QLORA_RESULT_JSONL:-$BENCH_STORAGE_ROOT/results/raw/qlora-smoke.jsonl}"
+RESOURCE_JSONL="${QLORA_RESOURCE_JSONL:-$BENCH_STORAGE_ROOT/results/raw/qlora-smoke-resources.jsonl}"
+LOG_PATH="${QLORA_LOG_PATH:-$BENCH_STORAGE_ROOT/logs/qlora-smoke-$(date -u +%Y%m%dT%H%M%SZ).log}"
 STEPS="${QLORA_STEPS:-8}"
 MAX_SEQ_LENGTH="${QLORA_MAX_SEQ_LENGTH:-192}"
 METHOD="${TRAINING_METHOD:-qlora}"
@@ -33,7 +34,7 @@ fi
 [[ -f "$MODEL_DIR/model.safetensors" || -f "$MODEL_DIR/model.safetensors.index.json" ]] || { echo "Pinned training model is missing; run scripts/07_download_training_model.sh first." >&2; exit 1; }
 mkdir -p "$(dirname "$LOG_PATH")"
 export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-/tmp/local-llm-training-pycache}"
-export HF_HOME="${HF_HOME:-/mnt/e/local-llm-cache/huggingface}"
+export HF_HOME="${HF_HOME:-$BENCH_STORAGE_ROOT/cache/huggingface}"
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 python3 "$ROOT/benchmark/resource_sampler.py" --output "$RESOURCE_JSONL" --interval 1 &
@@ -41,3 +42,7 @@ SAMPLER_PID=$!
 cleanup() { kill "$SAMPLER_PID" 2>/dev/null || true; wait "$SAMPLER_PID" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 "$PYTHON" "$ROOT/benchmark/qlora_smoke.py" "${ARGS[@]}" 2>&1 | tee -a "$LOG_PATH"
+cleanup
+cp "$RESULT_JSONL" "$ROOT/results/raw/$(basename "$RESULT_JSONL")"
+cp "$RESOURCE_JSONL" "$ROOT/results/raw/$(basename "$RESOURCE_JSONL")"
+cp "$LOG_PATH" "$ROOT/logs/$(basename "$LOG_PATH")"

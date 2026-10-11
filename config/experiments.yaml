@@ -27,9 +27,18 @@ tiers:
     repetitions: 3
     status: ExLlamaV3 CUDA installation passed; model download pending
   hybrid:
-    question: Measure CPU/GPU layer offload with a 14B candidate.
-    model: Qwen/Qwen2.5-Coder-14B-Instruct
-    status: deferred by 6 GiB WSL memory cap
+    question: Measure CPU/GPU layer offload with a 14B Q4_K_M coding model under the 8 GiB WSL limit.
+    model: Qwen/Qwen2.5-Coder-14B-Instruct-GGUF
+    revision: d0a692ef765eefbf2fabb130b3cb2e8917e3d225
+    quant: Q4_K_M
+    storage_profile: ssd-wsl-ext4-c
+    max_context: 2048
+    gpu_layers: [24, 32, 36]
+    kv_cache: f16
+    flash_attention: on
+    warmups: 0
+    repetitions: 3
+    status: completed on C SSD; see results/reports/qwen25-coder14b-hybrid.md
   moe:
     question: Measure MoE expert placement, cache behavior and MTP on an available implementation.
     model: Qwen/Qwen3.6-35B-A3B
@@ -48,7 +57,7 @@ tiers:
     steps: 8
     seed: 42
     optimizer: torch.optim.AdamW (32-bit states)
-    status: completed: one warm-up and three measured repeats per method; see results/reports/lora-qlora-comparison.md
+    status: "completed: one warm-up and three measured repeats per method; see results/reports/lora-qlora-comparison.md"
   training_7b:
     question: Determine the largest model that completes bounded QLoRA on the RTX 3070 with 8 GiB WSL RAM.
     model: Qwen/Qwen2.5-Coder-7B-Instruct
@@ -63,4 +72,16 @@ tiers:
     seed: 42
     optimizer: torch.optim.AdamW (32-bit states)
     status: seven 8-step runs passed (three clean HDD-source repeats and three clean SSD repeats, plus one preliminary HDD run)
+  context_kv_ssd:
+    question: Compare long-prefill performance and sampled VRAM for Qwen3.5-9B Q4_K_M from SSD at 16K/32K Q4_0 K/V, then compare Q8_0 and FP16 K/V at 16K.
+    model: unsloth/Qwen3.5-9B-GGUF
+    revision: 3885219b6810b007914f3a7950a8d1b469d598a5
+    quant: Q4_K_M
+    runtime: llama.cpp d81235049384534c167caea52b85a694f6103d14
+    storage_profile: ssd-wsl-ext4-c
+    warmups: 1
+    repetitions: 3
+    prompt_target_percent: 87.5
+    max_new_tokens: 64
+    status: in progress; results recorded by scripts/20_benchmark_context_kv.sh
 

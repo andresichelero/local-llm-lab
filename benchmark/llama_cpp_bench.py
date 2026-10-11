@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -53,8 +54,9 @@ def long_prompt(url: str, target_tokens: int) -> tuple[str, int]:
 def gpu_sample() -> dict[str, str | None]:
     query = "memory.used,utilization.gpu,temperature.gpu,clocks.gr,power.draw"
     try:
+        executable = shutil.which("nvidia-smi") or ("/usr/lib/wsl/lib/nvidia-smi" if Path("/usr/lib/wsl/lib/nvidia-smi").is_file() else "nvidia-smi")
         result = subprocess.run(
-            ["nvidia-smi", f"--query-gpu={query}", "--format=csv,noheader,nounits"],
+            [executable, f"--query-gpu={query}", "--format=csv,noheader,nounits"],
             capture_output=True, text=True, check=True, timeout=5,
         )
         values = [item.strip() for item in result.stdout.strip().split(",")]
@@ -178,7 +180,8 @@ def main() -> int:
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--experiment", default="tier0_streaming_smoke")
-    parser.add_argument("--output", type=Path, default=Path("results/raw/tier0.jsonl"))
+    bench_storage_root = Path(os.environ.get("BENCH_STORAGE_ROOT", Path.home() / "local-llm-benchmark"))
+    parser.add_argument("--output", type=Path, default=Path(os.environ.get("LLAMA_CPP_RESULT_JSONL", bench_storage_root / "results/raw/tier0.jsonl")))
     args = parser.parse_args()
     if args.repetitions < 1 or args.warmups < 0:
         parser.error("repetitions must be >= 1 and warmups must be >= 0")

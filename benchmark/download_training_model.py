@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+BENCH_STORAGE_ROOT = Path(os.environ.get("BENCH_STORAGE_ROOT", Path.home() / "local-llm-benchmark"))
 FILES_05B = (
     {"path": "LICENSE", "size": 11343, "blob_sha1": "6634c8cc3133b3848ec74b9f275acaaa1ea618ab"},
     {"path": "config.json", "size": 659, "blob_sha1": "e2aa18293b0dd66539341467fa454878a5adb2be"},
@@ -200,7 +201,7 @@ def download(model_dir: Path, dry_run: bool, profile_name: str) -> None:
     temporary_manifest = manifest.with_suffix(".json.tmp")
     temporary_manifest.write_text(json.dumps(manifest_data, indent=2) + "\n", encoding="utf-8")
     temporary_manifest.replace(manifest)
-    log_path = Path(os.environ.get("MODEL_DOWNLOAD_LOG", ROOT / "results/raw/model-downloads.jsonl"))
+    log_path = Path(os.environ.get("MODEL_DOWNLOAD_LOG", BENCH_STORAGE_ROOT / "results/raw/model-downloads.jsonl"))
     log_path.parent.mkdir(parents=True, exist_ok=True)
     weight_files = [item for item in downloaded if str(item["path"]).endswith(".safetensors")]
     hashes = {str(item["path"]): str(item["sha256"]) for item in weight_files}
@@ -223,7 +224,7 @@ def download(model_dir: Path, dry_run: bool, profile_name: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", "/mnt/e/local-llm-models")))
+    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", BENCH_STORAGE_ROOT / "models")))
     parser.add_argument("--profile", choices=sorted(PROFILES), default="qwen25-coder-0.5b")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
