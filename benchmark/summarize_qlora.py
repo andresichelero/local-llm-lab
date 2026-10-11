@@ -17,7 +17,7 @@ DEFAULT_CSV = ROOT / "results/csv/qlora-7b-summary.csv"
 DEFAULT_REPORT = ROOT / "results/reports/qlora-7b-summary.md"
 GROUP_FIELDS = (
     "model", "model_revision", "quantization", "max_seq_length", "batch_size",
-    "lora_rank", "seed", "git_sha", "source_tree_dirty",
+    "lora_rank", "seed", "source_tree_dirty",
 )
 RUN_METRICS = (
     "initial_loss", "final_loss", "total_seconds", "import_seconds", "model_load_seconds",
@@ -116,13 +116,14 @@ def main() -> int:
         grouped[key].append(run)
 
     args.csv.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = list(GROUP_FIELDS) + ["runs", "successful_runs", "paired_resource_samples"]
+    fieldnames = list(GROUP_FIELDS) + ["git_revisions", "runs", "successful_runs", "paired_resource_samples"]
     fieldnames += [f"{metric}_{stat}" for metric in (*RUN_METRICS, *RESOURCE_METRICS) for stat in ("mean", "median", "stddev", "min", "max")]
     with args.csv.open("w", newline="", encoding="utf-8") as output:
         writer = csv.DictWriter(output, fieldnames=fieldnames)
         writer.writeheader()
         for key, values in sorted(grouped.items(), key=lambda item: str(item[0])):
             row = dict(zip(GROUP_FIELDS, key))
+            row["git_revisions"] = ";".join(sorted({str(run.get("git_sha", "unknown")) for run in values}))
             row["runs"] = len(values)
             row["successful_runs"] = sum(bool(run.get("success")) for run in values)
             metric_values: dict[str, list[float]] = {
@@ -154,7 +155,7 @@ def main() -> int:
         clean = key[GROUP_FIELDS.index("source_tree_dirty")] is False
         clean_groups += int(clean)
         lines.append(
-            f"| `{key[GROUP_FIELDS.index('git_sha')]}` | {'yes' if clean else 'no'} | {len(values)} | "
+            f"| `{'; '.join(sorted({str(run.get('git_sha', 'unknown'))[:7] for run in values}))}` | {'yes' if clean else 'no'} | {len(values)} | "
             f"{sum(bool(run.get('success')) for run in values)} | {summary['model_load_seconds']['median']:.1f} | "
             f"{summary['training_seconds']['median']:.1f} | {summary['total_seconds']['median']:.1f} | "
             f"{max(peak_vram):.0f} | {max(peak_ram):.0f} |"
