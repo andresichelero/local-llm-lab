@@ -102,6 +102,8 @@ Pi had the lowest measured context overhead and shortest median wall time for th
 
 Reproduce with llama-server already running at `http://127.0.0.1:8080` against the pinned Qwen3.5-9B Q4_K_M GGUF and the three isolated harness installs present: `./scripts/19_benchmark_harnesses.sh --harness all --warmup`, followed by `./scripts/19_benchmark_harnesses.sh --harness all --repeat 3`. Generate the consolidated files with `python3 benchmark/summarize_harness_results.py`. Raw per-run output, quality checks, and hardware samples are stored under `results/raw/harness-run-summary.jsonl` and the SSD-side run directories listed in each record; two early OpenCode setup-invalid records remain preserved and are excluded from the CSV and Markdown summary. See `results/reports/harness-evaluation.md`.
 
+As a model follow-up using the same Pi coding fixture, Ornith-1.0-9B Q4_K_M also passed three of three runs on the C:-backed WSL SSD, with a 25.13 s median versus 19.92 s for the pinned Qwen3.5 baseline. Both passed the same tests and scope checks; this single task is not a general model ranking. The parameterized runner and per-run events/resources are documented in the [model follow-up report](results/reports/harness-evaluation.md), with machine-readable metrics in `results/raw/harness-ornith-pi.jsonl` and `results/csv/harness-ornith-pi.csv`.
+
 TrueForge 0.178.0 is installed and its isolated local UI returned the exact expected text from the same llama.cpp endpoint. This was a text-only smoke: the UI exposed zero tools, and startup reported that the local sandbox fallback needs `bubblewrap` and `socat`. No coding/tool result is claimed for TrueForge; see `results/raw/trueforge-smoke.jsonl`.
 
 ## SSD-only context and KV follow-up
