@@ -7,6 +7,7 @@ from benchmark.opencode_controlled_probe import (
     child_task_calls,
     derive_profile,
     read_only_smoke_gate,
+    require_runtime_revision,
     workflow_gate,
 )
 
@@ -50,6 +51,11 @@ class ControlledProbeTests(unittest.TestCase):
             treatment["agent"]["build"]["permission"]["task"],
             {"*": "deny", "repo-explorer": "allow", "independent-reviewer": "allow"},
         )
+
+    def test_runtime_revision_accepts_stderr_banner(self) -> None:
+        self.assertEqual(require_runtime_revision("", "version: d81235049", "d81235049"), "version: d81235049")
+        with self.assertRaisesRegex(RuntimeError, "Unexpected llama.cpp build"):
+            require_runtime_revision("version: other", "", "d81235049")
 
     def test_child_calls_require_completed_task_events(self) -> None:
         events = [
@@ -102,6 +108,9 @@ class ControlledProbeTests(unittest.TestCase):
         self.assertFalse(workflow_gate("treatment", True, events))
         events.pop()
         events.append({"type": "tool_use", "part": {"tool": "bash", "state": {"status": "completed", "input": {"command": "python -m unittest"}, "metadata": {"exit": 0}}}})
+        self.assertFalse(workflow_gate("treatment", True, events))
+        events.pop()
+        events.append({"type": "tool_use", "part": {"tool": "read", "state": {"status": "completed", "input": {}}}})
         self.assertFalse(workflow_gate("treatment", True, events))
 
 

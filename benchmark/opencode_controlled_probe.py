@@ -124,6 +124,12 @@ def workflow_gate(arm: str, task_success: bool, events: list[dict[str, Any]]) ->
         return False
     explorer_index, _ = indexed[CHILDREN[0]]
     reviewer_index, reviewer_state = indexed[CHILDREN[1]]
+    completed_tool_indices = [
+        index for index, event in enumerate(events)
+        if event.get("type") == "tool_use" and event.get("part", {}).get("state", {}).get("status") == "completed"
+    ]
+    if not completed_tool_indices or max(completed_tool_indices) != reviewer_index:
+        return False
     edit_indices = [
         index for index, event in enumerate(events[explorer_index + 1:reviewer_index], explorer_index + 1)
         if str(event.get("part", {}).get("tool", "")).lower() in {"edit", "write"}
@@ -179,6 +185,13 @@ def _successful_test_event(event: dict[str, Any]) -> bool:
     state = event.get("part", {}).get("state", {})
     metadata = state.get("metadata", {})
     return _successful_tool_event(event) and isinstance(metadata, dict) and metadata.get("exit") == 0
+
+
+def require_runtime_revision(stdout: str, stderr: str, expected: str) -> str:
+    combined = (stdout + stderr).strip()
+    if expected not in combined:
+        raise RuntimeError(f"Unexpected llama.cpp build: {combined}")
+    return combined
 
 
 def primary_final_text(events: list[dict[str, Any]]) -> str:
@@ -520,7 +533,7 @@ def main() -> int:
         "LANG": "C.UTF-8",
     }
     runtime_version = _run_checked([str(server), "--version"], server_env, 10)
-    runtime_version_text = (runtime_version.stdout + runtime_version.stderr).strip()
+    runtime_version_text = require_runtime_revision(runtime_version.stdout, runtime_version.stderr, "d81235049")
     _write_json(output_root / "preflight.json", {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "source_git_sha": git_provenance(REPO_ROOT)[0],
@@ -529,8 +542,6 @@ def main() -> int:
         "model_sha256": MODEL_SHA256,
         "server_bundle_ldd_preflight": "passed",
     })
-    if "d81235049" not in runtime_version_text:
-        raise RuntimeError(f"Unexpected llama.cpp build: {runtime_version_text}")
     server_command = [
         str(server), "--model", str(model_path), "--host", "127.0.0.1", "--port", "8080",
         "--alias", DEFAULT_MODEL, "--ctx-size", str(DEFAULT_CONTEXT), "--n-gpu-layers", "99", "--batch-size", "512",
