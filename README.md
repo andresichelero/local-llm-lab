@@ -84,6 +84,8 @@ A clean-provenance repeat then completed one warm-up and three SSD-only measurem
 
 Storage-path audit found that the original Unsloth launcher left its process cwd on the D: checkout and created a small 2.28 MB compiled cache there. That cache was moved to C: and the runner now enters the SSD storage root before importing Unsloth. A post-fix smoke verified no cache was recreated on D:. The earlier Unsloth timings retain that small cache-I/O caveat; no HDD performance testing was performed.
 
+Dropout-zero comparison on the 7B model enabled fused QKV/O LoRA kernels but changed median training time only from 3.385 s to 3.289 s (+22.7 MiB allocated VRAM); this tiny smoke does not establish a meaningful speed or quality win. Details and raw records are in the [7B capacity report](results/reports/unsloth-7b-capacity-smoke.md).
+
 ## SSD-backed llama.cpp follow-up
 
 The Qwen3.5-9B GGUF Q4_K_M (pinned revision `3885219b6810b007914f3a7950a8d1b469d598a5`, SHA-256 in `versions.lock`) was tested from WSL ext4 on the C: SSD at 2K and 16K context. Three 2K-context startup-log measurements had a median 4.39 s from llama.cpp initialization to model-ready, versus 41.47 s across three prior E:-backed starts. Those historical log timings were collected on different runs without clearing the OS file cache, so treat the ratio as observed storage behavior, not a controlled cold-cache guarantee. Warm inference stayed in a similar range (about 63–66 generated tok/s); prompt and GPU load varied slightly between series.

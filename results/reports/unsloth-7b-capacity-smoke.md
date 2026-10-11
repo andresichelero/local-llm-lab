@@ -71,3 +71,17 @@ The sampler ran at one-second intervals (127 samples total); its mean GPU utiliz
 The prior warm-up plus interrupted repetition with invalid provenance is preserved but explicitly excluded from all summaries in results/raw/archive/qlora7b-provenance-invalid-20261011/. The clean JSONL, one-second traces, and logs are stored in results/raw/qlora7b-clean-20261011* and logs/qlora7b-clean-20261011-*.log. A post-run archive, including one representative adapter (all four adapter hashes matched), was stored on E: and checksummed.
 
 CSV per-measurement summary: `results/csv/unsloth-7b-clean-20261011.csv`. E: archive: `E:\LocalLLMLabArchive\2026-10-11\qlora7b-clean-20261011\qlora7b-clean-20261011.tar.gz`; SHA-256 `261def338918489d65e4e04812f87951e9a0950ea87904fe1c4221fa67c267cb`. The tar contains raw records, traces, logs, this report snapshot, and one representative adapter; its adapter weight SHA-256 matches the run records.
+
+
+## Dropout-zero comparison — 2026-10-11
+
+A matched one-warm-up/three-measurement run changed only `lora_dropout` from 0.05 to 0.00, keeping the pinned model, dataset, seed, sequence length, rank, batch, optimizer, and 8-step count fixed. Unsloth logged that the 0.05 configuration skipped fused QKV/O LoRA kernels; at 0.00 it patched all 28 QKV and 28 O layers with fused kernels. Both configurations completed all runs and passed the same deterministic code probe. All measured rows have clean source provenance and identify the C-backed WSL ext4 SSD.
+
+| Dropout | Median total (s) | Median training (s) | Torch allocated VRAM (MiB) | Torch reserved VRAM (MiB) | Sampled system VRAM peak (MiB) |
+|---:|---:|---:|---:|---:|---:|
+| 0.05 | 28.853 | 3.385 | 5,640.3 | 5,772 | 6,723 |
+| 0.00 | 28.714 | 3.289 | 5,663.0 | 5,768 | 6,728 |
+
+On this eight-step smoke, dropout zero was 2.8% faster for the training segment and 0.5% faster end-to-end, while using 22.7 MiB more Torch-allocated VRAM. These small differences do not establish a meaningful speed advantage. Dropout changes regularization, the base model already passed the probe, and no adapter-quality comparison was performed. Raw records/traces are `results/raw/qlora7b-dropout0-20261011*`; the per-run CSV is `results/csv/unsloth-7b-dropout0-20261011.csv`; logs are `logs/qlora7b-dropout0-20261011-*.log`.
+
+E: archive for the dropout-zero comparison: `E:\LocalLLMLabArchive\2026-10-11\qlora7b-dropout0-20261011\qlora7b-dropout0-20261011.tar.gz`; SHA-256 `924fb785e248d0df888f73c71dd51a77e84a7cebebeccea18a0aa24b72e0539a`. The representative adapter hash in that archive matches the dropout-zero JSONL.
