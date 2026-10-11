@@ -1,5 +1,12 @@
 # Execution status — updated 2026-10-11
 
+## Qwen2.5-Coder-14B hybrid SSD checkpoint — 2026-10-11
+
+- Completed 3 runs each at 24/32/36 GPU layers, using only the C:-hosted SSD for active model/runtime/result I/O. Clean-source 32-layer median was 11.73 tok/s generation and 350 ms TTFT at 6,731 MiB sampled VRAM; clean-source 36-layer median was 13.92 tok/s and 289 ms at 7,366 MiB. Use 32 layers as the default desktop-safe setting; 36 is the fastest tested setting with less headroom.
+- Strict JSON passed once. Tool-call smoke failed once: the model emitted a textual `<tools>` block instead of a structured `tool_calls` object. This path is not counted as tool-call success. Full details and qualification are in `results/reports/qwen25-coder14b-hybrid.md`.
+- After testing, the 8,988,110,272-byte model was archived to E: and the SSD working copy removed only after SHA-256 verification. E: was not used as a benchmark source or target.
+- Historical HDD measurements elsewhere in this repository are retained as past records; this checkpoint ran no HDD tests.
+
 ## SSD-only EXL3 validation — 2026-10-11
 
 - Qwen3.5-9B GGUF Q4_K_M passed one strict JSON response and one local `add(19,23)` tool round trip on SSD. The first JSON attempt failed because automatic reasoning used all 128 output tokens and returned an empty content field. Reproduction confirmed the cause; setting reasoning off produced valid exact JSON. The runner now defaults to reasoning off for this quality smoke and records the selected mode. Details and the retained failed event are in `results/reports/qwen35-gguf-quality-smoke.md` and `results/raw/qwen35-gguf-quality.jsonl`.

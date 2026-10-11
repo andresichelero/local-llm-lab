@@ -1,6 +1,6 @@
 # Tier 0 summary
 
-Clean-source measured runs: 97 across 32 configurations.
+Clean-source measured runs: 103 across 34 configurations.
 Warm-ups and preliminary or dirty-source records remain in raw JSONL but are excluded from measured-run statistics.
 
 | Experiment | Context | Prompt | Max output | KV K/V | Prompt cache | Reasoning | Runs | TTFT median (ms) | Prompt median (tok/s) | Generation median (tok/s) | Max sampled VRAM (MiB) |
@@ -24,6 +24,8 @@ Warm-ups and preliminary or dirty-source records remain in raw JSONL but are exc
 | llama-cpp-qwen35-ssd-kv-16384-f16-kv | 16384 | 14352 | 64 | f16/f16 | off | off | 3 | 7248.50 | 1982.40 | 59.52 | 6456 |
 | llama-cpp-qwen35-ssd-kv-16384-q8_0-kv | 16384 | 14352 | 64 | q8_0/q8_0 | off | off | 3 | 7408.30 | 1939.72 | 61.99 | 6264 |
 | llamacpp-qwen35-9b-gguf-q4km-2k-sameprompt | 2048 | 29 | 32 | f16/f16 | off | off | 3 | 68.77 | 433.51 | 58.38 | 6086 |
+| qwen25coder14b-q4km-hybrid-2k-layers32 | 2048 | 46 | 64 | f16/f16 | off | off | 3 | 349.74 | 132.77 | 11.73 | 6731 |
+| qwen25coder14b-q4km-hybrid-2k-layers36 | 2048 | 46 | 64 | f16/f16 | off | off | 3 | 288.80 | 161.25 | 13.92 | 7366 |
 | qwen35_9b_gguf_16k_q4kv_ssd | 16384 | 14380 | 64 | q4_0/q4_0 | off | off | 3 | 7324.97 | 1965.55 | 62.04 | 6191 |
 | qwen35_9b_gguf_2k_full_ssd_runtime | 2048 | 29 | 64 | f16/f16 | off | off | 3 | 85.27 | 351.08 | 52.75 | 6700 |
 | qwen35_9b_gguf_2k_ssd_profiled | 2048 | 29 | 64 | f16/f16 | off | off | 3 | 71.34 | 418.94 | 65.51 | 6212 |

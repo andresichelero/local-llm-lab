@@ -1,5 +1,14 @@
 # Resume point — 2026-10-11
 
+## Latest checkpoint — Qwen2.5-Coder-14B hybrid SSD run
+
+- User's current storage rule: run benchmarks only from the C: SSD-backed WSL ext4 filesystem. E: is for archiving tested models and general storage; do not run HDD performance tests. Historical HDD results remain documented as history.
+- Qwen2.5-Coder-14B-Instruct official Q4_K_M GGUF was tested on C: using llama.cpp `d81235049384534c167caea52b85a694f6103d14`, 2K context, FP16 K/V, Flash Attention, with 24/32/36 GPU layers. Three runs each: clean-source 32-layer median 11.73 tok/s / 350 ms TTFT / 6,731 MiB sampled VRAM; clean-source 36-layer median 13.92 tok/s / 289 ms / 7,366 MiB. Use 32 layers as the default; 36 is faster but has less VRAM headroom. The dirty-source 24-layer calibration is retained but excluded from the clean ranking.
+- Strict JSON passed once. Structured tool-call smoke failed: model emitted a literal `<tools>` block in content instead of an OpenAI-compatible `tool_calls` object, despite answering 42. This is a protocol-path failure, not a tool success. Full results and caveats: `results/reports/qwen25-coder14b-hybrid.md`.
+- The 8,988,110,272-byte model was archived to `E:\local-llm-models\hybrid\qwen2.5-coder-14b-instruct-q4_k_m.gguf`, SHA-256 verified as `c1e659736d89ac1065fb495330fb824d94001974a4bfa78e7270e43476a8d940`, and its C: working copy removed after verification. `scripts/21_archive_qwen14b_from_ssd.sh` documents the safe archive procedure.
+- Quality-smoke runner now accepts context, GPU-layer and K/V cache settings and reports the actual settings in JSONL. Regression tests cover config metadata and preservation of model tool-call failure details.
+- After checkpoint completion, `py -3.12 -m pytest -q` passed 35 tests; compileall and diff checks passed. A shell syntax check via a Windows-mounted path was initially invoked with bad PowerShell quoting; the corrected WSL check passed for all shell scripts. No model weights are tracked.
+
 ## Latest checkpoint — SSD-only ExLlamaV3 / EXL3 validation
 
 - Follow-up Qwen3.5-9B GGUF quality smoke passed strict JSON and a local arithmetic tool round trip on C: SSD. The first JSON response under automatic reasoning exhausted its output allowance in `reasoning_content`; the reproduced root cause was fixed by defaulting this smoke to reasoning off. Both the failed attempt and clean successful results are preserved; see `results/reports/qwen35-gguf-quality-smoke.md`.
@@ -11,7 +20,7 @@
 
 ## Current objective
 
-Continue the reproducible RTX 3070 / WSL2 lab. The HDD-versus-SSD QLoRA storage comparison is complete; resume the broader inference and harness experiments with active assets on the SSD and model archives on E:.
+Continue the reproducible RTX 3070 / WSL2 lab. Keep all new benchmarks on the SSD-backed WSL filesystem and archive completed model weights on E:. Do not run HDD performance comparisons unless the user changes this rule.
 
 Earlier checkpoint: the pinned Qwen3.5-9B GGUF Q4_K_M was tested from the C:-hosted WSL ext4 filesystem at 2K and 16K, and the llama.cpp runtime bundle was staged to the same SSD. Three 2K startup log measurements showed 4.39 s median on SSD versus 41.47 s on E:, with uncontrolled OS file-cache state. Warm generation remained near 63–66 tok/s. A C-only runtime series completed, but Windows GPU sharing raised VRAM use and reduced throughput; treat it as contention-affected. See `results/reports/ssd-inference-comparison.md`.
 

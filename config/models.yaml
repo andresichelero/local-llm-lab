@@ -164,7 +164,7 @@ models:
     candidate_quant: official GGUF Q4_K_M; Q3_K_M remains a lower-memory comparison
     estimated_weight_gib: 8.4
     realistic_context_tokens: 2048
-    status: pinned SSD hybrid test candidate; Q4_K_M run pending
+    status: SSD hybrid benchmark passed; tool-call smoke failed
     purpose: hybrid inference and CPU offload
     evidence: official-model-card
   - id: qwen3.5-27b

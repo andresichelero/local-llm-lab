@@ -33,8 +33,12 @@ tiers:
     quant: Q4_K_M
     storage_profile: ssd-wsl-ext4-c
     max_context: 2048
-    gpu_layers: calibrate against current VRAM headroom
-    status: pinned; staged download and hybrid smoke pending
+    gpu_layers: [24, 32, 36]
+    kv_cache: f16
+    flash_attention: on
+    warmups: 0
+    repetitions: 3
+    status: completed on C SSD; see results/reports/qwen25-coder14b-hybrid.md
   moe:
     question: Measure MoE expert placement, cache behavior and MTP on an available implementation.
     model: Qwen/Qwen3.6-35B-A3B

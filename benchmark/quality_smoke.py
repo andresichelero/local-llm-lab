@@ -30,6 +30,18 @@ def request(url: str, model: str, messages: list[dict], **extra) -> tuple[dict, 
     return data, time.perf_counter() - started
 
 
+def get_required_tool_call(message: dict) -> dict:
+    calls = message.get("tool_calls") or []
+    if not calls or calls[0].get("function", {}).get("name") != "add":
+        details = {
+            "finish_reason": message.get("finish_reason"),
+            "content": message.get("content"),
+            "tool_calls": calls,
+        }
+        raise RuntimeError(f"model did not return the required add tool call: {json.dumps(details, ensure_ascii=False)}")
+    return calls[0]
+
+
 def record(mode: str, model: str, elapsed: float, success: bool, **fields) -> dict:
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -42,10 +54,10 @@ def record(mode: str, model: str, elapsed: float, success: bool, **fields) -> di
         "source_tree_dirty": os.environ.get("LAB_SOURCE_DIRTY", "unknown") == "true",
         "runtime_commit": os.environ.get("LAB_RUNTIME_COMMIT"),
         "reasoning": os.environ.get("LAB_REASONING", "unknown"),
-        "context_tokens": 2048,
-        "kv_cache_k": "f16",
-        "kv_cache_v": "f16",
-        "gpu_layers": 99,
+        "context_tokens": int(os.environ.get("LAB_CONTEXT_TOKENS", "2048")),
+        "kv_cache_k": os.environ.get("LAB_KV_CACHE_K", "f16"),
+        "kv_cache_v": os.environ.get("LAB_KV_CACHE_V", "f16"),
+        "gpu_layers": int(os.environ.get("LAB_GPU_LAYERS", "99")),
         "flash_attention": "on",
         "wall_time_s": round(elapsed, 4),
         "success": success,
@@ -101,10 +113,7 @@ def main() -> int:
     try:
         first, _ = request(args.url, args.model, messages, tools=tools, tool_choice="required")
         assistant = first["choices"][0]["message"]
-        calls = assistant.get("tool_calls") or []
-        if not calls or calls[0].get("function", {}).get("name") != "add":
-            raise RuntimeError("model did not return the required add tool call")
-        call = calls[0]
+        call = get_required_tool_call(assistant)
         arguments = json.loads(call["function"]["arguments"])
         if set(arguments) != {"a", "b"} or any(type(arguments[key]) is not int for key in ("a", "b")):
             raise RuntimeError(f"invalid tool arguments: {arguments!r}")
