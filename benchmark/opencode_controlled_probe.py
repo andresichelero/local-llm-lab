@@ -520,8 +520,17 @@ def main() -> int:
         "LANG": "C.UTF-8",
     }
     runtime_version = _run_checked([str(server), "--version"], server_env, 10)
-    if "d81235049" not in runtime_version.stdout:
-        raise RuntimeError(f"Unexpected llama.cpp build: {runtime_version.stdout.strip()}")
+    runtime_version_text = (runtime_version.stdout + runtime_version.stderr).strip()
+    _write_json(output_root / "preflight.json", {
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "source_git_sha": git_provenance(REPO_ROOT)[0],
+        "opencode_version": version.stdout.strip(),
+        "llama_cpp_version": runtime_version_text,
+        "model_sha256": MODEL_SHA256,
+        "server_bundle_ldd_preflight": "passed",
+    })
+    if "d81235049" not in runtime_version_text:
+        raise RuntimeError(f"Unexpected llama.cpp build: {runtime_version_text}")
     server_command = [
         str(server), "--model", str(model_path), "--host", "127.0.0.1", "--port", "8080",
         "--alias", DEFAULT_MODEL, "--ctx-size", str(DEFAULT_CONTEXT), "--n-gpu-layers", "99", "--batch-size", "512",
@@ -597,7 +606,7 @@ def main() -> int:
         except subprocess.TimeoutExpired:
             os.killpg(server_process.pid, signal.SIGKILL)
             server_process.wait()
-    print(json.dumps({"opencode_version": version.stdout.strip(), "llama_cpp_version": runtime_version.stdout.strip(), "model_sha256": MODEL_SHA256, "model_preflight": preflight, "records": records}, indent=2))
+    print(json.dumps({"opencode_version": version.stdout.strip(), "llama_cpp_version": runtime_version_text, "model_sha256": MODEL_SHA256, "model_preflight": preflight, "records": records}, indent=2))
     return 0
 
 
