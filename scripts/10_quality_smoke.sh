@@ -9,8 +9,10 @@ OUTPUT="${OUTPUT:-$BENCH_STORAGE_ROOT/results/raw/tier0-quality.jsonl}"
 MODEL_ID="${MODEL_ID:-granite-4.1-3b}"
 RESOURCE_OUTPUT="${RESOURCE_OUTPUT:-$BENCH_STORAGE_ROOT/results/raw/tier0-quality-resources.jsonl}"
 SERVER_LOG="${LOG_PATH:-$BENCH_STORAGE_ROOT/logs/llama-server-quality-$PORT.log}"
+REASONING="${REASONING:-off}"
 if [[ "${1:-}" == "--help" ]]; then echo "Usage: $0 [--dry-run]; validates JSON output and a single local tool round trip."; exit 0; fi
 if [[ "${1:-}" == "--dry-run" ]]; then printf 'model=%s server=%s port=%s output=%s\n' "$MODEL" "$SERVER" "$PORT" "$OUTPUT"; exit 0; fi
+case "$REASONING" in on|off|auto) ;; *) echo "REASONING must be on, off, or auto" >&2; exit 2 ;; esac
 [[ -x "$SERVER" ]] || { echo "llama-server missing: $SERVER" >&2; exit 1; }
 [[ -f "$MODEL" ]] || { echo "Model file missing: $MODEL" >&2; exit 1; }
 if curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then echo "Port $PORT already has a healthy server; refusing to use an unknown process." >&2; exit 1; fi
@@ -20,7 +22,7 @@ RUNTIME_COMMIT="$(git -C "$ROOT/tools/llama.cpp" rev-parse HEAD 2>/dev/null || e
 mkdir -p "$(dirname "$OUTPUT")" "$(dirname "$RESOURCE_OUTPUT")" "$(dirname "$SERVER_LOG")"
 python3 "$ROOT/benchmark/resource_sampler.py" --output "$RESOURCE_OUTPUT" --interval 1 &
 SAMPLER_PID=$!
-"$SERVER" --model "$MODEL" --host 127.0.0.1 --port "$PORT" --ctx-size 2048 --n-gpu-layers 99 --batch-size 256 --ubatch-size 128 --flash-attn on --cache-type-k f16 --cache-type-v f16 >"$SERVER_LOG" 2>&1 &
+"$SERVER" --model "$MODEL" --host 127.0.0.1 --port "$PORT" --ctx-size 2048 --n-gpu-layers 99 --batch-size 256 --ubatch-size 128 --flash-attn on --cache-type-k f16 --cache-type-v f16 --reasoning "$REASONING" >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 cleanup() { kill "$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; kill "$SAMPLER_PID" 2>/dev/null || true; wait "$SAMPLER_PID" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
@@ -31,7 +33,7 @@ for _ in $(seq 1 90); do
   sleep 1
 done
 if ((READY == 0)); then tail -100 "$SERVER_LOG" >&2; exit 1; fi
-LAB_GIT_SHA="$SHA" LAB_SOURCE_DIRTY="$SOURCE_DIRTY" LAB_RUNTIME_COMMIT="$RUNTIME_COMMIT" python3 "$ROOT/benchmark/quality_smoke.py" --url "http://127.0.0.1:$PORT" --model "$MODEL_ID" --output "$OUTPUT"
+LAB_GIT_SHA="$SHA" LAB_SOURCE_DIRTY="$SOURCE_DIRTY" LAB_RUNTIME_COMMIT="$RUNTIME_COMMIT" LAB_REASONING="$REASONING" python3 "$ROOT/benchmark/quality_smoke.py" --url "http://127.0.0.1:$PORT" --model "$MODEL_ID" --output "$OUTPUT"
 cleanup
 cp "$OUTPUT" "$ROOT/results/raw/$(basename "$OUTPUT")"
 cp "$RESOURCE_OUTPUT" "$ROOT/results/raw/$(basename "$RESOURCE_OUTPUT")"

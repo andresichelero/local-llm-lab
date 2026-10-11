@@ -41,6 +41,7 @@ def record(mode: str, model: str, elapsed: float, success: bool, **fields) -> di
         "git_sha": os.environ.get("LAB_GIT_SHA"),
         "source_tree_dirty": os.environ.get("LAB_SOURCE_DIRTY", "unknown") == "true",
         "runtime_commit": os.environ.get("LAB_RUNTIME_COMMIT"),
+        "reasoning": os.environ.get("LAB_REASONING", "unknown"),
         "context_tokens": 2048,
         "kv_cache_k": "f16",
         "kv_cache_v": "f16",
