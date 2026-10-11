@@ -33,3 +33,31 @@ def test_token_ids_accepts_mapping_and_direct_tensor_like_results():
 
     assert unsloth_smoke.token_ids({"input_ids": [1, 2]}) == [1, 2]
     assert unsloth_smoke.token_ids(direct) is direct
+
+
+def test_git_provenance_ignores_generated_results_but_detects_source_changes(tmp_path, monkeypatch):
+    import subprocess
+
+    repository = tmp_path / "repo"
+    repository.mkdir()
+    def git(*args):
+        subprocess.run(["git", "-C", str(repository), *args], check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.name", "Test")
+    git("config", "user.email", "test@example.invalid")
+    source = repository / "benchmark.py"
+    source.write_text("value = 1\n", encoding="utf-8")
+    git("add", "benchmark.py")
+    git("commit", "-qm", "initial")
+    generated = repository / "results" / "system-audit" / "host-audit.txt"
+    generated.parent.mkdir(parents=True)
+    generated.write_text("generated audit\n", encoding="utf-8")
+    monkeypatch.setattr(unsloth_smoke, "REPOSITORY_ROOT", repository)
+
+    _, dirty_with_only_generated_results = unsloth_smoke.git_provenance()
+    assert not dirty_with_only_generated_results
+
+    source.write_text("value = 2\n", encoding="utf-8")
+    _, dirty_with_source_change = unsloth_smoke.git_provenance()
+    assert dirty_with_source_change

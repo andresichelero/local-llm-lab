@@ -93,9 +93,16 @@ def load_rows(dataset: Path, tokenizer: object, max_length: int) -> list[dict[st
     return rows
 
 
-def git_provenance() -> tuple[str, bool]:
-    commit = subprocess.run(["git", "-C", str(REPOSITORY_ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
-    dirty = bool(subprocess.run(["git", "-C", str(REPOSITORY_ROOT), "status", "--porcelain"], capture_output=True, text=True, check=True).stdout.strip())
+def git_provenance(repository: Path | None = None) -> tuple[str, bool]:
+    root = (repository or REPOSITORY_ROOT).resolve()
+    commit = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    status = subprocess.run(
+        ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=all", "--", ".", ":(exclude)results/**"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    dirty = bool(status.strip())
     return commit, dirty
 
 
