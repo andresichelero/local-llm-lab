@@ -9,6 +9,7 @@ from benchmark.qlora_quality import load_tasks, run_generated_code, strip_code_f
 TASK = {
     "function": "difference_of_cubes",
     "arguments": ["a", "b"],
+    "reference": "def difference_of_cubes(a, b):\n    return a ** 3 - b ** 3",
     "tests": [
         {"inputs": [3, 2], "expected": 19},
         {"inputs": [2, 3], "expected": -19},
@@ -67,6 +68,15 @@ class QloraQualityTests(unittest.TestCase):
             self.assertEqual(load_tasks(path)[0]["task_id"], "one")
             path.write_text("\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "empty"):
+                load_tasks(path)
+
+    def test_rejects_task_without_reference_completion(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "tasks.jsonl"
+            task = {"task_id": "one", **TASK, "prompt": "do task"}
+            task.pop("reference")
+            path.write_text(json.dumps(task) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Invalid held-out task"):
                 load_tasks(path)
 
     def test_quality_fixture_has_disjoint_task_ids_and_nonempty_cases(self):
