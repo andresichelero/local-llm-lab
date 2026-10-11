@@ -86,6 +86,8 @@ Storage-path audit found that the original Unsloth launcher left its process cwd
 
 Dropout-zero comparison on the 7B model enabled fused QKV/O LoRA kernels but changed median training time only from 3.385 s to 3.289 s (+22.7 MiB allocated VRAM); this tiny smoke does not establish a meaningful speed or quality win. Details and raw records are in the [7B capacity report](results/reports/unsloth-7b-capacity-smoke.md).
 
+Long-context QLoRA checks on 7B now pass at 512, 1,024, and 2,048 tokens with one warm-up plus three repetitions each. At 2,048, median training was 22.73 s and sampled total VRAM peaked at 7,541 MiB, leaving limited margin for desktop contention. This is a synthetic capacity smoke, not a quality result or a universal context ceiling; see the [detailed capacity report and fixtures](results/reports/unsloth-7b-capacity-smoke.md).
+
 ## SSD-backed llama.cpp follow-up
 
 The Qwen3.5-9B GGUF Q4_K_M (pinned revision `3885219b6810b007914f3a7950a8d1b469d598a5`, SHA-256 in `versions.lock`) was tested from WSL ext4 on the C: SSD at 2K and 16K context. Three 2K-context startup-log measurements had a median 4.39 s from llama.cpp initialization to model-ready, versus 41.47 s across three prior E:-backed starts. Those historical log timings were collected on different runs without clearing the OS file cache, so treat the ratio as observed storage behavior, not a controlled cold-cache guarantee. Warm inference stayed in a similar range (about 63–66 generated tok/s); prompt and GPU load varied slightly between series.
