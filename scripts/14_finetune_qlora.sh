@@ -47,6 +47,7 @@ fi
 mkdir -p "$(dirname "$LOG_PATH")"
 export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-/tmp/local-llm-training-pycache}"
 export HF_HOME="${HF_HOME:-$BENCH_STORAGE_ROOT/cache/huggingface}"
+export QLORA_STORAGE_PROFILE="${QLORA_STORAGE_PROFILE:-ssd-wsl-ext4-c}"
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 python3 "$ROOT/benchmark/resource_sampler.py" --output "$RESOURCE_JSONL" --interval 1 &
