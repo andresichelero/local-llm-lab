@@ -39,10 +39,10 @@ models:
     context_claim: 262144 native; model card documents agent/tool use and MTP
     tool_use: upstream Qwen-Agent/Qwen Code guidance; not locally measured
     formats: [Transformers, community-GGUF]
-    candidate_quant: Q4_K_M; pin and inspect a community GGUF before use
+    candidate_quant: Q4_K_M; bartowski revision 4168f45a16a1290d65a4ec0fa312ae917a4c15d6, SHA-256 in versions.lock
     estimated_weight_gib: 2.8
     realistic_context_tokens: 8192
-    status: research_candidate_not_downloaded
+    status: ssd_downloaded_q4_k_m_not_yet_benchmarked
     purpose: compact local worker and small-model harness comparison
     evidence: official model card observed 2026-10-11; quant artifact and runtime support remain to be pinned
   - id: qwen3.5-2b
