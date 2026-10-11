@@ -1,0 +1,71 @@
+{
+  "audit_date": "2026-10-11",
+  "host": {
+    "os": "Windows 10 Pro 22H2",
+    "gpu": "NVIDIA GeForce RTX 3070",
+    "gpu_vram_mib": 8192,
+    "c_drive_free_gb_after_resize": 93,
+    "wslconfig": "C:\\Users\\Andre\\.wslconfig",
+    "wslconfig_backup": "C:\\Users\\Andre\\.wslconfig.backup-20261011",
+    "wslconfig_memory": "8GB",
+    "wslconfig_default_vhd_size": "70GB",
+    "wslconfig_processors": 8,
+    "wslconfig_swap": "4GB",
+    "wsl_vhdx_path": "C:\\Users\\Andre\\AppData\\Local\\wsl\\{05bd4646-eee1-4dc5-9a85-ffba1cd4425e}\\ext4.vhdx",
+    "wsl_vhdx_file_length_bytes": 51459915776
+  },
+  "wsl": {
+    "version": "3.0.1",
+    "distribution": "Ubuntu-24.04",
+    "kernel": "6.18.40.1-microsoft-standard-WSL2",
+    "mem_total_bytes": 8330272768,
+    "swap_total_bytes": 4294967296,
+    "root_device": "/dev/sdd",
+    "root_virtual_size_bytes": 75161927680,
+    "root_filesystem_size_bytes": 72854241280,
+    "root_used_bytes": 44238372864,
+    "root_available_bytes": 24841003008,
+    "root_use_percent": 65,
+    "ncdu": {
+      "version": "1.19",
+      "command": "ncdu -x -o /tmp/local-llm-ncdu-root.json /",
+      "accessible_top_level_sizes_gib": {
+        "/home": 19.77,
+        "/usr": 8.06,
+        "/opt/nvidia": 2.23,
+        "/var": 1.10,
+        "/tmp": 0.08,
+        "/mnt": 0.19
+      },
+      "caveat": "The scan reported unreadable WSL pseudo-mounts; sizes summarize accessible paths on the root filesystem.",
+      "packages_removed": []
+    }
+  },
+  "suspended_for_test_window": [
+    "Immich containers: immich_server, immich_machine_learning, immich_postgres, immich_redis",
+    "docker.service",
+    "docker.socket",
+    "containerd.service",
+    "glances.service",
+    "cron.service",
+    "wsl-pro.service",
+    "unattended-upgrades.service",
+    "snapd.service",
+    "snapd.socket",
+    "apt-daily.timer",
+    "apt-daily-upgrade.timer"
+  ],
+  "remaining_system_services": [
+    "dbus.service",
+    "getty@tty1.service",
+    "rsyslog.service",
+    "systemd-journald.service",
+    "systemd-logind.service",
+    "systemd-resolved.service",
+    "systemd-timesyncd.service",
+    "systemd-udevd.service",
+    "user@0.service",
+    "user@1000.service"
+  ],
+  "service_state_notes": "Immich restart policies were changed from always to no. Restoration details are in logs/wsl-service-enable-state-before-tests.txt and logs/wsl-immich-restart-policies.txt."
+}

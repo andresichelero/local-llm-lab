@@ -1,0 +1,15 @@
+WSL services suspended for local LLM experiments on 2026-10-11.
+
+Active before suspension: Docker, containerd, Immich (4 containers), Glances, cron, Ubuntu Pro bridge, unattended-upgrades.
+Systemd explicitly reported Docker, docker.socket, containerd, and unattended-upgrades as enabled; startup links for the other active units were removed during the temporary disable.
+Immich restart policies before suspension:
+/immich_server always
+/immich_machine_learning always
+/immich_postgres always
+/immich_redis always
+
+Disabled for the test window: docker.service, docker.socket, containerd.service, glances.service, cron.service, wsl-pro.service, unattended-upgrades.service.
+snapd.service and snapd.socket were active after a later WSL reactivation and were disabled before continuing.
+apt-daily.timer and apt-daily-upgrade.timer were enabled and will be paused during the test window.
+
+To restore afterward, re-enable/start the units that were enabled before the test window and restore the four Immich restart policies to `always` before starting those containers.
