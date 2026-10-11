@@ -251,7 +251,12 @@ def _prepare_run(harness: str, run_dir: Path, install_root: Path, prompt_text: s
     workspace.mkdir(parents=True)
     home.mkdir(parents=True)
     output.mkdir(parents=True)
-    shutil.copytree(REPO_ROOT / "benchmark/fixtures/harness_task", workspace, dirs_exist_ok=True)
+    shutil.copytree(
+        REPO_ROOT / "benchmark/fixtures/harness_task",
+        workspace,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
     prompt_file = run_dir / "TASK_PROMPT.md"
     prompt_file.write_text(prompt_text + "\n", encoding="utf-8")
     if harness == "pi":

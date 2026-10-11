@@ -34,6 +34,9 @@ class HarnessRunnerTests(unittest.TestCase):
             source_fixture = Path(__file__).resolve().parents[1] / "benchmark/fixtures/harness_task"
             import shutil
             shutil.copytree(source_fixture, fixture)
+            cache = fixture / "src/__pycache__"
+            cache.mkdir(parents=True, exist_ok=True)
+            (cache / "calculator.cpython-312.pyc").write_bytes(b"cache")
             configs = repo / "benchmark/configs/harnesses"
             configs.mkdir(parents=True)
             source_config = Path(__file__).resolve().parents[1] / "benchmark/configs/harnesses/opencode.json"
@@ -46,6 +49,7 @@ class HarnessRunnerTests(unittest.TestCase):
                 _prepare_run("opencode", run_dir, root, "Do the task.")
             self.assertFalse((run_dir / "workspace/opencode.json").exists())
             self.assertTrue((run_dir / "home/.config/opencode/opencode.json").is_file())
+            self.assertFalse((run_dir / "workspace/src/__pycache__").exists())
 
     def test_isolated_environment_points_pwd_at_benchmark_workspace(self) -> None:
         self.assertTrue(callable(_isolated_environment), "isolated environment builder is not implemented")
