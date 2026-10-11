@@ -21,6 +21,7 @@ METRICS = (
     "tool_failures",
     "compactions",
     "ram_used_mb_peak",
+    "swap_used_mb_peak",
     "vram_used_mb_peak",
     "gpu_util_pct_avg",
     "temperature_c_peak",
@@ -50,7 +51,12 @@ def summarize_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
             or not record.get("git_sha")
         ):
             continue
-        groups[tuple(record.get(field) for field in GROUP_FIELDS)].append(record)
+        task = record.get("task")
+        if task is None and record.get("experiment") == "harness-coding-task-smoke":
+            task = "calculator_division"
+        groups[
+            tuple(task if field == "task" else record.get(field) for field in GROUP_FIELDS)
+        ].append(record)
 
     summaries: list[dict[str, Any]] = []
     for key, runs in sorted(groups.items(), key=lambda item: str(item[0])):
@@ -92,15 +98,17 @@ def write_outputs(
         writer.writeheader()
         writer.writerows(summaries)
 
+    task_count = len({row.get("task") for row in summaries if row.get("task")})
+    task_scope = "one fixed coding task" if task_count <= 1 else f"{task_count} fixed coding tasks"
     lines = [
         "# Harness evaluation summary",
         "",
         "Sources: " + ", ".join(f"`{source.as_posix()}`" for source in sources) + ". Warm-up runs, invalid runs, and rows without a Git revision are excluded; raw entries remain preserved.",
-        "Rows are grouped by harness, model, runtime, quantization, context, KV cache, and storage profile. Token counts come from each harness's own usage records, including cached input where exposed.",
+        "Rows are grouped by task, harness, model, runtime, quantization, context, KV cache, and storage profile. Token counts come from each harness's own usage records, including cached input where exposed.",
         "Success requires clean harness exit, passing unit tests, passing behavior probe, and scoped edits.",
         "",
-        "| Task | Model | Harness | Version | Runs | Success | Wall s median (mean ± sd) | First prompt tokens median | Prompt tokens median | Tool calls median | RAM peak MB median | VRAM peak MB median |",
-        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Task | Model | Harness | Version | Runs | Success | Wall s median (mean ± sd) | First prompt tokens median | Prompt tokens median | Tool calls median | RAM peak MB median | Swap peak MB median | VRAM peak MB median |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in summaries:
         def fmt(value: Any) -> str:
@@ -111,11 +119,11 @@ def write_outputs(
         lines.append(
             f"| {fmt(row['task'])} | {fmt(row['model'])} | {fmt(row['harness'])} | {fmt(row['harness_version'])} | {row['measurement_count']} | {success} | {wall} | "
             f"{fmt(row['first_prompt_tokens_median'])} | {fmt(row['prompt_tokens_median'])} | {fmt(row['tool_calls_median'])} | "
-            f"{fmt(row['ram_used_mb_peak_median'])} | {fmt(row['vram_used_mb_peak_median'])} |"
+            f"{fmt(row['ram_used_mb_peak_median'])} | {fmt(row['swap_used_mb_peak_median'])} | {fmt(row['vram_used_mb_peak_median'])} |"
         )
     lines += [
         "",
-        "These measurements cover one fixed coding task and the exact model/harness configurations shown above. They do not establish broad coding quality or long-context, compaction, subagent, or MCP performance.",
+        f"These measurements cover {task_scope} and the exact model/harness configurations shown above. They do not establish broad coding quality or long-context, compaction, subagent, or MCP performance.",
         "Vibe first-prompt counts are read from journal usage events; llama.cpp prompt-evaluation work is stored separately and can be smaller when server prefix caching is active.",
         "See the raw JSONL for per-run quality details, tool errors, timing, resource samples, and excluded setup attempts.",
         "",

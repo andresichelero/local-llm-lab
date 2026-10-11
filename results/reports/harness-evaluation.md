@@ -78,3 +78,17 @@ Mistral Vibe 2.26.1 used the same fixed coding task, Qwen3.5-4B Q4_K_M revision,
 | Mistral Vibe 2.26.1 | 5 | 0/5 | 20.02 | 8,088 | 54,225 | 6 | 4,105 MB |
 
 In this single-task sample, OpenCode was the only harness to follow the exact test-name requirement in all runs; Pi and Vibe still produced passing behavior and unit tests but missed that strict spec detail. Pi had lower reported prompt overhead and was faster. Vibe used fewer reported tokens than OpenCode but completed at a similar wall time. Harness counters and schemas differ, so token totals are directional rather than normalized. This does not establish general quality or measure compaction, subagents, or MCP. Vibe raw data, CSV, and report are in `results/raw/qwen35-4b-vibe-harness-20261011.jsonl`, `results/csv/harness-qwen35-4b-vibe.csv`, and `results/reports/harness-qwen35-4b-vibe.md`; its post-run archive is checksum-verified on E:.
+
+## Qwen3.5-4B matched harness follow-up — whitespace normalization task, SSD only
+
+The harness runner now supports a second deterministic task, `whitespace_normalization`, with a separate fixture and independent grader. Pi 1.1.0, OpenCode 1.19.0, and Mistral Vibe 2.26.1 used the pinned Qwen3.5-4B Q4_K_M, llama.cpp `d81235049384534c167caea52b85a694f6103d14`, 16K context, Q4_0 K/V, 99 GPU layers, and Flash Attention. Each harness had one warm-up followed by five measurements, all on C-backed WSL ext4.
+
+| Harness | Strict success | Wall s median (mean ± sd) | Prompt tokens median | Tool failures total | WSL RAM peak median | WSL swap peak median |
+|---|---:|---:|---:|---:|---:|---:|
+| Pi | 5/5 | 14.76 (28.36 ± 33.99) | 16,536 | 2 | 4,222 MB | 0 MB |
+| OpenCode | 5/5 | 16.99 (17.37 ± 0.96) | 49,504 | 0 | 7,334 MB | 1,168 MB |
+| Mistral Vibe | 5/5 | 14.76 (15.17 ± 0.59) | 43,624 | 0 | 7,349 MB | 2,094 MB |
+
+All 15 measured runs passed the exact test-name grader, the independent behavior probe, unit tests, preservation of `word_count`, and the two-file scope check. Pi had one 89.035 s outlier with 30 tool calls and two failed calls; it still completed the task correctly. Across this task and the earlier division task, strict success was Pi 8/10, OpenCode 10/10, and Vibe 5/10. The contrast shows the earlier test-name failures were task-specific and should not be treated as general harness failure rates.
+
+The WSL resource sampler reached 7,610 MiB RAM and 2,447 MiB swap during the full series, close to the configured memory ceiling; there was no OOM. Memory pressure makes small timing differences provisional. Harness-reported prompt tokens are not normalized across tools. The comparison covers only these two small tasks and does not test long-context compaction, subagents, or MCP. The task-level report, combined report, CSV, and raw JSONL are `results/reports/harness-qwen35-4b-whitespace.md`, `results/reports/harness-qwen35-4b-multitask.md`, `results/csv/harness-qwen35-4b-whitespace.csv`, `results/csv/harness-qwen35-4b-multitask.csv`, and `results/raw/qwen35-4b-whitespace-harness-20261011.jsonl`.
