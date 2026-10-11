@@ -89,7 +89,7 @@ def summarize_series(runs: list[dict[str, Any]], samples: list[dict[str, Any]]) 
 
 def generate(input_dir: Path, csv_path: Path, markdown_path: Path) -> list[dict[str, Any]]:
     files = sorted(
-        path for path in input_dir.glob("qwen35-ssd-recall-16k-*.jsonl")
+        path for path in input_dir.glob("qwen35-ssd-recall-*.jsonl")
         if not path.name.endswith("-resources.jsonl")
     )
     rows = []
@@ -112,22 +112,23 @@ def generate(input_dir: Path, csv_path: Path, markdown_path: Path) -> list[dict[
     lines = [
         "# SSD long-context exact-recall probe",
         "",
-        "Each series uses the same invented maintenance code, placed once at the midpoint of a deterministic report. The tokenizer sized the user prompt to 14,011 tokens; llama.cpp reports 14,023 prompt tokens after chat formatting. One warm-up and three measured repetitions were run per KV format at 16K context, temperature 0, seed 1234, with prompt caching disabled.",
+        "Each series uses the same invented maintenance code, placed once at the midpoint of a deterministic report. Context and prompt token counts are recorded per series in the CSV and table. Each run has one warm-up and three measured repetitions per KV format, temperature 0, seed 1234, with prompt caching disabled.",
         "",
-        "| KV K/V | Exact matches | TTFT median ms | Wall median s | Sampler VRAM peak MiB | RAM peak MiB | GPU utilization mean % |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Context | Prompt tokens | KV K/V | Exact matches | TTFT median ms | Wall median s | Sampler VRAM peak MiB | RAM peak MiB | GPU utilization mean % |",
+        "|---:|---:|---|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         lines.append(
-            f"| {row['kv_cache_k']}/{row['kv_cache_v']} | {row['quality_success_count']}/{row['measurement_count']} | "
+            f"| {row['context_tokens']} | {row.get('prompt_tokens', 'n/a')} | {row['kv_cache_k']}/{row['kv_cache_v']} | {row['quality_success_count']}/{row['measurement_count']} | "
             f"{row['ttft_ms_median']:.2f} | {row['wall_time_s_median']:.3f} | "
             f"{row.get('vram_mb_peak', 'n/a')} | {row.get('ram_used_mb_peak', 'n/a')} | {row.get('gpu_util_pct_mean', 'n/a')} |"
         )
     lines.extend([
         "",
-        "All three formats retrieved this single synthetic fact exactly in all measured repeats. This narrow probe does not establish general long-context recall or quantization quality. Resource samples are one-second system-wide observations and include server startup and idle intervals.",
+        "This deterministic synthetic probe checks one fact placed at the midpoint. Exact matches do not establish general long-context recall or quantization quality. Resource samples are one-second system-wide observations and include server startup and idle intervals.",
         "",
-        f"Raw JSONL and resource samples are under `results/raw/`; consolidated data is in `results/csv/{csv_path.name}`. Model revision `{rows[0]['model_revision']}`, runtime commit `{rows[0]['runtime_commit']}`, source revision `{rows[0]['git_sha']}`.",
+        f"Raw JSONL and resource samples are under `results/raw/`; consolidated data is in `results/csv/{csv_path.name}`. Model revision `{rows[0]['model_revision']}`, runtime commit `{rows[0]['runtime_commit']}`. Source revisions represented: {', '.join(f'`{sha}`' for sha in sorted({row['git_sha'] for row in rows}))}.",
+        "All active benchmark I/O was on the C:-hosted WSL ext4 SSD; E: stores historical archives only. No HDD benchmark was run. The 64K recall logs and resource files are archived at `E:\\LocalLLMLabArchive\\2026-10-11\\qwen35-ssd-context-recall-64k-20261011\\results.tar.gz` with a SHA-256 sidecar.",
         "",
     ])
     markdown_path.write_text("\n".join(lines), encoding="utf-8")
