@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare a local NF4 QLoRA base model and adapter on held-out code tasks."""
+"""Compare a local LoRA/QLoRA base model and adapter on held-out code tasks."""
 from __future__ import annotations
 
 import argparse
@@ -53,6 +53,10 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def model_id_from_manifest(manifest: dict) -> str:
+    return manifest.get("repo_id") or manifest.get("repo") or "Qwen/Qwen2.5-Coder-0.5B-Instruct"
 
 
 def load_tasks(path: Path) -> list[dict]:
@@ -240,7 +244,7 @@ def main() -> int:
                     "base_weight_precision": base_precision,
                     "repeat": repeat,
                     "task_id": task["task_id"],
-                    "model": model_manifest.get("repo_id", "Qwen/Qwen2.5-Coder-0.5B-Instruct"),
+                    "model": model_id_from_manifest(model_manifest),
                     "model_revision": model_manifest.get("revision"),
                     "quantization": quantization_label,
                     "runtime": "Transformers + PEFT + bitsandbytes",
