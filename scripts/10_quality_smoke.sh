@@ -10,8 +10,8 @@ MODEL_ID="${MODEL_ID:-granite-4.1-3b}"
 RESOURCE_OUTPUT="${RESOURCE_OUTPUT:-$BENCH_STORAGE_ROOT/results/raw/tier0-quality-resources.jsonl}"
 SERVER_LOG="${LOG_PATH:-$BENCH_STORAGE_ROOT/logs/llama-server-quality-$PORT.log}"
 REASONING="${REASONING:-off}"
-if [[ "${1:-}" == "--help" ]]; then echo "Usage: $0 [--dry-run]; validates JSON output and a single local tool round trip."; exit 0; fi
-if [[ "${1:-}" == "--dry-run" ]]; then printf 'model=%s server=%s port=%s output=%s\n' "$MODEL" "$SERVER" "$PORT" "$OUTPUT"; exit 0; fi
+if [[ "${1:-}" == "--help" ]]; then echo "Usage: $0 [--dry-run]; validates JSON output and a single local tool round trip. REASONING=off|on|auto (default: off)."; exit 0; fi
+if [[ "${1:-}" == "--dry-run" ]]; then printf 'model=%s server=%s port=%s reasoning=%s output=%s\n' "$MODEL" "$SERVER" "$PORT" "$REASONING" "$OUTPUT"; exit 0; fi
 case "$REASONING" in on|off|auto) ;; *) echo "REASONING must be on, off, or auto" >&2; exit 2 ;; esac
 [[ -x "$SERVER" ]] || { echo "llama-server missing: $SERVER" >&2; exit 1; }
 [[ -f "$MODEL" ]] || { echo "Model file missing: $MODEL" >&2; exit 1; }

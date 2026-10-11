@@ -2,6 +2,8 @@
 
 ## Latest checkpoint — SSD-only ExLlamaV3 / EXL3 validation
 
+- Follow-up Qwen3.5-9B GGUF quality smoke passed strict JSON and a local arithmetic tool round trip on C: SSD. The first JSON response under automatic reasoning exhausted its output allowance in `reasoning_content`; the reproduced root cause was fixed by defaulting this smoke to reasoning off. Both the failed attempt and clean successful results are preserved; see `results/reports/qwen35-gguf-quality-smoke.md`.
+
 - The Qwen3.5-9B EXL3 2.50bpw snapshot was staged to C:-hosted WSL ext4, size/SHA-256 verified, and tested with ExLlamaV3 1.6.1+cu128.torch2.10.0 on the RTX 3070. All measured inference ran from C:; E: was used only to stage/archive model files, never for a benchmark.
 - One warm-up plus three measured runs passed at each setting: 2K/fp16 K/V/148-token prompt (56.78 tok/s median, 168 ms TTFT); 8K/fp16 K/V/7,171-token prompt (55.22 tok/s, 2.79 s TTFT); 16K/4-bit K/V/14,340-token prompt (53.72 tok/s, 5.84 s TTFT); and 16K/8-bit K/V on the same long prompt (52.59 tok/s, 6.39 s TTFT). The 8-bit run showed 402 MiB higher peak sampled total VRAM and 346 MiB swap use, with no quality comparison performed.
 - A short same-question test also passed 3/3 on llama.cpp Qwen3.5-9B GGUF Q4_K_M (58.38 tok/s, 68.77 ms TTFT) versus ExLlama EXL3 (54.10 tok/s, 55.71 ms); the quant formats, tokenization and answer lengths differ, so this is not a backend-only ranking. Data and caveats are in `results/reports/exllama-ssd.md`, `results/reports/status.md`, raw JSONL, and the summary CSV. Commit `c0de1d9` fixes package-version and WSL `nvidia-smi` reporting.
