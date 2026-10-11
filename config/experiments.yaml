@@ -36,5 +36,16 @@ tiers:
     status: deferred pending local RAM budget and supported quant format
   training:
     question: Determine whether a small LoRA run can complete in the available 6 GiB WSL memory and 8 GiB GPU.
-    status: deferred pending PyTorch install footprint and free space
+    model: Qwen/Qwen2.5-Coder-0.5B-Instruct
+    revision: ea3f2471cf1b1f0db85067f1ef93848e38e88c25
+    method: QLoRA NF4 with double quantization
+    rank: 8
+    batch_size: 1
+    gradient_accumulation_steps: 1
+    gradient_checkpointing: true
+    max_seq_length: 192
+    steps: 8
+    seed: 42
+    optimizer: torch.optim.AdamW (32-bit states)
+    status: candidate pinned; bitsandbytes NF4 GPU kernel smoke passed; training not yet run
 

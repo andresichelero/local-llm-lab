@@ -33,4 +33,13 @@ model.qwen35_9b_exl3.file: model.safetensors; size=5889564052; sha256=19e38d592d
 model.qwen35_9b_gguf.repo: unsloth/Qwen3.5-9B-GGUF
 model.qwen35_9b_gguf.revision: 3885219b6810b007914f3a7950a8d1b469d598a5
 model.qwen35_9b_gguf.file: Qwen3.5-9B-Q4_K_M.gguf; size=5680522464; sha256=03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8; license=Apache-2.0
+model.qwen25_coder_0_5b_instruct.repo: Qwen/Qwen2.5-Coder-0.5B-Instruct
+model.qwen25_coder_0_5b_instruct.revision: ea3f2471cf1b1f0db85067f1ef93848e38e88c25
+model.qwen25_coder_0_5b_instruct.file: model.safetensors; size=988097824; sha256=f9523886352217ded3aeeef552b381af79d568c6d49a4b9e423288cea56b0a44; license=Apache-2.0
+training.torch: 2.10.0+cu128; CUDA runtime=12.8
+training.transformers: 5.19.0
+training.peft: 0.21.2
+training.bitsandbytes: 0.50.2
+training.accelerate: 1.15.0
+training.trl: 1.14.1
 
