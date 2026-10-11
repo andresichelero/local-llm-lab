@@ -13,6 +13,8 @@ results/raw/*
 !results/raw/*.json
 !results/raw/*.jsonl
 !results/raw/*.csv
+!results/raw/exploratory-invalid/
+!results/raw/exploratory-invalid/*.jsonl
 !results/raw/archive/
 !results/raw/archive/*.jsonl
 !results/raw/archive/*.md

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "description": "SSD-only OpenCode subagent probe. Keep primary agents bounded with steps; subagents are read-only unless a later experiment explicitly tests edits.",
+  "subagent_depth": 1,
+  "agent": {
+    "build": {
+      "mode": "primary",
+      "steps": 10,
+      "permission": {
+        "task": {
+          "*": "allow"
+        }
+      }
+    },
+    "repo-explorer": {
+      "description": "Read-only worker for finding files and reporting a narrow codebase question.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": "allow"
+      }
+    },
+    "independent-reviewer": {
+      "description": "Read-only reviewer that independently inspects a diff and its test evidence.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": "allow"
+      }
+    }
+  }
+}
