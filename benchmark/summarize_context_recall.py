@@ -128,6 +128,7 @@ def generate(input_dir: Path, csv_path: Path, markdown_path: Path) -> list[dict[
         "This deterministic synthetic probe checks one fact placed at the midpoint. Exact matches do not establish general long-context recall or quantization quality. Resource samples are one-second system-wide observations and include server startup and idle intervals.",
         "",
         f"Raw JSONL and resource samples are under `results/raw/`; consolidated data is in `results/csv/{csv_path.name}`. Model revision `{rows[0]['model_revision']}`, runtime commit `{rows[0]['runtime_commit']}`. Source revisions represented: {', '.join(f'`{sha}`' for sha in sorted({row['git_sha'] for row in rows}))}.",
+        "All active benchmark I/O was on the C:-hosted WSL ext4 SSD; E: stores historical archives only. No HDD benchmark was run. The 64K recall logs and resource files are archived at `E:\\LocalLLMLabArchive\\2026-10-11\\qwen35-ssd-context-recall-64k-20261011\\results.tar.gz` with a SHA-256 sidecar.",
         "",
     ])
     markdown_path.write_text("\n".join(lines), encoding="utf-8")
