@@ -131,6 +131,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--method", choices=("qlora", "lora"), default="qlora")
+    parser.add_argument("--adapter-training-backend", choices=("transformers-peft", "unsloth"), default="transformers-peft")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--warmup", action="store_true")
     args = parser.parse_args()
@@ -241,6 +242,7 @@ def main() -> int:
                     "experiment": "finetune_heldout_quality",
                     "phase": phase,
                     "finetune_method": args.method,
+                    "adapter_training_backend": args.adapter_training_backend,
                     "base_weight_precision": base_precision,
                     "repeat": repeat,
                     "task_id": task["task_id"],

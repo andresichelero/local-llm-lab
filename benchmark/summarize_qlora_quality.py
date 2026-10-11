@@ -19,6 +19,7 @@ def summarize(rows: list[dict]) -> list[dict]:
         output.append({
             "phase": phase,
             "task_id": task_id,
+            "adapter_training_backend": items[0].get("adapter_training_backend", "not recorded"),
             "runs": len(items),
             "successes": sum(bool(item["success"]) for item in items),
             "success_rate": round(sum(bool(item["success"]) for item in items) / len(items), 4),
@@ -60,7 +61,7 @@ def main() -> int:
         "This report compares a pinned local base checkpoint with its adapter on the same deterministic, held-out Python tasks. Each generated function is parsed and run only after an AST allowlist rejects imports, unsafe calls, attributes, and other non-expression code; positional calls to `abs`, `max`, and `min` are permitted. It also records per-token negative log likelihood for a fixed reference completion. These metrics cover a narrow synthetic task set, not general coding ability.",
         "",
         f"Raw input: `{args.input.name}`. Measurements: {len(rows)}. Tasks: {len(task_ids)}.",
-        f"Model: `{sample['model']}` at revision `{sample['model_revision']}`; quantization: {sample['quantization']}; runtime: {sample['runtime']} (PyTorch {sample['torch_version']}, Transformers {sample['transformers_version']}, PEFT {sample['peft_version']}, bitsandbytes {sample['bitsandbytes_version']}).",
+        f"Model: `{sample['model']}` at revision `{sample['model_revision']}`; quantization: {sample['quantization']}; adapter training backend: {sample.get('adapter_training_backend', 'not recorded')}; evaluation runtime: {sample['runtime']} (PyTorch {sample['torch_version']}, Transformers {sample['transformers_version']}, PEFT {sample['peft_version']}, bitsandbytes {sample['bitsandbytes_version']}).",
         f"GPU: {sample['gpu']}; storage: `{sample['storage_profile']}`; source commit: `{sample['git_sha']}` (dirty: {sample['source_tree_dirty']}); context limit: {sample['context_window_tokens']} tokens; greedy decoding, max {sample['max_new_tokens']} generated tokens.",
         f"Dataset SHA-256: `{sample['dataset_sha256']}`; adapter SHA-256: `{adapter_hashes[0] if len(adapter_hashes) == 1 else 'inconsistent'}`.",
         "",
