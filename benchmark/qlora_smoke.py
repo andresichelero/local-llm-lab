@@ -18,6 +18,8 @@ DEFAULT_MODEL = Path(os.environ.get("TRAINING_MODEL_DIR", "/mnt/e/local-llm-mode
 DEFAULT_DATASET = ROOT / "benchmark/data/qlora-smoke.jsonl"
 DEFAULT_OUTPUT = Path(os.environ.get("QLORA_OUTPUT_ROOT", "/mnt/e/local-llm-results/qlora"))
 DEFAULT_RESULT = ROOT / "results/raw/qlora-smoke.jsonl"
+DEFAULT_MODEL_ID = os.environ.get("TRAINING_MODEL_ID", "Qwen/Qwen2.5-Coder-0.5B-Instruct")
+DEFAULT_MODEL_PARAMETERS = os.environ.get("TRAINING_MODEL_PARAMETERS", "0.49B")
 PROBE_PROMPT = "Write a Python function called add(a, b) that returns their sum. Output only Python code."
 
 
@@ -92,19 +94,24 @@ def load_rows(dataset: Path, tokenizer: object, max_length: int) -> list[dict[st
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-dir", type=Path, default=DEFAULT_MODEL)
+    parser.add_argument("--model-id", default=DEFAULT_MODEL_ID)
+    parser.add_argument("--model-parameters", default=DEFAULT_MODEL_PARAMETERS)
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--result-jsonl", type=Path, default=DEFAULT_RESULT)
     parser.add_argument("--steps", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--max-seq-length", type=int, default=192)
+    parser.add_argument("--max-seq-length", type=int, default=int(os.environ.get("TRAINING_MAX_SEQ_LENGTH", "192")))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if args.steps < 1 or args.max_seq_length < 16:
         parser.error("--steps must be positive and --max-seq-length must be at least 16")
-    adapter_path = args.output_root / f"qwen25-coder-0.5b-nf4-r8-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-seed{args.seed}"
+    model_slug = args.model_id.rsplit("/", 1)[-1].lower().replace(".", "").replace("-instruct", "")
+    adapter_path = args.output_root / f"{model_slug}-nf4-r8-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-seed{args.seed}"
     preflight = {
         "model_dir": str(args.model_dir),
+        "model": args.model_id,
+        "model_parameters": args.model_parameters,
         "dataset": str(args.dataset),
         "steps": args.steps,
         "seed": args.seed,
@@ -115,8 +122,8 @@ def main() -> int:
     print(json.dumps(preflight, sort_keys=True), flush=True)
     if args.dry_run:
         return 0
-    if not (args.model_dir / "model.safetensors").is_file():
-        raise FileNotFoundError(f"Pinned model weights missing: {args.model_dir / 'model.safetensors'}")
+    if not any(args.model_dir.glob("*.safetensors")):
+        raise FileNotFoundError(f"No safetensors model weights found in {args.model_dir}")
     if not args.dataset.is_file():
         raise FileNotFoundError(f"Dataset missing: {args.dataset}")
 
@@ -243,9 +250,9 @@ def main() -> int:
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "experiment": "qlora-smoke",
         "method": "QLoRA",
-        "model": "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+        "model": args.model_id,
         "model_revision": model_revision,
-        "model_parameters": "0.49B",
+        "model_parameters": args.model_parameters,
         "quantization": "bitsandbytes NF4 with double quantization",
         "compute_dtype": "float16",
         "runtime": "Transformers + PEFT + bitsandbytes",

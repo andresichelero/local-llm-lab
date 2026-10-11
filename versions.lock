@@ -42,4 +42,16 @@ training.peft: 0.21.2
 training.bitsandbytes: 0.50.2
 training.accelerate: 1.15.0
 training.trl: 1.14.1
+model.qwen25_coder_7b_instruct.repo: Qwen/Qwen2.5-Coder-7B-Instruct
+model.qwen25_coder_7b_instruct.revision: c03e6d358207e414f1eca0bb1891e29f1db0e242
+model.qwen25_coder_7b_instruct.license: Apache-2.0
+model.qwen25_coder_7b_instruct.parameters: 7,615,616,512
+model.qwen25_coder_7b_instruct.files: 12; total=15242799486 bytes
+model.qwen25_coder_7b_instruct.weight_shard_1: model-00001-of-00004.safetensors; size=4877660776; sha256=0b6f069918b07c064cbba8ae4f00f529aa9bbf84b7cdfcb7fc2694a40f6aa8ef
+model.qwen25_coder_7b_instruct.weight_shard_2: model-00002-of-00004.safetensors; size=4932751008; sha256=c3d46733e7aa054ea7b063fbccd0a5a08446e7bd1814bef26936c5aa1331da62
+model.qwen25_coder_7b_instruct.weight_shard_3: model-00003-of-00004.safetensors; size=4330865200; sha256=9fe45dacee087385b3d2d6dd27a7413a8a56d95f145772facc148fa86fc73446
+model.qwen25_coder_7b_instruct.weight_shard_4: model-00004-of-00004.safetensors; size=1089994880; sha256=5aa6e5cbe642377fd441fb4e60e83cca96b2bcd9820e245b9ea06d94653f17f2
+model.qwen25_coder_7b_instruct.config: config.json; size=663; blob_sha1=1a2ea88621f4248fccfb575beaf64c1ea5d9587f
+model.qwen25_coder_7b_instruct.tokenizer: tokenizer.json; size=7031645; blob_sha1=443909a61d429dff23010e5bddd28ff530edda00
+model.qwen25_coder_7b_instruct.index: model.safetensors.index.json; size=27752; blob_sha1=6ca5084b88f1a95fef37f1b94c6e87ff69422bb7
 

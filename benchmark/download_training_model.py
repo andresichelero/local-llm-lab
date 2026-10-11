@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download one revision-pinned QLoRA smoke model outside the Git checkout."""
+"""Download a revision-pinned QLoRA model outside the Git checkout."""
 from __future__ import annotations
 
 import argparse
@@ -15,9 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REPO = "Qwen/Qwen2.5-Coder-0.5B-Instruct"
-REVISION = "ea3f2471cf1b1f0db85067f1ef93848e38e88c25"
-FILES = (
+FILES_05B = (
     {"path": "LICENSE", "size": 11343, "blob_sha1": "6634c8cc3133b3848ec74b9f275acaaa1ea618ab"},
     {"path": "config.json", "size": 659, "blob_sha1": "e2aa18293b0dd66539341467fa454878a5adb2be"},
     {"path": "generation_config.json", "size": 243, "blob_sha1": "c28f9c697cbc09f047434efec57556505af31111"},
@@ -31,6 +29,38 @@ FILES = (
     {"path": "tokenizer_config.json", "size": 7305, "blob_sha1": "acee076f49bf3c0298e15de0909d1da7b392f0c3"},
     {"path": "vocab.json", "size": 2776833, "blob_sha1": "4783fe10ac3adce15ac8f358ef5462739852c569"},
 )
+FILES_7B = (
+    {"path": "LICENSE", "size": 11343, "blob_sha1": "6634c8cc3133b3848ec74b9f275acaaa1ea618ab"},
+    {"path": "config.json", "size": 663, "blob_sha1": "1a2ea88621f4248fccfb575beaf64c1ea5d9587f"},
+    {"path": "generation_config.json", "size": 242, "blob_sha1": "b7849b3dad857bc1e227afd6ca21d1e4cb3f8f82"},
+    {"path": "merges.txt", "size": 1671839, "blob_sha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0"},
+    {"path": "model-00001-of-00004.safetensors", "size": 4877660776, "sha256": "0b6f069918b07c064cbba8ae4f00f529aa9bbf84b7cdfcb7fc2694a40f6aa8ef"},
+    {"path": "model-00002-of-00004.safetensors", "size": 4932751008, "sha256": "c3d46733e7aa054ea7b063fbccd0a5a08446e7bd1814bef26936c5aa1331da62"},
+    {"path": "model-00003-of-00004.safetensors", "size": 4330865200, "sha256": "9fe45dacee087385b3d2d6dd27a7413a8a56d95f145772facc148fa86fc73446"},
+    {"path": "model-00004-of-00004.safetensors", "size": 1089994880, "sha256": "5aa6e5cbe642377fd441fb4e60e83cca96b2bcd9820e245b9ea06d94653f17f2"},
+    {"path": "model.safetensors.index.json", "size": 27752, "blob_sha1": "6ca5084b88f1a95fef37f1b94c6e87ff69422bb7"},
+    {"path": "tokenizer.json", "size": 7031645, "blob_sha1": "443909a61d429dff23010e5bddd28ff530edda00"},
+    {"path": "tokenizer_config.json", "size": 7305, "blob_sha1": "acee076f49bf3c0298e15de0909d1da7b392f0c3"},
+    {"path": "vocab.json", "size": 2776833, "blob_sha1": "4783fe10ac3adce15ac8f358ef5462739852c569"},
+)
+PROFILES = {
+    "qwen25-coder-0.5b": {
+        "repo": "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+        "revision": "ea3f2471cf1b1f0db85067f1ef93848e38e88c25",
+        "model_parameters": "0.49B",
+        "license": "Apache-2.0",
+        "directory": "Qwen2.5-Coder-0.5B-Instruct",
+        "files": FILES_05B,
+    },
+    "qwen25-coder-7b": {
+        "repo": "Qwen/Qwen2.5-Coder-7B-Instruct",
+        "revision": "c03e6d358207e414f1eca0bb1891e29f1db0e242",
+        "model_parameters": "7.62B",
+        "license": "Apache-2.0",
+        "directory": "Qwen2.5-Coder-7B-Instruct",
+        "files": FILES_7B,
+    },
+}
 SAFETY_BYTES = 256 * 1024 * 1024
 
 
@@ -66,7 +96,7 @@ def existing_mount(path: Path) -> Path:
     return probe
 
 
-def download_file(destination: Path, spec: dict[str, object]) -> dict[str, object]:
+def download_file(destination: Path, spec: dict[str, object], repo: str, revision: str) -> dict[str, object]:
     target = destination / str(spec["path"])
     part = target.with_name(target.name + ".part")
     if target.exists():
@@ -78,7 +108,7 @@ def download_file(destination: Path, spec: dict[str, object]) -> dict[str, objec
     offset = part.stat().st_size if part.exists() else 0
     if offset > expected:
         raise RuntimeError(f"Partial file is larger than expected; preserved: {part}")
-    url = f"https://huggingface.co/{REPO}/resolve/{REVISION}/{spec['path']}?download=true"
+    url = f"https://huggingface.co/{repo}/resolve/{revision}/{spec['path']}?download=true"
     headers = {"User-Agent": "local-llm-lab/0.1"}
     if offset:
         headers["Range"] = f"bytes={offset}-"
@@ -118,12 +148,16 @@ def download_file(destination: Path, spec: dict[str, object]) -> dict[str, objec
     return {"path": str(spec["path"]), "bytes": expected, **actual}
 
 
-def download(model_dir: Path, dry_run: bool) -> None:
-    destination = model_dir / "Qwen2.5-Coder-0.5B-Instruct"
+def download(model_dir: Path, dry_run: bool, profile_name: str) -> None:
+    profile = PROFILES[profile_name]
+    repo = str(profile["repo"])
+    revision = str(profile["revision"])
+    files = profile["files"]
+    destination = model_dir / str(profile["directory"])
     manifest = destination / "download-manifest.json"
     free = shutil.disk_usage(existing_mount(model_dir)).free
     required = 0
-    for spec in FILES:
+    for spec in files:
         target = destination / str(spec["path"])
         part = target.with_name(target.name + ".part")
         if target.exists() and not valid_file(target, spec):
@@ -134,14 +168,17 @@ def download(model_dir: Path, dry_run: bool) -> None:
                 raise RuntimeError(f"Partial file exceeds expected size and was preserved: {part}")
             required += int(spec["size"]) - partial
     record = {
-        "repo": REPO,
-        "revision": REVISION,
+        "profile": profile_name,
+        "repo": repo,
+        "revision": revision,
+        "model_parameters": profile["model_parameters"],
+        "license": profile["license"],
         "destination": str(destination),
-        "expected_bytes": sum(int(spec["size"]) for spec in FILES),
+        "expected_bytes": sum(int(spec["size"]) for spec in files),
         "additional_bytes_needed": required,
         "free_bytes": free,
         "safety_margin_bytes": SAFETY_BYTES,
-        "files": [dict(spec) for spec in FILES],
+        "files": [dict(spec) for spec in files],
     }
     print(json.dumps(record, sort_keys=True), flush=True)
     if free < required + SAFETY_BYTES:
@@ -150,10 +187,13 @@ def download(model_dir: Path, dry_run: bool) -> None:
         return
 
     destination.mkdir(parents=True, exist_ok=True)
-    downloaded = [download_file(destination, spec) for spec in FILES]
+    downloaded = [download_file(destination, spec, repo, revision) for spec in files]
     manifest_data = {
-        "repo": REPO,
-        "revision": REVISION,
+        "profile": profile_name,
+        "repo": repo,
+        "revision": revision,
+        "model_parameters": profile["model_parameters"],
+        "license": profile["license"],
         "files": downloaded,
         "verified_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -162,15 +202,19 @@ def download(model_dir: Path, dry_run: bool) -> None:
     temporary_manifest.replace(manifest)
     log_path = Path(os.environ.get("MODEL_DOWNLOAD_LOG", ROOT / "results/raw/model-downloads.jsonl"))
     log_path.parent.mkdir(parents=True, exist_ok=True)
+    weight_files = [item for item in downloaded if str(item["path"]).endswith(".safetensors")]
+    hashes = {str(item["path"]): str(item["sha256"]) for item in weight_files}
     event = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "repo": REPO,
-        "revision": REVISION,
+        "profile": profile_name,
+        "repo": repo,
+        "revision": revision,
         "destination": str(destination),
-        "license": "apache-2.0",
+        "license": profile["license"],
         "verified": True,
-        "weights_bytes": next(item["bytes"] for item in downloaded if item["path"] == "model.safetensors"),
-        "weights_sha256": next(item["sha256"] for item in downloaded if item["path"] == "model.safetensors"),
+        "model_parameters": profile["model_parameters"],
+        "weights_bytes": sum(int(item["bytes"]) for item in weight_files),
+        "weights_sha256": next(iter(hashes.values())) if len(hashes) == 1 else hashes,
         "file_count": len(downloaded),
     }
     with log_path.open("a", encoding="utf-8") as output:
@@ -180,10 +224,11 @@ def download(model_dir: Path, dry_run: bool) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", "/mnt/e/local-llm-models")))
+    parser.add_argument("--profile", choices=sorted(PROFILES), default="qwen25-coder-0.5b")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     try:
-        download(args.model_dir.expanduser(), args.dry_run)
+        download(args.model_dir.expanduser(), args.dry_run, args.profile)
     except (OSError, RuntimeError, urllib.error.URLError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

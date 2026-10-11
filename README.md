@@ -6,9 +6,9 @@ Reproducible experiments for local inference, quantization, fine-tuning, and age
 
 - Windows 10 Pro 22H2, Ryzen 5 5600X, 32 GiB physical RAM, RTX 3070 8 GiB, NVIDIA driver 610.62.
 - Ubuntu 24.04.5 in WSL2, kernel 6.18.40.1, CUDA device visible through `nvidia-smi`.
-- The current user `.wslconfig` limits WSL to 6 GiB RAM, 8 processors, and 4 GiB swap. This lab will not change that setting.
+- The current user `.wslconfig` sets WSL to 8 GiB RAM, 8 processors, 4 GiB swap, and a 70 GiB default virtual disk. The previous file is backed up outside the repository.
 - Free VRAM has varied from about 4.6 GiB during the first audit to 3.2–3.4 GiB while other WSL and Windows workloads were active; the desktop shares this GPU.
-- The WSL root filesystem started with about 13 GiB free. After installing the CUDA toolkit and clearing only its downloaded apt package archives, it has about 5 GiB free. E: had about 111 GiB free and F: about 157 GiB at audit time. Current disk space changes; check it before downloads/builds.
+- The Ubuntu virtual disk is 70 GiB (68 GiB filesystem) with about 24 GiB available at the latest audit. E: has about 76 GiB free after downloading the pinned Qwen2.5-Coder-7B checkpoint. Current disk space changes; check it before downloads/builds.
 - CUDA Toolkit 13.0 was installed from NVIDIA's WSL repository. `nvcc` 13.0.88 is available. The Windows driver remains 610.62; no Linux NVIDIA driver was installed into WSL.
 
 The host, WSL and GPU can change while the lab runs. Re-run the audit before interpreting later benchmarks.
@@ -50,4 +50,8 @@ The first Tier 0 target is IBM Granite 4.1 3B in GGUF Q4_K_M, served locally by 
 ExLlamaV3 1.6.0 is installed in an isolated Python 3.12 environment under `/mnt/e/local-llm-envs/exllamav3`; CUDA 12.8 PyTorch detected the RTX 3070. To reproduce the pinned install, run `scripts/04_install_exllamav3.sh`. Qwen3.5-9B EXL3 2.50bpw has been measured through 64K context using chunked prefill and 4-bit K/V cache; see `results/raw/exllama-qwen35-9b.jsonl` and the execution status. Its same-family GGUF Q4_K_M counterpart has now been downloaded and verified for a runtime comparison. The GGUF and EXL3 measurements use different quantization formats and bit budgets, so any speed difference is not attributable to runtime alone.
 
 Reproduce the pinned GGUF download with `scripts/07_download_qwen35_gguf.sh --dry-run`, then omit `--dry-run` to download to `MODEL_DIR` (default `/mnt/e/local-llm-models`). Both downloaders preserve partial files for safe resumption and verify the final checksum. The cache-controlled short-prompt comparison shows 64.13 tok/s median for llama.cpp Q4_K_M versus 62.51 tok/s for ExLlamaV3 EXL3 2.50bpw, with respective TTFT medians 64.32 ms and 47.24 ms. llama.cpp Q4_K_M completed cold prompts up to 28,695 tokens in 32K context with q4_0 K/V at 1,820 tok/s prefill, 54.41 tok/s generation, and 6,147 MiB sampled VRAM. These are different quantization formats and serving templates, so treat them as configuration measurements, not a controlled runtime-only ranking. Cold-prefill runs set `CACHE_PROMPT=off` (the default). See `results/reports/status.md` and raw JSONL for scope and details.
+
+## QLoRA capacity smoke
+
+The pinned QLoRA downloader supports `scripts/07_download_training_model.sh --profile qwen25-coder-0.5b|qwen25-coder-7b`. It verifies each file's revision, size, and digest before writing a manifest. One bounded Qwen2.5-Coder-7B run completed 8 NF4 QLoRA steps on the RTX 3070 at sequence length 192; see `results/raw/qlora-7b-smoke.jsonl` and `results/reports/status.md`. Model weights and adapters remain outside Git. This proves the short configuration fit once; it is not an adapter quality result or repeated benchmark yet.
 
