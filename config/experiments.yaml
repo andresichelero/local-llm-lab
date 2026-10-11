@@ -61,5 +61,5 @@ tiers:
     steps: 8
     seed: 42
     optimizer: torch.optim.AdamW (32-bit states)
-    status: five 8-step runs passed (three clean HDD-source repeats and one clean SSD repeat); two more SSD repetitions are planned
+    status: seven 8-step runs passed (three clean HDD-source repeats and three clean SSD repeats, plus one preliminary HDD run)
 

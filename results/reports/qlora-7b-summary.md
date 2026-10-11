@@ -5,7 +5,7 @@ Runs are grouped by storage location and source cleanliness. Keep the HDD archiv
 | Storage | Git revision | Clean source | Runs | Passed | Median load (s) | Median train (s) | Median total (s) | Peak sampled VRAM (MiB) | Peak RAM (MiB) |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | hdd-e | 4aaf297; a19bd00 | yes | 3 | 3 | 273.3 | 9.5 | 591.8 | 7897 | 2383 |
-| ssd-wsl-ext4-c | ac04176 | yes | 1 | 1 | 15.0 | 10.5 | 54.1 | 7840 | 2218 |
+| ssd-wsl-ext4-c | ac04176; ce33b35 | yes | 3 | 3 | 15.0 | 7.6 | 52.0 | 7850 | 2335 |
 | hdd-e | 33663fe | no | 1 | 1 | 250.5 | 11.2 | 420.9 | 7760 | 2222 |
 
 CSV with per-run mean, median, standard deviation, minimum, and maximum: `results/csv/qlora-7b-summary.csv`.
