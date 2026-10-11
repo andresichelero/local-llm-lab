@@ -1,14 +1,35 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "description": "SSD-only OpenCode subagent probe. Keep primary agents bounded with steps; subagents are read-only unless a later experiment explicitly tests edits.",
+  "autoupdate": false,
+  "model": "local/Qwen3.5-9B-Q4_K_M",
+  "default_agent": "build",
   "subagent_depth": 1,
+  "provider": {
+    "local": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Local llama.cpp on WSL SSD",
+      "options": {
+        "baseURL": "http://127.0.0.1:8080/v1",
+        "apiKey": "local"
+      },
+      "models": {
+        "Qwen3.5-9B-Q4_K_M": {
+          "name": "Qwen3.5-9B-Q4_K_M",
+          "limit": { "context": 16384, "output": 1024 },
+          "options": { "temperature": 0 }
+        }
+      }
+    }
+  },
   "agent": {
     "build": {
       "mode": "primary",
       "steps": 10,
       "permission": {
         "task": {
-          "*": "allow"
+          "*": "deny",
+          "repo-explorer": "allow",
+          "independent-reviewer": "allow"
         }
       }
     },
@@ -17,7 +38,7 @@
       "mode": "subagent",
       "permission": {
         "edit": "deny",
-        "bash": "allow"
+        "bash": "deny"
       }
     },
     "independent-reviewer": {
@@ -25,7 +46,7 @@
       "mode": "subagent",
       "permission": {
         "edit": "deny",
-        "bash": "allow"
+        "bash": "deny"
       }
     }
   }
