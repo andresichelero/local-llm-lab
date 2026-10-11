@@ -6,9 +6,9 @@ Reproducible experiments for local inference, quantization, fine-tuning, and age
 
 - Windows 10 Pro 22H2, Ryzen 5 5600X, 32 GiB physical RAM, RTX 3070 8 GiB, NVIDIA driver 610.62.
 - Ubuntu 24.04.5 in WSL2, kernel 6.18.40.1, CUDA device visible through `nvidia-smi`.
-- The current user `.wslconfig` sets WSL to 8 GiB RAM, 8 processors, 4 GiB swap, and a 70 GB default virtual disk. The existing Ubuntu VHD was separately expanded from 70 to 90 GB; the previous config is backed up outside the repository.
+- The current user `.wslconfig` sets WSL to 8 GiB RAM, 8 processors, 4 GiB swap, and a 110 GB virtual disk limit; the Ubuntu ext4 filesystem reports 108 GiB.
 - Free VRAM has varied from about 4.6 GiB during the first audit to 3.2–3.4 GiB while other WSL and Windows workloads were active; the desktop shares this GPU.
-- The Ubuntu virtual disk is 90 GB (88 GiB filesystem), stored on the C: Samsung 970 EVO Plus SSD; it had 38 GiB free after staging the current model, runtime, and SSD checkout. D: and E: are HDDs. All new experiments run from SSD-backed WSL ext4 on C:, including active model/runtime copies, logs, resource samples, and raw output. E: is archival storage for verified models and historical data; D: holds the Git checkout and receives completed result files only after an SSD run finishes. No new HDD performance tests are planned. Current free space changes, so check before downloads/builds.
+- The Ubuntu virtual disk is stored on the C: Samsung 970 EVO Plus SSD; at the latest check its ext4 filesystem was 108 GiB with 19 GiB free. All experiments, active model/runtime files, scratch workspaces, logs, resource samples, and raw outputs stay on this SSD-backed WSL filesystem. D: and E: are storage/archive drives only; E: receives verified completed artifacts and historical records. No HDD performance tests are part of this lab. Check current free space before downloads/builds.
 - CUDA Toolkit 13.0 was installed from NVIDIA's WSL repository. `nvcc` 13.0.88 is available. The Windows driver remains 610.62; no Linux NVIDIA driver was installed into WSL.
 
 The host, WSL and GPU can change while the lab runs. Re-run the audit before interpreting later benchmarks.
@@ -16,9 +16,11 @@ The host, WSL and GPU can change while the lab runs. Re-run the audit before int
 ## Quick start
 
 ```bash
-cd /mnt/d/Usuario/Downloads/LLM/local-llm-lab
+cd "$HOME/local-llm-benchmark/source-tree"
 bash scripts/00_audit_system.sh
 ```
+
+Run benchmark commands from a repository checkout on WSL ext4 (for example, `$HOME/local-llm-benchmark/source-tree`). The benchmark preflights reject non-ext4 model, runtime, dataset, and output paths.
 
 The audit is read-only. Model downloads require an explicit tier and check free space before writing:
 
@@ -68,7 +70,7 @@ Reproduce the pinned GGUF download with `scripts/07_download_qwen35_gguf.sh --dr
 
 ## QLoRA capacity smoke
 
-The pinned QLoRA downloader supports `scripts/07_download_training_model.sh --profile qwen25-coder-0.5b|qwen25-coder-7b`. It verifies each file's revision, size, and digest before writing a manifest. Qwen2.5-Coder-7B completed four HDD-backed runs and three clean SSD-backed 8-step NF4 QLoRA smokes on the RTX 3070 at sequence length 192. Median model load fell from 273.3 s on E: to 15.0 s on the SSD-backed WSL ext4 filesystem; median total time fell from 591.8 s to 52.0 s. All three runs on each disk used the same synthetic data, seed, and config and passed 8/8 steps. This establishes fit and storage performance, not adapter quality. See `results/reports/qlora-storage-comparison.md` and `results/reports/qlora-7b-summary.md`.
+The pinned QLoRA downloader supports `scripts/07_download_training_model.sh --profile qwen25-coder-0.5b|qwen25-coder-7b`. It verifies each file's revision, size, and digest before writing a manifest. Current QLoRA experiments use the SSD-backed WSL ext4 filesystem. Older E:-backed storage observations remain in `results/reports/qlora-storage-comparison.md` as archival history only; they are not repeated or used to rank active configurations. The 7B SSD capacity results are summarized in `results/reports/qlora-7b-summary.md`.
 
 To stage the pinned model and isolated training environment from E: to the SSD-backed WSL Linux filesystem without deleting the archive, run `bash scripts/16_stage_benchmark_to_ssd.sh --dry-run`, then omit `--dry-run`. The destination defaults to ${XDG_DATA_HOME:-$HOME/.local/share}/local-llm-lab; set `BENCH_STORAGE_ROOT` to choose another WSL-native path. The copied virtual environment is checked for relocatability before the script reports the QLoRA command.
 
@@ -88,11 +90,15 @@ Dropout-zero comparison on the 7B model enabled fused QKV/O LoRA kernels but cha
 
 Long-context QLoRA checks on 7B now pass at 512, 1,024, and 2,048 tokens with one warm-up plus three repetitions each. At 2,048, median training was 22.73 s and sampled total VRAM peaked at 7,541 MiB, leaving limited margin for desktop contention. This is a synthetic capacity smoke, not a quality result or a universal context ceiling; see the [detailed capacity report and fixtures](results/reports/unsloth-7b-capacity-smoke.md).
 
+## Held-out QLoRA quality probe
+
+One 16-step NF4 QLoRA run trained the pinned Qwen2.5-Coder-0.5B-Instruct (0.49B, revision `ea3f2471cf1b1f0db85067f1ef93848e38e88c25`) on the existing eight-row synthetic fixture at sequence length 192, seed 42, rank 8, and learning rate 2e-4. The RTX 3070 completed training in 4.045 s with an 886 MiB Torch-allocated peak; the saved adapter is 4.2 MiB. Three deterministic repeats on five held-out function tasks passed 15/15 tasks and 54/54 test cases for both the NF4 base and adapter. The baseline was already perfect, so this run shows no measurable quality gain from adaptation; it is a narrow synthetic probe, not evidence of general coding quality. See the [quality report](results/reports/qlora-quality-heldout-20261011T184100Z.md), [CSV](results/csv/qlora-quality-heldout-20261011T184100Z.csv), and [raw JSONL](results/raw/qlora-quality-heldout-20261011T184100Z.jsonl). Reproduce with `bash scripts/32_benchmark_qlora_quality.sh --dry-run`, then rerun without `--dry-run`; all benchmark files must stay on WSL ext4. A verified copy of the used model, adapter, and results is archived under `E:\LocalLLMLabArchive\2026-10-11\qlora-heldout-quality-20261011T184100Z`.
+
 ## SSD-backed llama.cpp follow-up
 
-The Qwen3.5-9B GGUF Q4_K_M (pinned revision `3885219b6810b007914f3a7950a8d1b469d598a5`, SHA-256 in `versions.lock`) was tested from WSL ext4 on the C: SSD at 2K and 16K context. Three 2K-context startup-log measurements had a median 4.39 s from llama.cpp initialization to model-ready, versus 41.47 s across three prior E:-backed starts. Those historical log timings were collected on different runs without clearing the OS file cache, so treat the ratio as observed storage behavior, not a controlled cold-cache guarantee. Warm inference stayed in a similar range (about 63–66 generated tok/s); prompt and GPU load varied slightly between series.
+The Qwen3.5-9B GGUF Q4_K_M (pinned revision `3885219b6810b007914f3a7950a8d1b469d598a5`, SHA-256 in `versions.lock`) was tested from WSL ext4 on the C: SSD at 2K and 16K context. The earlier E:-backed startup observations remain only in the linked historical report and are not part of the current SSD performance results. Warm inference was about 63–66 generated tok/s; prompt and GPU load varied slightly between runs.
 
-The 16K run processed a 14,380-token prompt using Q4 K/V with 3/3 successful outputs, 1,966 tok/s median prefill, 62.04 tok/s generation, and 6,191 MiB peak in paired resource samples. Its prior HDD comparison used 14,352 prompt tokens, so it is close but not an identical-prompt test. Raw JSONL, resource samples, startup events, and logs are in `results/raw/` and `logs/`; see `results/reports/ssd-inference-comparison.md`.
+The 16K run processed a 14,380-token prompt using Q4 K/V with 3/3 successful outputs, 1,966 tok/s median prefill, 62.04 tok/s generation, and 6,191 MiB peak in paired resource samples. Raw JSONL, resource samples, startup events, and logs are in `results/raw/` and `logs/`; see `results/reports/ssd-inference-comparison.md` for archived context.
 
 After testing, keep the hash-verified archive on E: and remove only the temporary SSD copy when it is no longer needed. Run `bash scripts/18_stage_qwen35_gguf_to_ssd.sh --dry-run`, then omit `--dry-run` to restage it for the next Qwen series.
 
