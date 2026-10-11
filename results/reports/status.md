@@ -144,10 +144,17 @@
 ## Current constraints and next steps
 
 - Current WSL limits are 8 GiB RAM, 8 processors, 4 GiB swap, and a 110 GiB virtual disk; the C:-backed ext4 filesystem had about 19 GiB free at the latest check. Active benchmarks must use this SSD-backed ext4 filesystem. HDDs are archive-only; earlier HDD measurements are retained as historical records and are not inputs to current SSD rankings.
-- The small-model LoRA-versus-QLoRA quality probe and the 7B AdamW32-versus-AdamW8bit comparison are complete and documented below. A controlled QLoRA rank sweep remains next: use the pinned 0.5B model, NF4, fixed dataset/seed/sequence length/steps, ranks 8/16/32, one warm-up plus three measurements, then evaluate each saved adapter on the same held-out tasks.
+- The small-model LoRA-versus-QLoRA quality probe, 7B AdamW32-versus-AdamW8bit comparison, and 0.5B QLoRA rank sweep are complete. The rank sweep uses pinned model/revision and clean source commit `131eabe`; all nine measured training rows have clean provenance and all active I/O was on WSL ext4 backed by the C: SSD. See `results/reports/qlora-rank-sweep-20261011T194427Z/qlora-rank-sweep.md` and its raw JSONL directory.
 - Free VRAM varied substantially with other Windows and WSL workloads: 4.6 GiB at first audit, 3.2–3.4 GiB during installation, and 7.2 GiB immediately before the successful smoke test.
 - The ExLlamaV3 C++ deferred file loader intermittently failed with WSL `Cannot allocate memory`; the Python streaming weight loader succeeded without changing inference kernels. One-shot 64K prefill also failed before the chunked retry succeeded. These failed attempts remain documented in `logs/exllama-benchmark.log`; not every failure currently has a structured JSONL event.
 - Remaining work includes broader optimizer and rank sweeps, additional quant formats and hybrid/MoE comparisons, larger coding-task quality sets, and multiagent routing. No final winner is claimed across harnesses or model families.
+
+## QLoRA rank sweep — SSD only, 2026-10-11
+
+- Qwen2.5-Coder-0.5B-Instruct (revision `ea3f2471cf1b1f0db85067f1ef93848e38e88c25`) completed ranks 8, 16, and 32 with alpha 2×rank, NF4/double quantization, AdamW32, seed 42, 16 steps, sequence length 192, batch size 1, and gradient checkpointing. Each rank had one warm-up and three measured trainings; the final adapter and the base each had three held-out repeats across five deterministic tasks.
+- All 9/9 measured training records succeeded with `source_tree_dirty=false` at source commit `131eabe84616db25710f28125e0f20246b111328`. All adapter runs passed the static post-training probe. Every rank passed 54/54 held-out cases, as did the base. Median train time / Torch allocated VRAM: rank 8, 3.905 s / 886.0 MiB; rank 16, 3.935 s / 898.4 MiB; rank 32, 3.932 s / 923.1 MiB. Sampled whole-GPU peaks were 1,914 / 1,932 / 1,978 MiB.
+- Median reference NLL on the five tasks was 0.266511 for the NF4 base, then 0.084842, 0.068473, and 0.063254 for ranks 8, 16, and 32. Since exact test success was already saturated for the base and all adapters, this is evidence of better likelihood on a tiny synthetic fixture, not a broad quality win. Rank 8 is the smallest configuration with the same observed test pass rate; rank 16/32 did not add pass-rate value in this probe.
+- All model, runtime, cache, logs, and result writes during measurements used `/home/foxtrot/local-llm-benchmark` on WSL ext4 backed by the C: SSD. HDDs were not benchmarked; E: is used only to archive the completed run artifacts. The run's raw JSONL, one-second resource samples, CSV, and summary are in `results/raw/qlora-rank-sweep-20261011T194427Z/` and `results/reports/qlora-rank-sweep-20261011T194427Z/`.
 
 ## SSD-only context and KV checkpoint — 2026-10-11
 

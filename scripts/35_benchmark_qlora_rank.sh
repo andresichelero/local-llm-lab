@@ -87,6 +87,10 @@ for rank in "${RANK_LIST[@]}"; do
     >"$LOG_DIR/quality-r${rank}.jsonl" 2>"$LOG_DIR/quality-r${rank}.stderr.log"
 done
 
-cp "$RAW_DIR"/*.jsonl "$ROOT/results/raw/"
-cp "$LOG_DIR"/* "$ROOT/logs/"
+REPO_RAW_DIR="$ROOT/results/raw/qlora-rank-sweep-$RUN_ID"
+mkdir -p "$REPO_RAW_DIR"
+cp "$RAW_DIR"/*.jsonl "$REPO_RAW_DIR/"
+REPO_LOG_DIR="$ROOT/logs/qlora-rank-sweep-$RUN_ID"
+mkdir -p "$REPO_LOG_DIR"
+cp "$LOG_DIR"/* "$REPO_LOG_DIR/"
 echo "Completed SSD-only rank series in $RAW_DIR; adapter artifacts remain under $BENCH_STORAGE_ROOT/results/qlora-rank-$RUN_ID/adapters"

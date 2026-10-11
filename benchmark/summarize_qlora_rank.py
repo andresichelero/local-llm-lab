@@ -61,6 +61,9 @@ def summarize(raw_dir: Path, repo_raw_dir: Path) -> list[dict]:
             "base_reference_nll_median": round(statistics.median(float(row["reference_nll_per_token"]) for row in base), 6),
             "adapter_reference_nll_median": round(statistics.median(float(row["reference_nll_per_token"]) for row in adapter), 6),
             "adapter_sha256": str(train[0]["adapter_sha256"]),
+            "git_sha": str(train[0]["git_sha"]),
+            "model_revision": str(train[0]["model_revision"]),
+            "source_tree_dirty": any(bool(row.get("source_tree_dirty")) for row in train),
         })
     return summaries
 
@@ -90,6 +93,7 @@ def main() -> int:
             f"| {row['rank']} / {row['alpha']} | {row['trainable_parameters']:,} | {row['adapter_mib']:.2f} | {row['train_seconds_median']:.3f} ± {row['train_seconds_sd']:.3f} | {row['torch_vram_peak_mib']:.1f} | {row['sampled_system_vram_peak_mib']} | {row['base_tests_passed']}/{row['base_tests_total']} | {row['adapter_tests_passed']}/{row['adapter_tests_total']} | {row['base_task_passes']}/15 | {row['adapter_task_passes']}/15 | {row['base_reference_nll_median']:.6f} → {row['adapter_reference_nll_median']:.6f} |"
         )
     report.extend(["", "The CSV records adapter SHA-256 values and mean/standard deviation. Training-run JSONL and one-second hardware samples remain the source of truth.", ""])
+    report.insert(4, f"Source commit: `{rows[0]['git_sha']}`; pinned model revision: `{rows[0]['model_revision']}`; dirty source rows: {sum(bool(row['source_tree_dirty']) for row in rows)} of 9 measured training records.")
     (args.output_dir / "qlora-rank-sweep.md").write_text("\n".join(report), encoding="utf-8")
     return 0
 
