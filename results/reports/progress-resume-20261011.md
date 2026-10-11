@@ -34,4 +34,3 @@ Updated: 2026-10-11 (America/Sao_Paulo)
 ## Scope still open
 
 The overall research mission is not complete. The merged probe only establishes short read-only subagent compatibility and documents failed/incomplete coding attempts. It does not establish the best multi-agent setup, routing design, compaction quality, or a general runtime/model ranking.
-
