@@ -15,6 +15,8 @@ RESOURCE_JSONL="${QLORA_RESOURCE_JSONL:-$BENCH_STORAGE_ROOT/results/raw/qlora-sm
 LOG_PATH="${QLORA_LOG_PATH:-$BENCH_STORAGE_ROOT/logs/qlora-smoke-$RUN_ID.log}"
 STEPS="${QLORA_STEPS:-8}"
 MAX_SEQ_LENGTH="${QLORA_MAX_SEQ_LENGTH:-192}"
+RANK="${QLORA_RANK:-8}"
+ALPHA="${QLORA_ALPHA:-$((RANK * 2))}"
 METHOD="${TRAINING_METHOD:-qlora}"
 OPTIMIZER="${TRAINING_OPTIMIZER:-adamw32}"
 DRY_RUN=0
@@ -24,6 +26,8 @@ while (($#)); do
     --dry-run) DRY_RUN=1; shift ;;
     --steps) (($# >= 2)) || { echo "--steps needs a value" >&2; exit 2; }; STEPS="$2"; shift 2 ;;
     --max-seq-length) (($# >= 2)) || { echo "--max-seq-length needs a value" >&2; exit 2; }; MAX_SEQ_LENGTH="$2"; shift 2 ;;
+    --rank) (($# >= 2)) || { echo "--rank needs a value" >&2; exit 2; }; RANK="$2"; shift 2 ;;
+    --alpha) (($# >= 2)) || { echo "--alpha needs a value" >&2; exit 2; }; ALPHA="$2"; shift 2 ;;
     --method) (($# >= 2)) || { echo "--method needs lora or qlora" >&2; exit 2; }; METHOD="$2"; shift 2 ;;
     --optimizer) (($# >= 2)) || { echo "--optimizer needs adamw32 or adamw8bit" >&2; exit 2; }; OPTIMIZER="$2"; shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
@@ -37,7 +41,7 @@ for path in "$OUTPUT_ROOT" "$RESULT_JSONL" "$RESOURCE_JSONL" "$LOG_PATH"; do
   require_wsl_ext4_destination "$path" "QLoRA benchmark output path"
 done
 [[ "$OPTIMIZER" == adamw32 || "$OPTIMIZER" == adamw8bit ]] || { echo "--optimizer must be adamw32 or adamw8bit" >&2; exit 2; }
-ARGS=(--model-dir "$MODEL_DIR" --model-id "$MODEL_ID" --model-parameters "$MODEL_PARAMETERS" --dataset "$DATASET" --method "$METHOD" --optimizer "$OPTIMIZER" --output-root "$OUTPUT_ROOT" --result-jsonl "$RESULT_JSONL" --steps "$STEPS" --max-seq-length "$MAX_SEQ_LENGTH")
+ARGS=(--model-dir "$MODEL_DIR" --model-id "$MODEL_ID" --model-parameters "$MODEL_PARAMETERS" --dataset "$DATASET" --method "$METHOD" --optimizer "$OPTIMIZER" --output-root "$OUTPUT_ROOT" --result-jsonl "$RESULT_JSONL" --steps "$STEPS" --max-seq-length "$MAX_SEQ_LENGTH" --rank "$RANK" --alpha "$ALPHA")
 if ((DRY_RUN)); then
   "$PYTHON" "$ROOT/benchmark/qlora_smoke.py" "${ARGS[@]}" --dry-run
   exit 0
@@ -56,6 +60,9 @@ cleanup() { kill "$SAMPLER_PID" 2>/dev/null || true; wait "$SAMPLER_PID" 2>/dev/
 trap cleanup EXIT INT TERM
 "$PYTHON" "$ROOT/benchmark/qlora_smoke.py" "${ARGS[@]}" 2>&1 | tee -a "$LOG_PATH"
 cleanup
-cp "$RESULT_JSONL" "$ROOT/results/raw/$(basename "$RESULT_JSONL")"
-cp "$RESOURCE_JSONL" "$ROOT/results/raw/$(basename "$RESOURCE_JSONL")"
-cp "$LOG_PATH" "$ROOT/logs/$(basename "$LOG_PATH")"
+if [[ "${QLORA_COPY_RESULTS_TO_REPO:-1}" == "1" ]]; then
+  mkdir -p "$ROOT/results/raw" "$ROOT/logs"
+  cp "$RESULT_JSONL" "$ROOT/results/raw/$(basename "$RESULT_JSONL")"
+  cp "$RESOURCE_JSONL" "$ROOT/results/raw/$(basename "$RESOURCE_JSONL")"
+  cp "$LOG_PATH" "$ROOT/logs/$(basename "$LOG_PATH")"
+fi

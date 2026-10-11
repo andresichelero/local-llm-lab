@@ -1,0 +1,20 @@
+{"adapter_output": "/home/foxtrot/local-llm-benchmark/results/qlora-rank-20261011T194427Z/adapters/qwen25-coder-05b-qlora-nf4-r16-a32-20261011T194612Z-seed42", "dataset": "/home/foxtrot/local-llm-benchmark/worktrees/qlora-rank-clean/benchmark/data/qlora-smoke.jsonl", "lora_alpha": 32, "lora_rank": 16, "max_seq_length": 192, "method": "qlora", "model": "Qwen/Qwen2.5-Coder-0.5B-Instruct", "model_dir": "/home/foxtrot/local-llm-benchmark/models/Qwen2.5-Coder-0.5B-Instruct", "model_parameters": "0.49B", "optimizer": "adamw32", "result_jsonl": "/home/foxtrot/local-llm-benchmark/results/raw/qlora-rank-20261011T194427Z/train-r16-rep-2.jsonl", "seed": 42, "steps": 16}
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:00<00:29,  9.92it/s]Loading weights:  22%|██▏       | 63/290 [00:00<00:00, 364.12it/s]Loading weights:  60%|█████▉    | 173/290 [00:00<00:00, 697.58it/s]Loading weights:  97%|█████████▋| 281/290 [00:00<00:00, 843.77it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 709.27it/s]
+trainable params: 2,162,688 || all params: 496,195,456 || trainable%: 0.4359
+step=1/16 loss=0.295435
+step=2/16 loss=0.401419
+step=3/16 loss=0.100144
+step=4/16 loss=0.205202
+step=5/16 loss=0.084911
+step=6/16 loss=0.128034
+step=7/16 loss=0.013334
+step=8/16 loss=0.095194
+step=9/16 loss=0.009618
+step=10/16 loss=0.037004
+step=11/16 loss=0.011107
+step=12/16 loss=0.013397
+step=13/16 loss=0.005662
+step=14/16 loss=0.003483
+step=15/16 loss=0.000800
+step=16/16 loss=0.001375
+{"adapter_bytes": 8676008, "adapter_path": "/home/foxtrot/local-llm-benchmark/results/qlora-rank-20261011T194427Z/adapters/qwen25-coder-05b-qlora-nf4-r16-a32-20261011T194612Z-seed42", "adapter_sha256": "7c042690d283fc63f2244fd994d1ae226d35f3a2faee93253cb2a9582e5916b3", "baseline_probe": "```python\ndef add(a, b):\n    return a + b\n```", "baseline_probe_seconds": 1.204, "batch_size": 1, "bitsandbytes_version": "0.50.2", "compute_dtype": "float16", "dataset": "benchmark/data/qlora-smoke.jsonl", "dataset_rows": 8, "dataset_sha256": "4ff85d0585fc875f41b0506e0a890feadcbb892fcb63a78e1c767e14283f2193", "experiment": "qlora-smoke", "final_loss": 0.00137501978315413, "git_sha": "131eabe84616db25710f28125e0f20246b111328", "gpu": "NVIDIA GeForce RTX 3070", "gradient_accumulation_steps": 1, "gradient_checkpointing": true, "gradient_checkpointing_kwargs": {"use_reentrant": false}, "import_seconds": 3.211, "initial_loss": 0.29543477296829224, "learning_rate": 0.0002, "lora_alpha": 32, "lora_rank": 16, "lora_target_modules": ["q_proj", "k_proj", "v_proj", "o_proj"], "losses": [0.29543477296829224, 0.40141862630844116, 0.10014387220144272, 0.2052023857831955, 0.08491054177284241, 0.1280343383550644, 0.01333408523350954, 0.09519386291503906, 0.009617844596505165, 0.03700418025255203, 0.011106749065220356, 0.01339711807668209, 0.00566206406801939, 0.003483045380562544, 0.0007997869397513568, 0.00137501978315413], "max_seq_length": 192, "max_steps": 16, "method": "QLoRA", "model": "Qwen/Qwen2.5-Coder-0.5B-Instruct", "model_load_seconds": 1.055, "model_parameters": "0.49B", "model_revision": "ea3f2471cf1b1f0db85067f1ef93848e38e88c25", "optimizer": "torch.optim.AdamW (32-bit states)", "peft_version": "0.21.2", "post_training_probe_seconds": 0.523, "quantization": "bitsandbytes NF4 with double quantization", "runtime": "Transformers + PEFT + bitsandbytes", "seed": 42, "source_tree_dirty": false, "steps_completed": 16, "storage_profile": "ssd-wsl-ext4-c", "success": true, "timestamp": "2026-10-11T19:46:22.776977+00:00", "torch_version": "2.10.0+cu128", "total_parameters": 496195456, "total_seconds": 10.005, "trainable_parameters": 2162688, "trained_probe": "def add(a, b):\n    return a + b", "trained_probe_static_add_ast_pass": true, "training_seconds": 3.935, "transformers_version": "5.19.0", "vram_peak_allocated_mib": 898.4, "vram_peak_reserved_mib": 1026.0}

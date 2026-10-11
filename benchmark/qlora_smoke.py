@@ -79,6 +79,10 @@ def successful_training(
     )
 
 
+def valid_lora_config(rank: int, alpha: int) -> bool:
+    return rank > 0 and alpha > 0
+
+
 def load_rows(dataset: Path, tokenizer: object, max_length: int) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for line_number, line in enumerate(dataset.read_text(encoding="utf-8").splitlines(), start=1):
@@ -119,14 +123,16 @@ def main() -> int:
     parser.add_argument("--optimizer", choices=("adamw32", "adamw8bit"), default="adamw32")
     parser.add_argument("--steps", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--rank", type=int, default=8)
+    parser.add_argument("--alpha", type=int, default=16)
     parser.add_argument("--max-seq-length", type=int, default=int(os.environ.get("TRAINING_MAX_SEQ_LENGTH", "192")))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    if args.steps < 1 or args.max_seq_length < 16:
-        parser.error("--steps must be positive and --max-seq-length must be at least 16")
+    if args.steps < 1 or args.max_seq_length < 16 or not valid_lora_config(args.rank, args.alpha):
+        parser.error("--steps, --rank, and --alpha must be positive; --max-seq-length must be at least 16")
     model_slug = args.model_id.rsplit("/", 1)[-1].lower().replace(".", "").replace("-instruct", "")
     method_slug = "nf4" if args.method == "qlora" else "fp16"
-    adapter_path = args.output_root / f"{model_slug}-{args.method}-{method_slug}-r8-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-seed{args.seed}"
+    adapter_path = args.output_root / f"{model_slug}-{args.method}-{method_slug}-r{args.rank}-a{args.alpha}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-seed{args.seed}"
     preflight = {
         "model_dir": str(args.model_dir),
         "model": args.model_id,
@@ -136,6 +142,8 @@ def main() -> int:
         "dataset": str(args.dataset),
         "steps": args.steps,
         "seed": args.seed,
+        "lora_rank": args.rank,
+        "lora_alpha": args.alpha,
         "max_seq_length": args.max_seq_length,
         "adapter_output": str(adapter_path),
         "result_jsonl": str(args.result_jsonl),
@@ -212,8 +220,8 @@ def main() -> int:
     model = get_peft_model(
         model,
         LoraConfig(
-            r=8,
-            lora_alpha=16,
+            r=args.rank,
+            lora_alpha=args.alpha,
             lora_dropout=0.05,
             bias="none",
             task_type="CAUSAL_LM",
@@ -312,8 +320,8 @@ def main() -> int:
         "gradient_checkpointing_kwargs": gradient_checkpointing_kwargs,
         "optimizer": optimizer_label,
         "learning_rate": 2e-4,
-        "lora_rank": 8,
-        "lora_alpha": 16,
+        "lora_rank": args.rank,
+        "lora_alpha": args.alpha,
         "lora_target_modules": target_modules,
         "trainable_parameters": trainable_parameters,
         "total_parameters": total_parameters,
