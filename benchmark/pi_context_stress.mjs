@@ -94,14 +94,14 @@ const samples = [{ label: 'start', usage: usage(), entries: sessionManager.getEn
 const t0 = Date.now();
 let phase1Error;
 try {
-  await session.prompt('We are in a synthetic benchmark repo. Inspect archive-01.md through archive-20.md using the read tool, in batches. Then create summary.md with exactly `archive_count: 32` and a short description of the archives. Run `python3 test_result.py` and fix summary.md if needed. Do not search for or report any recovery key yet; keep working on the repository task.');
+  await session.prompt('We are in a synthetic benchmark repo. Inspect archive-01.md through archive-20.md using the read tool, in batches. Find the exact ARCHIVE RECOVERY KEY in archive-07.md and preserve it in summary.md as `recovery_key: <exact value>`. Also include exactly `archive_count: 32` and a short description. Run `python3 test_result.py` and fix summary.md if needed. The next task will ask you to recover this key after context compaction.');
 } catch (error) { phase1Error = String(error); }
 await session.waitForIdle();
 samples.push({ label: 'after_phase_1', usage: usage(), entries: sessionManager.getEntryCount() });
 
 let phase2Error;
 try {
-  await session.prompt('Continue the same repository task. Inspect archive-21.md through archive-32.md, verify the summary still reports all 32 files, and run the test again. Then recover the exact ARCHIVE RECOVERY KEY from the earlier archives and write it into recovery.txt. The earlier file may have been compacted out of the visible transcript, so use the retained task state and inspect files as needed. After the test passes, report the key and whether you performed a compaction.');
+  await session.prompt('Continue the same repository task after the context pressure. Inspect archive-21.md through archive-32.md, verify the summary reports all 32 files, then recover the exact key you were asked to preserve earlier and write it into recovery.txt. Do not reopen archive-07.md; use the retained task state or summary.md. Run `python3 test_result.py` and report the key and whether compaction occurred.');
 } catch (error) { phase2Error = String(error); }
 await session.waitForIdle();
 samples.push({ label: 'after_phase_2', usage: usage(), entries: sessionManager.getEntryCount() });
@@ -140,6 +140,7 @@ const record = {
   tool_call_start_count: toolCalls,
   session_stats: stats,
   summary_exists: summaryText.includes('archive_count: 32'),
+  key_preserved_in_summary: summaryText.includes(secret),
   recovery_exact_match: recoveryText.includes(secret),
   recovery_text: recoveryText.slice(0, 200),
   test_exit_code: test.exitCode,
@@ -150,5 +151,4 @@ const record = {
 fs.appendFileSync(outFile, `${JSON.stringify(record)}\n`);
 console.log(JSON.stringify(record, null, 2));
 session.dispose();
-settingsManager.dispose();
-if (record.source_tree_dirty || !record.summary_exists || !record.recovery_exact_match || record.test_exit_code !== 0 || record.compaction_event_count === 0) process.exitCode = 2;
+if (record.source_tree_dirty || !record.summary_exists || !record.key_preserved_in_summary || !record.recovery_exact_match || record.test_exit_code !== 0 || record.compaction_event_count === 0) process.exitCode = 2;

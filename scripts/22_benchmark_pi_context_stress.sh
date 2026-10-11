@@ -15,6 +15,7 @@ RUN_DIR="$OUT_ROOT/$RUN_ID"
 AGENT_DIR="$RUN_DIR/agent"
 WORKSPACE="$RUN_DIR/workspace"
 RAW="$BENCH_STORAGE_ROOT/results/raw/pi-context-stress.jsonl"
+INVALID="$BENCH_STORAGE_ROOT/results/pi-context-stress/exploratory-invalid.jsonl"
 SERVER_LOG="$LOG_ROOT/pi-context-stress-server-$RUN_ID.log"
 RECORD="$RUN_DIR/result.jsonl"
 
@@ -72,6 +73,10 @@ set +e
 "$NODE" "$ROOT/benchmark/pi_context_stress.mjs" | tee "$RUN_DIR/stdout.json"
 status=${PIPESTATUS[0]}
 set -e
-cat "$RECORD" >> "$RAW"
+if (( status == 0 )); then
+  cat "$RECORD" >> "$RAW"
+else
+  cat "$RECORD" >> "$INVALID"
+fi
 printf 'run_dir=%s\nrecord=%s\nserver_log=%s\nexit_code=%s\n' "$RUN_DIR" "$RECORD" "$SERVER_LOG" "$status"
 exit "$status"
