@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 try:
-    from benchmark.summarize_harness_results import summarize_records
+    from benchmark.summarize_harness_results import summarize_records, write_outputs
 except ImportError:
     summarize_records = None  # type: ignore[assignment]
+    write_outputs = None  # type: ignore[assignment]
 
 
 class HarnessSummaryTests(unittest.TestCase):
@@ -32,6 +35,27 @@ class HarnessSummaryTests(unittest.TestCase):
         self.assertEqual(summary["wall_s_stddev"], 10)
         self.assertEqual(summary["prompt_tokens_median"], 200)
         self.assertEqual(summary["vram_used_mb_peak_median"], 6200)
+
+    def test_separates_models_and_writes_multi_source_labels(self) -> None:
+        self.assertTrue(callable(summarize_records), "harness result summarizer is not implemented")
+        self.assertTrue(callable(write_outputs), "harness report writer is not implemented")
+        records = [
+            {"harness": "pi", "model": "Qwen", "git_sha": "a" * 40, "success": True, "wall_s": 20},
+            {"harness": "pi", "model": "Ornith", "git_sha": "b" * 40, "success": True, "wall_s": 25},
+        ]
+        summaries = summarize_records(records)
+        self.assertEqual({row["model"] for row in summaries}, {"Qwen", "Ornith"})
+        with tempfile.TemporaryDirectory() as temp:
+            csv_path = Path(temp) / "summary.csv"
+            markdown_path = Path(temp) / "summary.md"
+            sources = [Path("runs-qwen.jsonl"), Path("runs-ornith.jsonl")]
+            write_outputs(summaries, csv_path, markdown_path, sources)
+            markdown = markdown_path.read_text(encoding="utf-8")
+        self.assertIn("runs-qwen.jsonl", markdown)
+        self.assertIn("runs-ornith.jsonl", markdown)
+        self.assertIn("| Model | Harness |", markdown)
+        self.assertIn("Qwen", markdown)
+        self.assertIn("Ornith", markdown)
 
 
 if __name__ == "__main__":
