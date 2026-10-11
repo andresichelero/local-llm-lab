@@ -55,3 +55,14 @@ Three of five runs met the strict task grader (60%). All five exited cleanly, pa
 | Qwen3.5-9B Q4_K_M | 3 | 3/3 | 19.92 | 13,875 | 6 | 6,145 MB |
 
 The 4B sample was faster and used less VRAM, but its strict success rate was lower; sample sizes differ and this single task cannot establish a general ranking. Per-run records and summary are in `results/raw/qwen35-4b-pi-harness-20261011.jsonl`, `results/csv/harness-qwen35-4b-pi.csv`, and `results/reports/harness-qwen35-4b-pi.md`. The post-run historical archive is `E:\\LocalLLMLabArchive\\2026-10-11\\qwen35-4b-pi-harness-20261011`; E: was not used for benchmark I/O.
+
+## Qwen3.5-4B local-worker follow-up — OpenCode, SSD only
+
+OpenCode 1.19.0 ran the same fixed coding task, model revision, local llama.cpp endpoint, and settings as the Pi follow-up: Qwen3.5-4B Q4_K_M, 16K context, Q4_0 KV, 99 GPU layers, and Flash Attention. All benchmark I/O stayed on C:-backed WSL ext4 SSD. One warm-up preceded five measured runs. All five met the strict grader, passed unit tests and the independent behavior probe, changed only the two allowed files, and had zero tool-call failures.
+
+| Harness | Runs | Strict success | Wall s median | First prompt tokens median | Prompt tokens median | Tool calls median | VRAM peak median |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Pi 1.1.0 | 5 | 3/5 | 16.82 | 1,709 | 13,542 | 6 | 4,108 MB |
+| OpenCode 1.19.0 | 5 | 5/5 | 19.98 | 7,592 | 59,495 | 7 | 4,103 MB |
+
+On this single task, Pi used substantially fewer harness-reported prompt tokens and finished about 16% sooner, while OpenCode followed the exact test-name specification on all five runs. Each harness has different token accounting and schemas, so token totals are directional overhead indicators, not a normalized tokenizer comparison. The result does not cover broader coding tasks, compaction, subagents, or MCP. OpenCode raw records, CSV, and report are in `results/raw/qwen35-4b-opencode-harness-20261011.jsonl`, `results/csv/harness-qwen35-4b-opencode.csv`, and `results/reports/harness-qwen35-4b-opencode.md`; E: is reserved for a checksum-verified post-run archive.
