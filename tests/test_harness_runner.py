@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import os
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +12,7 @@ try:
         build_command,
         parse_server_prompt_eval_tokens,
         _isolated_environment,
+        _preflight,
         _prepare_run,
         summarize_resources,
         summarize_usage,
@@ -20,12 +21,32 @@ except ImportError:
     build_command = None  # type: ignore[assignment]
     parse_server_prompt_eval_tokens = None  # type: ignore[assignment]
     _isolated_environment = None  # type: ignore[assignment]
+    _preflight = None  # type: ignore[assignment]
     _prepare_run = None  # type: ignore[assignment]
     summarize_resources = None  # type: ignore[assignment]
     summarize_usage = None  # type: ignore[assignment]
 
 
 class HarnessRunnerTests(unittest.TestCase):
+    def test_preflight_rejects_non_ssd_log_or_result_destinations(self) -> None:
+        self.assertTrue(callable(_preflight), "harness SSD preflight is not implemented")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "source"
+            source.mkdir()
+            model = root / "model.gguf"
+            model.write_bytes(b"fixture")
+            server_log = root / "logs/server.log"
+            results = root / "results/summary.jsonl"
+            with patch("benchmark.harness_runner.REPO_ROOT", source), patch(
+                "benchmark.harness_runner._filesystem_type",
+                side_effect=["ext4", "ext4", "ext4", "ext4", "drvfs"],
+            ) as filesystem_type, patch("benchmark.harness_runner.urllib.request.urlopen") as urlopen:
+                with self.assertRaisesRegex(RuntimeError, "results output must be on the WSL ext4 SSD"):
+                    _preflight(root, "local-model", model, 4096, "http://127.0.0.1:8080", server_log, results)
+            self.assertEqual(filesystem_type.call_count, 5)
+            urlopen.assert_not_called()
+
     def test_opencode_config_is_outside_task_workspace(self) -> None:
         self.assertTrue(callable(_prepare_run), "harness workspace preparation is not implemented")
         with tempfile.TemporaryDirectory() as temp:

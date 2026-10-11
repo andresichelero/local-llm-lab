@@ -208,8 +208,11 @@ def _read_server_log_after(path: Path, offset: int) -> str:
 
 
 def _filesystem_type(path: Path) -> str:
+    probe = path.resolve()
+    while not probe.exists() and probe.parent != probe:
+        probe = probe.parent
     result = subprocess.run(
-        ["findmnt", "-n", "-o", "FSTYPE", "-T", str(path)],
+        ["findmnt", "-n", "-o", "FSTYPE", "-T", str(probe)],
         check=True,
         capture_output=True,
         text=True,
@@ -223,10 +226,18 @@ def _preflight(
     model_path: Path,
     context: int,
     server_url: str,
+    server_log: Path,
+    results_output: Path,
 ) -> dict[str, Any]:
     if not model_path.is_file():
         raise RuntimeError(f"SSD model is missing: {model_path}")
-    for label, path in (("benchmark root", install_root), ("model", model_path)):
+    for label, path in (
+        ("source repository", REPO_ROOT),
+        ("benchmark root", install_root),
+        ("model", model_path),
+        ("server log", server_log),
+        ("results output", results_output),
+    ):
         filesystem = _filesystem_type(path)
         if filesystem != "ext4":
             raise RuntimeError(f"{label} must be on the WSL ext4 SSD (found {filesystem}): {path}")
@@ -357,7 +368,13 @@ def run_one(
     source_revision, source_tree_dirty = git_provenance(REPO_ROOT)
     resolved_model_path = install_root / DEFAULT_MODEL_PATH if model_path is None else model_path
     resolved_server_log = install_root / "logs/harness-llama-server.log" if server_log is None else server_log
-    preflight = _preflight(install_root, model, resolved_model_path, context, server_url)
+    resolved_results_output = (
+        REPO_ROOT / "results/raw/harness-run-summary.jsonl" if results_output is None else results_output
+    )
+    preflight = _preflight(
+        install_root, model, resolved_model_path, context, server_url,
+        resolved_server_log, resolved_results_output,
+    )
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     run_dir = install_root / "results/harness-runs" / f"{timestamp}-{harness}"
     run_dir.mkdir(parents=True, exist_ok=False)
@@ -466,7 +483,7 @@ def run_one(
         "run_dir": str(run_dir),
     }
     (run_dir / "metrics.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
-    summary_path = REPO_ROOT / "results/raw/harness-run-summary.jsonl" if results_output is None else results_output
+    summary_path = resolved_results_output
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     with summary_path.open("a", encoding="utf-8") as summary:
         summary.write(json.dumps(record, ensure_ascii=False) + "\n")

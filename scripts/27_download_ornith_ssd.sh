@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/scripts/lib/ssd_preflight.sh"
 BENCH_STORAGE_ROOT="${BENCH_STORAGE_ROOT:-${HOME}/local-llm-benchmark}"
 MODEL_DIR="${MODEL_DIR:-$BENCH_STORAGE_ROOT/models/gguf/ornith-1.0-9b}"
 MODEL_PATH="$MODEL_DIR/ornith-1.0-9b-Q4_K_M.gguf"
@@ -29,10 +30,8 @@ case "${1:-}" in
 esac
 
 [[ -d "$BENCH_STORAGE_ROOT" ]] || { echo "SSD benchmark root does not exist: $BENCH_STORAGE_ROOT" >&2; exit 1; }
-[[ "$(findmnt -n -o FSTYPE -T "$BENCH_STORAGE_ROOT")" == ext4 ]] || {
-  echo "Benchmark root must be on WSL ext4 SSD: $BENCH_STORAGE_ROOT" >&2
-  exit 1
-}
+require_wsl_ext4_path "$BENCH_STORAGE_ROOT" "benchmark root"
+require_wsl_ext4_destination "$MODEL_PATH" "model destination"
 
 if [[ -e "$MODEL_PATH" ]]; then
   actual_size="$(stat -c %s "$MODEL_PATH")"
@@ -45,7 +44,9 @@ if [[ -e "$MODEL_PATH" ]]; then
   exit 0
 fi
 
-available_bytes="$(df -B1 --output=avail "$BENCH_STORAGE_ROOT" | tail -n 1 | tr -d '[:space:]')"
+SPACE_PATH="$MODEL_DIR"
+while [[ ! -e "$SPACE_PATH" ]]; do SPACE_PATH="$(dirname "$SPACE_PATH")"; done
+available_bytes="$(df -B1 --output=avail "$SPACE_PATH" | tail -n 1 | tr -d '[:space:]')"
 printf 'repo=%s\nrevision=%s\nfile=%s\nsize_bytes=%s\nsha256=%s\ndestination=%s\nfilesystem=ext4\navailable_bytes=%s\nminimum_required_bytes=%s\n' \
   "$REPO" "$REVISION" "$(basename "$MODEL_PATH")" "$EXPECTED_SIZE" "$EXPECTED_SHA256" "$MODEL_PATH" "$available_bytes" "$MIN_FREE_BYTES"
 ((available_bytes >= MIN_FREE_BYTES)) || {
