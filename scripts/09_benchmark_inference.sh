@@ -47,7 +47,7 @@ if curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then echo "Port $P
 SHA="$(git -C "$ROOT" rev-parse HEAD)"
 if ! git -C "$ROOT" diff --quiet HEAD -- . ':(exclude)results/**'; then SOURCE_DIRTY=true; else SOURCE_DIRTY=false; fi
 RUNTIME_COMMIT="$(git -C "$RUNTIME_SOURCE" rev-parse HEAD 2>/dev/null || echo unknown)"
-LOG="$ROOT/logs/llama-server-$PORT.log"
+LOG="${LOG_PATH:-$ROOT/logs/llama-server-$PORT.log}"
 if [[ "$CACHE_PROMPT" == on ]]; then
   CACHE_PROMPT_ARG=--cache-prompt
 elif [[ "$CACHE_PROMPT" == off ]]; then

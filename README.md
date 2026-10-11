@@ -8,7 +8,7 @@ Reproducible experiments for local inference, quantization, fine-tuning, and age
 - Ubuntu 24.04.5 in WSL2, kernel 6.18.40.1, CUDA device visible through `nvidia-smi`.
 - The current user `.wslconfig` sets WSL to 8 GiB RAM, 8 processors, 4 GiB swap, and a 70 GB default virtual disk. The existing Ubuntu VHD was separately expanded from 70 to 90 GB; the previous config is backed up outside the repository.
 - Free VRAM has varied from about 4.6 GiB during the first audit to 3.2–3.4 GiB while other WSL and Windows workloads were active; the desktop shares this GPU.
-- The Ubuntu virtual disk is 90 GB (88 GiB filesystem) with 45 GiB free after the 2026-10-11 harness cleanup and WSL restart. Its VHD is stored on the C: Samsung 970 EVO Plus SSD. D: and E: are HDDs; verified model archives remain on E:, while active models, runtimes, and benchmark outputs go under `/home/foxtrot/local-llm-benchmark` in WSL ext4 on C:. Current free space changes, so check before downloads/builds.
+- The Ubuntu virtual disk is 90 GB (88 GiB filesystem), stored on the C: Samsung 970 EVO Plus SSD. D: and E: are HDDs. All new experiments run from SSD-backed WSL ext4 on C:, including active model/runtime copies, logs, resource samples, and raw output. E: is archival storage for verified models and historical data; D: holds the Git checkout and receives completed result files only after an SSD run finishes. No new HDD performance tests are planned. Current free space changes, so check before downloads/builds.
 - CUDA Toolkit 13.0 was installed from NVIDIA's WSL repository. `nvcc` 13.0.88 is available. The Windows driver remains 610.62; no Linux NVIDIA driver was installed into WSL.
 
 The host, WSL and GPU can change while the lab runs. Re-run the audit before interpreting later benchmarks.
@@ -41,9 +41,9 @@ See `results/reports/status.md` for the current ledger of what has been research
 - Do not infer quality from throughput. Coding tasks must include deterministic checks and preserve their test output.
 - Never store API keys or credentials in this repository. Cloud work is opt-in and has a conservative spend ceiling.
 
-## Current first experiment
+## Tier 0 baseline (historical)
 
-The first Tier 0 target is IBM Granite 4.1 3B in GGUF Q4_K_M, served locally by llama.cpp. The pinned model was downloaded to `E:\local-llm-models` and verified against SHA-256 in `versions.lock`. A CLI smoke test and a clean-source three-repeat 2K-context server baseline completed; the clean baseline is in `results/raw/tier0-final.jsonl`, consolidated results are in `results/csv/summary.csv`, and a human-readable summary is in `results/reports/tier0-summary.md`. These are short-run throughput tests; model quality and larger-context behavior remain untested.
+The first Tier 0 target was IBM Granite 4.1 3B in GGUF Q4_K_M, served locally by llama.cpp. Its pinned model remains archived on E: and verified against SHA-256 in `versions.lock`. A CLI smoke test and a clean-source three-repeat 2K-context server baseline completed; the clean baseline is in `results/raw/tier0-final.jsonl`, consolidated results are in `results/csv/summary.csv`, and a human-readable summary is in `results/reports/tier0-summary.md`. These are short-run throughput tests; model quality and larger-context behavior remain untested.
 
 ## ExLlamaV3 / EXL3 tier
 
@@ -73,9 +73,13 @@ The benchmark helper `scripts/17_stage_llamacpp_to_ssd.sh` copies the built runt
 
 Pi 1.1.0, OpenCode 1.19.0, and Mistral Vibe 2.26.1 each ran one warm-up and three measured repeats against the same deterministic coding task and local Qwen3.5-9B Q4_K_M endpoint. The server used llama.cpp `d81235049`, 16K context, Q4_0 KV, and the WSL-native SSD. All nine valid measured runs passed the five unit tests, independent behavior probe, and change-scope check; each harness passed 3/3.
 
-Pi had the lowest measured context overhead and shortest median wall time for this task: 1,709 first-prompt tokens, 11,189 total prompt tokens, and 14.71 s median. OpenCode used 7,550 first-prompt tokens and 50,549 total, with 23.14 s median. Vibe used 8,088 first-prompt tokens and 53,495 total, with 23.03 s median. Peak VRAM stayed around 6.3–6.4 GiB; Pi and Vibe used less RAM than OpenCode in these runs. These results support Pi as the leanest harness for this particular single-agent coding workload. All three had the same task success, and the experiment did not test subagents, MCP, long-context compaction, or general coding ability.
+Pi had the lowest measured context overhead and shortest median wall time for this task: 1,709 first-prompt tokens, 13,875 total prompt tokens, and 19.92 s median. OpenCode used 7,550 first-prompt tokens and 50,580 total, with 46.13 s median. Vibe used 8,088 first-prompt tokens and 53,490 total, with 45.02 s median. Peak VRAM stayed around 6.1 GiB; Pi used the least RAM in these runs. These results support Pi as the leanest harness for this particular single-agent coding workload. All three had the same task success, and the experiment did not test subagents, MCP, long-context compaction, or general coding ability. The consolidated report excludes legacy rows without Git provenance.
 
 Reproduce with llama-server already running at `http://127.0.0.1:8080` against the pinned Qwen3.5-9B Q4_K_M GGUF and the three isolated harness installs present: `./scripts/19_benchmark_harnesses.sh --harness all --warmup`, followed by `./scripts/19_benchmark_harnesses.sh --harness all --repeat 3`. Generate the consolidated files with `python3 benchmark/summarize_harness_results.py`. Raw per-run output, quality checks, and hardware samples are stored under `results/raw/harness-run-summary.jsonl` and the SSD-side run directories listed in each record; two early OpenCode setup-invalid records remain preserved and are excluded from the CSV and Markdown summary. See `results/reports/harness-evaluation.md`.
 
 TrueForge 0.178.0 is installed and its isolated local UI returned the exact expected text from the same llama.cpp endpoint. This was a text-only smoke: the UI exposed zero tools, and startup reported that the local sandbox fallback needs `bubblewrap` and `socat`. No coding/tool result is claimed for TrueForge; see `results/raw/trueforge-smoke.jsonl`.
+
+## SSD-only context and KV follow-up
+
+Continue context/KV experiments using `scripts/20_benchmark_context_kv.sh`. The pinned Qwen3.5-9B GGUF, llama.cpp executable, active JSONL, resource samples, and server logs stay on the C:-hosted WSL ext4 filesystem for the whole run. After every requested configuration completes, JSONL and sampler files are copied into `results/raw/` in this checkout for Git history; they are not read back from D: or E: during inference. A first interrupted attempt produced dirty-source diagnostics and is excluded from analysis. See `results/reports/ssd-context-kv.md` for the clean series when it completes.
 

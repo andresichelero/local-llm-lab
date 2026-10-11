@@ -7,6 +7,8 @@ MODEL_REVISION="${MODEL_REVISION:-3885219b6810b007914f3a7950a8d1b469d598a5}"
 LLAMA_SERVER="${LLAMA_SERVER:-/home/foxtrot/local-llm-benchmark/tools/llama-bin/llama-server}"
 LLAMA_CPP_SOURCE="${LLAMA_CPP_SOURCE:-$ROOT/tools/llama.cpp}"
 LLAMA_LIBRARY_DIR="${LLAMA_LIBRARY_DIR:-/home/foxtrot/local-llm-benchmark/tools/llama-bin}"
+BENCH_STORAGE_ROOT="${BENCH_STORAGE_ROOT:-/home/foxtrot/local-llm-benchmark}"
+BENCH_LOG_DIR="${BENCH_LOG_DIR:-$BENCH_STORAGE_ROOT/logs}"
 CONTEXTS="${CONTEXTS:-16384,32768}"
 KV_CONTEXT="${KV_CONTEXT:-16384}"
 KV_TYPES="${KV_TYPES:-q8_0,f16}"
@@ -35,9 +37,12 @@ Options:
   --help             Show this help
 
 Environment overrides: MODEL_PATH, MODEL_REVISION, LLAMA_SERVER,
-LLAMA_CPP_SOURCE, LLAMA_LIBRARY_DIR, PROMPT_PERCENT (basis points; default
-8750), REPETITIONS, WARMUPS, PORT_BASE, MAX_NEW_TOKENS, MODEL_ID,
-STORAGE_PROFILE, RUNTIME_STORAGE_PROFILE, OUTPUT_PREFIX.
+LLAMA_CPP_SOURCE, LLAMA_LIBRARY_DIR, BENCH_STORAGE_ROOT, BENCH_LOG_DIR,
+PROMPT_PERCENT (basis points; default 8750), REPETITIONS, WARMUPS, PORT_BASE,
+MAX_NEW_TOKENS, MODEL_ID, STORAGE_PROFILE, RUNTIME_STORAGE_PROFILE,
+OUTPUT_PREFIX. Active JSONL, resource samples, and server logs are written to
+BENCH_STORAGE_ROOT on the SSD. Completed JSONL files are copied into the Git
+checkout after all configurations finish.
 EOF
 }
 
@@ -77,10 +82,11 @@ IFS=',' read -r -a CONTEXT_LIST <<<"$CONTEXTS"
 IFS=',' read -r -a KV_LIST <<<"$KV_TYPES"
 (( ${#CONTEXT_LIST[@]} > 0 && ${#KV_LIST[@]} > 0 )) || { echo "At least one context and KV type are required" >&2; exit 2; }
 
-OUTPUT_PREFIX="${OUTPUT_PREFIX:-$ROOT/results/raw/qwen35-ssd}"
+OUTPUT_PREFIX="${OUTPUT_PREFIX:-$BENCH_STORAGE_ROOT/results/raw/qwen35-ssd}"
 STORAGE_PROFILE="${STORAGE_PROFILE:-ssd-wsl-ext4-c}"
 RUNTIME_STORAGE_PROFILE="${RUNTIME_STORAGE_PROFILE:-ssd-wsl-ext4-c}"
 PORT="$PORT_BASE"
+ARCHIVE_OUTPUTS=()
 
 run_config() {
   local context="$1" kv_type="$2" phase="$3" prompt_tokens experiment output resource_output
@@ -103,9 +109,12 @@ run_config() {
     printf 'model=%s\nruntime=%s\noutput=%s\nresources=%s\n' \
       "$MODEL_PATH" "$LLAMA_SERVER" "$output" "$resource_output"
   else
+    mkdir -p "$(dirname "$output")" "$(dirname "$resource_output")" "$BENCH_LOG_DIR"
+    ARCHIVE_OUTPUTS+=("$output" "$resource_output")
     MODEL_PATH="$MODEL_PATH" MODEL_REVISION="$MODEL_REVISION" STORAGE_PROFILE="$STORAGE_PROFILE" \
     LLAMA_SERVER="$LLAMA_SERVER" LLAMA_CPP_SOURCE="$LLAMA_CPP_SOURCE" \
-    LD_LIBRARY_PATH="$LLAMA_LIBRARY_DIR" RUNTIME_STORAGE_PROFILE="$RUNTIME_STORAGE_PROFILE" \
+    LD_LIBRARY_PATH="$LLAMA_LIBRARY_DIR" LOG_PATH="$BENCH_LOG_DIR/llama-server-$PORT.log" \
+    RUNTIME_STORAGE_PROFILE="$RUNTIME_STORAGE_PROFILE" \
     PORT="$PORT" OUTPUT="$output" RESOURCE_OUTPUT="$resource_output" \
     EXPERIMENT="$experiment" MODEL_ID="$MODEL_ID" CTX_SIZE="$context" \
     GPU_LAYERS=99 BATCH_SIZE=256 UBATCH_SIZE=128 FLASH_ATTN=on \
@@ -122,3 +131,11 @@ done
 for kv_type in "${KV_LIST[@]}"; do
   run_config "$KV_CONTEXT" "$kv_type" kv
 done
+
+if [[ "$DRY_RUN" == false ]]; then
+  for source in "${ARCHIVE_OUTPUTS[@]}"; do
+    [[ -s "$source" ]] || { echo "Expected benchmark output is missing or empty: $source" >&2; exit 1; }
+    cp -- "$source" "$ROOT/results/raw/$(basename "$source")"
+  done
+  echo "Completed JSONL and resource samples were copied to $ROOT/results/raw; SSD-side originals remain under $BENCH_STORAGE_ROOT."
+fi
