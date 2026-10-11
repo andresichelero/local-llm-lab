@@ -30,6 +30,36 @@ models:
     status: ssd_inference_passed_archived_on_e_quality_unverified
     purpose: all/mostly-GPU quantization and KV comparison
     evidence: official model card and verified EXL3 repository commit, size and SHA-256 recorded in versions.lock
+  - id: qwen3.5-4b
+    repo: Qwen/Qwen3.5-4B
+    params: 4B
+    active_params: 4B
+    architecture: dense multimodal hybrid attention/linear attention
+    license: Apache-2.0
+    context_claim: 262144 native; model card documents agent/tool use and MTP
+    tool_use: upstream Qwen-Agent/Qwen Code guidance; not locally measured
+    formats: [Transformers, community-GGUF]
+    candidate_quant: Q4_K_M; pin and inspect a community GGUF before use
+    estimated_weight_gib: 2.8
+    realistic_context_tokens: 8192
+    status: research_candidate_not_downloaded
+    purpose: compact local worker and small-model harness comparison
+    evidence: official model card observed 2026-10-11; quant artifact and runtime support remain to be pinned
+  - id: qwen3.5-2b
+    repo: Qwen/Qwen3.5-2B
+    params: 2B
+    active_params: 2B
+    architecture: dense multimodal hybrid attention/linear attention
+    license: Apache-2.0
+    context_claim: 262144 native; model-family card documents tool use and MTP
+    tool_use: upstream capability only; test actual harness calls
+    formats: [Transformers, community-GGUF]
+    candidate_quant: Q4_K_M; verify quant source and checksum
+    estimated_weight_gib: 1.5
+    realistic_context_tokens: 8192
+    status: research_candidate_not_downloaded
+    purpose: low-cost worker and context-overhead control
+    evidence: official model card observed 2026-10-11; no local results
   - id: qwen3.8-27b
     repo: Qwen/Qwen3.8-27B
     params: 27B
@@ -40,9 +70,9 @@ models:
     tool_use: official agent-execution and tool support claims; measure independently
     formats: [Transformers, community-GGUF, community-EXL3]
     candidate_quant: IQ2/Q2 or EXL3 2.5-3.0 bpw; format support must be verified
-    estimated_weight_gib: 8.0
+    estimated_weight_gib: 8.0  # unverified extreme-quant estimate; upstream BF16 repository is 55.6 GB
     realistic_context_tokens: 2048
-    status: hybrid_or_specialized-format_candidate
+    status: deferred_no_pinned_quant_and_insufficient_ssd_space_for_upstream_weights
     purpose: test highly compressed large dense models; not assumed usable
     evidence: official-model-card; community formats need separate review
   - id: qwen3.6-35b-a3b
@@ -60,6 +90,36 @@ models:
     status: tier4_deferred_by_wsl_ram
     purpose: MoE expert offload/cache and MTP
     evidence: official-model-card
+  - id: qwen3.6-27b
+    repo: Qwen/Qwen3.6-27B
+    params: 27B (28B model-card size including embedding)
+    active_params: 27B
+    architecture: dense multimodal hybrid Gated DeltaNet/Gated Attention; MTP
+    license: Apache-2.0
+    context_claim: 262144 native; upstream describes YaRN extension
+    tool_use: official Qwen-Agent and Qwen Code guidance; upstream MTP recipes
+    formats: [Transformers, community-GGUF, community-EXL3]
+    candidate_quant: Q2/Q3 only after verifying source, compatibility, and quality
+    estimated_weight_gib: 12.0
+    realistic_context_tokens: 2048
+    status: research_candidate_deferred_by_wsl_ram_and_ssd_space
+    purpose: difficult hybrid/offload candidate; not assumed interactive
+    evidence: official card observed 2026-10-11; BF16 model is roughly 52 GiB from 28B parameters, before overhead
+  - id: qwen-agentworld-35b-a3b
+    repo: Qwen/Qwen-AgentWorld-35B-A3B
+    params: 35B
+    active_params: 3B
+    architecture: specialized language world-model MoE; 256 experts, hybrid DeltaNet/attention
+    license: Apache-2.0
+    context_claim: 262144; upstream recommends at least 131072 for intended simulations
+    tool_use: simulates environment state transitions for agent interaction; not a general coding model
+    formats: [Transformers, community-GGUF]
+    candidate_quant: no local quant selected
+    estimated_weight_gib: 19.0
+    realistic_context_tokens: 0
+    status: research_only_not_downloaded
+    purpose: specialized agent-world-model reference; cloud or future larger-memory test only
+    evidence: official card observed 2026-10-11; serving recipes use multi-GPU tensor parallelism
   - id: granite-4.1-8b
     repo: ibm-granite/granite-4.1-8b-GGUF
     params: 8B
