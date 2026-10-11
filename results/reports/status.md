@@ -1,5 +1,14 @@
 # Execution status — updated 2026-10-11
 
+## Unsloth QLoRA 7B capacity smoke — 2026-10-11
+
+- Staged the pinned 15.23 GB Qwen2.5-Coder-7B-Instruct archive from E: into C:-backed WSL ext4 after checking the free-space reserve; all four copied weight shards passed their pinned SHA-256 checks. The new script refuses an incomplete destination and reports insufficient SSD space before copying.
+- Unsloth 2026.10.3 completed three 8-step NF4 QLoRA runs on the RTX 3070. All losses were finite, the fixed `add(a,b)` code probe passed before and after, no OOM occurred, and all three results correctly identify the model as 7.62B parameters. Median training was 6.431 s; peak allocated VRAM was 5,640 MiB and peak sampled system VRAM 6,705 MiB. Peak WSL RAM was 2,909 MiB; swap stayed effectively unused (1 MiB maximum).
+- The prior SSD PEFT QLoRA 7B series had median 7.603 s training and 7,678 MiB allocated VRAM. The Unsloth result used about 26.5% less Torch-allocated VRAM; timing is exploratory because the runs were not paired and the PEFT dropout setting was not consistently recorded. This validates a small training path, not fine-tuning quality or the absolute maximum trainable size.
+- After successful measurements, the trained adapter was copied to `E:\\local-llm-results\\unsloth-qwen2.5-coder-7b-20261011` and hash-verified. Report/CSV/raw data: `results/reports/unsloth-7b-capacity-smoke.md`, `results/csv/unsloth-7b-summary.csv`, and `results/raw/unsloth-7b-*`.
+- A post-run audit found 2.28 MB of Unsloth's relative compiled cache under the D: checkout because the initial launcher retained its checkout cwd. We moved it to C:-backed WSL ext4 and changed the launcher to `cd` to the SSD storage root before runtime imports. Models, env, dataset, adapters and result files were C:-based; this cache write is the only known D:-based exception in these runs. No HDD performance test was performed.
+- A follow-up 0.5B Unsloth smoke passed after the cwd fix, and confirmed no `unsloth_compiled_cache` folder was recreated in the D: checkout; the cache remained on C:. This single run validates the storage-path correction and is kept separate from performance comparisons in `results/raw/unsloth-cwdcheck-smoke.jsonl`.
+
 ## Unsloth QLoRA smoke — 2026-10-11
 
 - Installed Unsloth 2026.10.3 into an isolated Python 3.12 environment on C:-hosted WSL ext4. Torch 2.10.0+cu128 detected the RTX 3070; package versions and reproducible commands are pinned in `versions.lock`, `config/runtimes.yaml`, and `scripts/24_finetune_unsloth.sh`.

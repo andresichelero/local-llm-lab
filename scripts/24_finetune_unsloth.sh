@@ -6,6 +6,7 @@ BENCH_STORAGE_ROOT="${BENCH_STORAGE_ROOT:-/home/foxtrot/local-llm-benchmark}"
 UNSLOTH_ENV_DIR="${UNSLOTH_ENV_DIR:-$BENCH_STORAGE_ROOT/envs/unsloth}"
 PYTHON="${UNSLOTH_PYTHON_BIN:-$UNSLOTH_ENV_DIR/bin/python}"
 MODEL_DIR="${TRAINING_MODEL_DIR:-$BENCH_STORAGE_ROOT/models/Qwen2.5-Coder-0.5B-Instruct}"
+MODEL_ID="${UNSLOTH_MODEL_ID:-Qwen/Qwen2.5-Coder-0.5B-Instruct}"
 DATASET="$BENCH_STORAGE_ROOT/data/qlora-smoke.jsonl"
 RUNNER="$BENCH_STORAGE_ROOT/scripts/unsloth_smoke.py"
 RESULT="${UNSLOTH_RESULT_JSONL:-$BENCH_STORAGE_ROOT/results/raw/unsloth-smoke.jsonl}"
@@ -40,7 +41,8 @@ for tool in cp date; do
 done
 [[ "$RUN_PREFIX" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || { echo "UNSLOTH_RUN_PREFIX must be a simple filename prefix (1-64 safe characters)." >&2; exit 2; }
 [[ -x "$PYTHON" ]] || { echo "Unsloth Python missing: $PYTHON" >&2; exit 1; }
-[[ -f "$MODEL_DIR/model.safetensors" && -f "$DATASET" ]] || { echo "Pinned SSD model or dataset missing; run scripts/23_stage_qlora_model_to_ssd.sh first." >&2; exit 1; }
+[[ -f "$MODEL_DIR/model.safetensors" || -f "$MODEL_DIR/model.safetensors.index.json" ]] || { echo "Pinned SSD model weights are missing; run the matching staging script first." >&2; exit 1; }
+[[ -f "$DATASET" ]] || { echo "Pinned SSD training dataset is missing: $DATASET" >&2; exit 1; }
 
 mkdir -p "$BENCH_STORAGE_ROOT/scripts" "$OUTPUT_ROOT" "$LOG_ROOT" "$(dirname "$RESULT")" "$RESOURCE_ROOT"
 cp -- "$ROOT/benchmark/unsloth_smoke.py" "$RUNNER"
@@ -55,13 +57,17 @@ export HF_HOME="${HF_HOME:-$BENCH_STORAGE_ROOT/cache/huggingface}"
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 
-printf 'runtime=%s\nrunner=%s\nrunner_sha256=%s\nmodel=%s\ndataset=%s\nsteps=%s\nsequence=%s\nlora_dropout=%s\nrun_prefix=%s\nwarmups=%s\nrepetitions=%s\n' \
-  "$PYTHON" "$RUNNER" "$SCRIPT_SHA" "$MODEL_DIR" "$DATASET" "$STEPS" "$MAX_SEQ_LENGTH" "$LORA_DROPOUT" "$RUN_PREFIX" "$WARMUPS" "$REPETITIONS"
+printf 'runtime=%s\nrunner=%s\nrunner_sha256=%s\nmodel_id=%s\nmodel=%s\ndataset=%s\nsteps=%s\nsequence=%s\nlora_dropout=%s\nrun_prefix=%s\nwarmups=%s\nrepetitions=%s\n' \
+  "$PYTHON" "$RUNNER" "$SCRIPT_SHA" "$MODEL_ID" "$MODEL_DIR" "$DATASET" "$STEPS" "$MAX_SEQ_LENGTH" "$LORA_DROPOUT" "$RUN_PREFIX" "$WARMUPS" "$REPETITIONS"
 df -h "$BENCH_STORAGE_ROOT"
 if [[ "$DRY_RUN" == true ]]; then
-  "$PYTHON" "$RUNNER" --model-dir "$MODEL_DIR" --dataset "$DATASET" --output-root "$OUTPUT_ROOT" --result-jsonl "$RESULT" --steps "$STEPS" --max-seq-length "$MAX_SEQ_LENGTH" --lora-dropout "$LORA_DROPOUT" --dry-run
+  "$PYTHON" "$RUNNER" --model-dir "$MODEL_DIR" --model-id "$MODEL_ID" --dataset "$DATASET" --output-root "$OUTPUT_ROOT" --result-jsonl "$RESULT" --steps "$STEPS" --max-seq-length "$MAX_SEQ_LENGTH" --lora-dropout "$LORA_DROPOUT" --dry-run
   exit 0
 fi
+
+# Unsloth creates a relative compiled cache in the process working directory.
+# Keep those cache writes on the SSD-backed WSL filesystem as well.
+cd "$BENCH_STORAGE_ROOT"
 
 finish() {
   local status=$?
@@ -82,7 +88,7 @@ run_one() {
   python3 "$ROOT/benchmark/resource_sampler.py" --output "$resource_file" --interval 1 &
   SAMPLER_PID=$!
   set +e
-  "$PYTHON" "$RUNNER" --model-dir "$MODEL_DIR" --dataset "$DATASET" --output-root "$OUTPUT_ROOT" \
+  "$PYTHON" "$RUNNER" --model-dir "$MODEL_DIR" --model-id "$MODEL_ID" --dataset "$DATASET" --output-root "$OUTPUT_ROOT" \
     --result-jsonl "$RESULT" --steps "$STEPS" --max-seq-length "$MAX_SEQ_LENGTH" --lora-dropout "$LORA_DROPOUT" "$@" 2>&1 | tee "$log_file"
   local status=${PIPESTATUS[0]}
   set -e

@@ -116,7 +116,8 @@ def main() -> int:
     if args.steps < 1 or args.max_seq_length < 16 or not 0 <= args.lora_dropout < 1:
         parser.error("--steps must be positive, --max-seq-length at least 16, and --lora-dropout in [0, 1)")
     run_label = "warmup" if args.warmup else "measured"
-    adapter_path = args.output_root / f"qwen25-coder-05b-unsloth-qlora-r8-{run_label}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-seed{args.seed}"
+    model_slug = "".join(character.lower() if character.isalnum() else "-" for character in args.model_id.rsplit("/", 1)[-1]).strip("-")
+    adapter_path = args.output_root / f"{model_slug}-unsloth-qlora-r8-{run_label}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-seed{args.seed}"
     preflight = {
         "backend": "unsloth",
         "model_dir": str(args.model_dir),
@@ -136,8 +137,10 @@ def main() -> int:
     print(json.dumps(preflight, sort_keys=True), flush=True)
     if args.dry_run:
         return 0
-    if not (args.model_dir / "model.safetensors").is_file():
-        raise FileNotFoundError(f"Model weights missing: {args.model_dir / 'model.safetensors'}")
+    single_weight = args.model_dir / "model.safetensors"
+    sharded_index = args.model_dir / "model.safetensors.index.json"
+    if not single_weight.is_file() and not sharded_index.is_file():
+        raise FileNotFoundError(f"Model weights or sharded index missing under {args.model_dir}")
     if not args.dataset.is_file():
         raise FileNotFoundError(f"Dataset missing: {args.dataset}")
 
@@ -251,7 +254,7 @@ def main() -> int:
         "method": "Unsloth QLoRA",
         "model": args.model_id,
         "model_revision": manifest.get("revision", "unrecorded-local-model"),
-        "model_parameters": "0.49B",
+        "model_parameters": f"{total_parameters / 1_000_000_000:.2f}B",
         "quantization": "bitsandbytes NF4 with double quantization",
         "compute_dtype": "float16",
         "runtime": "Transformers + Unsloth + bitsandbytes",

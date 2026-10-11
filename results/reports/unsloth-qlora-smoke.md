@@ -21,6 +21,10 @@ Run-level metrics are in `results/csv/unsloth-smoke-summary.csv`; raw records ar
 
 The five successful adapter artifacts represented by the raw records were copied to `E:\\local-llm-results\\unsloth-20261011` after measurement; each copy's SHA-256 matched its recorded adapter hash. SSD copies remain available for ongoing experiments.
 
+Storage audit correction: after these runs, a 2.28 MB `unsloth_compiled_cache` was found under the D: checkout because the initial wrapper kept the shell's working directory there. The model, data, environment and measured outputs were on C:, but this small generated cache was not. It has been moved to the C:-backed WSL storage root, and the wrapper now changes into that SSD root before importing/training. These earlier results are not a perfectly SSD-only cache-I/O series; no HDD speed test was performed.
+
+A separate 0.5B one-run smoke after the cwd fix passed the same deterministic probe, and the D: checkout remained free of `unsloth_compiled_cache` afterward. Its single raw record is `results/raw/unsloth-cwdcheck-smoke.jsonl`; it validates the cache-location correction and is not included in the performance tables.
+
 ## Comparison and limits
 
 The earlier SSD-backed PEFT QLoRA baseline on this same tiny 0.49B task had median training time 2.214 s and PyTorch allocated peak 886 MiB. This Unsloth run measures 2.334 s and 507 MiB: about 5% slower training in this short run, with about 43% lower allocated VRAM. End-to-end time is not a fair speed headline: the isolated Unsloth environment took about 10 s to import versus about 4 s for the previous QLoRA environment. Three repeats are small, timing noise is material, and no statistical performance claim is warranted.
