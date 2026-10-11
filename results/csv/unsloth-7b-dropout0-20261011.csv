@@ -1,0 +1,4 @@
+run,success,source_tree_dirty,git_sha,lora_dropout,total_seconds,import_seconds,model_load_seconds,training_seconds,torch_vram_allocated_mib,torch_vram_reserved_mib,sampled_vram_peak_mib,sampled_ram_peak_mib,sampled_swap_peak_mib,adapter_sha256
+1,True,False,77a85a0ff98097002d0f750cae9700dc5ef2a47b,0.0,28.341,9.799,13.356,3.263,5663.0,5768.0,6728,2879,11,154afaffb085519352871f1793fd0fc6ae98a9065a15d659fff01f75d71d1484
+2,True,False,77a85a0ff98097002d0f750cae9700dc5ef2a47b,0.0,28.714,9.852,13.559,3.366,5663.0,5768.0,6728,2879,11,154afaffb085519352871f1793fd0fc6ae98a9065a15d659fff01f75d71d1484
+3,True,False,77a85a0ff98097002d0f750cae9700dc5ef2a47b,0.0,28.742,10.007,13.543,3.289,5663.0,5768.0,6728,2879,11,154afaffb085519352871f1793fd0fc6ae98a9065a15d659fff01f75d71d1484
