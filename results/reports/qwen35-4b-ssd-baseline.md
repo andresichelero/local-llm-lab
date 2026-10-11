@@ -25,14 +25,17 @@ An additional context sweep measured 4K and 8K with Q4_0 and compared Q4_0/Q8_0 
 | 4K / Q4_0 | 3,604 | 1,408 ms | 2,566 tok/s | 83.87 tok/s | 3,945 MiB | 3/3 successful |
 | 8K / Q4_0 | 7,206 | 2,802 ms | 2,577 tok/s | 91.34 tok/s | 3,997 MiB | 3/3 successful |
 | 8K / Q8_0 | 7,206 | 2,814 ms | 2,565 tok/s | 81.08 tok/s | 4,061 MiB | 3/3 successful |
+| 16K / Q4_0 | 14,352 | 5,846 ms | 2,459 tok/s | 76.21 tok/s | 4,108 MiB | 3/3 successful |
+| 16K / Q8_0 | 14,352 | 5,865 ms | 2,451 tok/s | 77.71 tok/s | 4,236 MiB | 3/3 successful |
 
-At 8K, Q4_0 used 64 MiB less peak sampled VRAM and was faster in generation by about 10 tok/s in these three runs; treat the size and speed differences as preliminary. This confirms an 8K operating point for the pinned 4B quant on this machine, not the upstream 262K context claim.
+At 8K, Q4_0 used 64 MiB less peak sampled VRAM and was faster in generation by about 10 tok/s in these three runs; treat the size and speed differences as preliminary. At 16K, Q4_0 used 128 MiB less peak sampled VRAM. Both formats sustained the tested 16K prompt without memory pressure on this machine; this does not validate the upstream 262K context claim.
 
 ## Functional smoke checks
 
 - Structured output: exact JSON `{"ok": true, "count": 3}` parsed successfully.
 - Function calling: model requested `add(19, 23)`, the harness executed it, and the model reported 42; 1 call, 0 failed calls, 0 retries.
 - These are smoke checks, not a broad capability or coding-quality evaluation.
+- Exact-recall probe at 16K: a synthetic maintenance code placed at the midpoint of a 14,023-token prompt was returned exactly in all three measured runs with both Q4_0 and Q8_0 KV. Median TTFT was 5,720 ms (Q4_0) and 5,743 ms (Q8_0). This single synthetic fact does not establish general long-context recall.
 
 ## Raw data and limitations
 
@@ -45,5 +48,10 @@ At 8K, Q4_0 used 64 MiB less peak sampled VRAM and was faster in generation by a
 - `results/raw/qwen35-4b-ssd-contextscale-20261011-context-4096-q4_0.jsonl` and its `-resources.jsonl` companion
 - `results/raw/qwen35-4b-ssd-contextscale-20261011-context-8192-q4_0.jsonl` and its `-resources.jsonl` companion
 - `results/raw/qwen35-4b-ssd-contextscale-20261011-kv-8192-q8_0.jsonl` and its `-resources.jsonl` companion
+- `results/raw/qwen35-4b-ssd-16k-20261011-context-16384-q4_0.jsonl` and its `-resources.jsonl` companion
+- `results/raw/qwen35-4b-ssd-16k-20261011-kv-16384-q8_0.jsonl` and its `-resources.jsonl` companion
+- `results/raw/qwen35-4b-ssd-recall-fixedlabel-16384-20261011-q4_0.jsonl` and `q8_0.jsonl`, each with its `-resources.jsonl` companion
 
-The throughput rows record clean source revisions (`e4793e6e7e50c794c0ed4f45bc17bcf9ddb6f065` for 2K and `9b9e2e81ea5433a8526115888aa4e20ce2db66eb` for the 4K/8K sweep) and the runtime commit. At tested lengths through 8K, the model fits comfortably within 8 GB VRAM. Longer-context scaling, CPU offload, comparative model quality, and repeated functional-quality trials remain untested.
+The throughput rows record clean source revisions (`e4793e6e7e50c794c0ed4f45bc17bcf9ddb6f065` for 2K, `9b9e2e81ea5433a8526115888aa4e20ce2db66eb` for 4K/8K, and `aa3ec7895e63517720cc6f70f402f17f927a4822` for 16K) and the runtime commit. A partial recall attempt was quarantined because its JSONL used the script's default 9B display name despite loading the pinned 4B path; it is excluded from all tables and raw results. The rerun used explicit `MODEL_ID=Qwen3.5-4B-Q4_K_M`, and every reported recall row identifies the 4B model correctly. At tested lengths through 16K, the model fits comfortably within 8 GB VRAM. CPU offload, comparative model quality, and repeated functional-quality trials remain untested.
+
+Consolidated per-context medians and the matching 16K recall counts are in `results/csv/qwen35-4b-ssd-context-kv.csv`; regenerate with `py -3.12 benchmark/summarize_qwen35_4b.py`.
