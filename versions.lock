@@ -84,4 +84,11 @@ harness.opencode: opencode-ai 1.19.0; npm isolated under envs/node-harnesses/ope
 harness.mistral_vibe: mistral-vibe 2.26.1; Python 3.12.3; isolated venv at envs/mistral-vibe
 harness.trueforge: @truefoundry/trueforge 0.178.0; npm isolated under envs/node-harnesses/trueforge; local text smoke passed; sandbox tools unavailable (bubblewrap and socat missing)
 harness.codex_host: 0.162.0-alpha.17.2; installed on Windows; local endpoint validation pending
+model.qwen35_4b_gguf.repo: bartowski/Qwen_Qwen3.5-4B-GGUF
+model.qwen35_4b_gguf.revision: 4168f45a16a1290d65a4ec0fa312ae917a4c15d6
+model.qwen35_4b_gguf.file: Qwen_Qwen3.5-4B-Q4_K_M.gguf; size=3013027808; sha256=13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983; license=Apache-2.0
+model.qwen35_4b_gguf.path: /home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf
+model.qwen35_4b_gguf.runtime: llama.cpp commit d81235049384534c167caea52b85a694f6103d14; CUDA RTX 3070, 99 GPU layers, Flash Attention on
+model.qwen35_4b_gguf.benchmark: C-hosted WSL ext4 SSD only; 2K/4K/8K context; Q4_0/Q8_0 KV; 1 warm-up + 3 runs per throughput config; structured JSON and function tool round trip passed
+model.qwen35_4b_gguf.status: local CUDA inference, structured JSON and tool smoke passed; Q4_0/Q8_0 KV measured through 8K; see results/reports/qwen35-4b-ssd-baseline.md
 
