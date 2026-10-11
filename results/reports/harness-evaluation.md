@@ -42,3 +42,16 @@ The same pinned Ornith model and fixed task were also run through OpenCode 1.19.
 This extends the earlier Qwen-only harness comparison: Pi again had the lowest prompt usage and wall time for this task, while Vibe and OpenCode were close in time. Token totals come from each harness's own counters, including cached input where exposed, so they are approximate context-overhead measures rather than a normalized tokenization comparison. This is one repository task and does not measure subagents, MCP, long-context compaction, or broad coding quality.
 
 The measured rows and all warm-ups are in `results/raw/harness-ornith-matrix.jsonl`; agent events and one-second resource traces are in the adjacent `harness-ornith-matrix-*.jsonl` files. Per-run CSV: `results/csv/harness-ornith-matrix-runs.csv`. To reproduce aggregate comparisons across the Qwen baseline and both Ornith series, run `python3 benchmark/summarize_harness_results.py --input results/raw/harness-run-summary.jsonl --input results/raw/harness-ornith-pi.jsonl --input results/raw/harness-ornith-matrix.jsonl --csv results/csv/harness-multi-model-summary.csv --markdown results/reports/harness-multi-model-summary.md`. All model, runtime, task, session, log, and result I/O remained on WSL ext4 backed by C:. After testing, the model remained in the verified archive at `E:\\LocalLLMLabArchive\\2026-10-11\\ornith-pi-harness\\model`, and the matrix run directories, logs, raw records, and a verified SHA-256 manifest were archived at `E:\\LocalLLMLabArchive\\2026-10-11\\ornith-harness-matrix`. The temporary SSD model copy and scratch directories were removed afterward.
+
+## Qwen3.5-4B local-worker follow-up — Pi, SSD only
+
+Pi 1.1.0 was run on the same fixed coding task using Qwen3.5-4B Q4_K_M, llama.cpp `d81235049384534c167caea52b85a694f6103d14`, 16K context, Q4_0 KV, 99 GPU layers, and Flash Attention. All model, task, log, and result I/O used the C:-backed WSL ext4 SSD. One warm-up preceded five measured runs.
+
+Three of five runs met the strict task grader (60%). All five exited cleanly, passed unit tests and the independent behavior probe, changed only the two allowed files, and had no tool-call failures. The two strict failures used test identifiers that differed from the exact names required by the fixture, despite correct behavior. This exposes a spec-following weakness, not an arithmetic or test failure.
+
+| Model | Runs | Strict success | Wall s median | Prompt tokens median | Tool calls median | VRAM peak median |
+|---|---:|---:|---:|---:|---:|---:|
+| Qwen3.5-4B Q4_K_M | 5 | 3/5 | 16.82 | 13,542 | 6 | 4,108 MB |
+| Qwen3.5-9B Q4_K_M | 3 | 3/3 | 19.92 | 13,875 | 6 | 6,145 MB |
+
+The 4B sample was faster and used less VRAM, but its strict success rate was lower; sample sizes differ and this single task cannot establish a general ranking. Per-run records and summary are in `results/raw/qwen35-4b-pi-harness-20261011.jsonl`, `results/csv/harness-qwen35-4b-pi.csv`, and `results/reports/harness-qwen35-4b-pi.md`. The post-run historical archive is `E:\\LocalLLMLabArchive\\2026-10-11\\qwen35-4b-pi-harness-20261011`; E: was not used for benchmark I/O.
