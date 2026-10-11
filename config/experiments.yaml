@@ -27,9 +27,14 @@ tiers:
     repetitions: 3
     status: ExLlamaV3 CUDA installation passed; model download pending
   hybrid:
-    question: Measure CPU/GPU layer offload with a 14B candidate.
-    model: Qwen/Qwen2.5-Coder-14B-Instruct
-    status: deferred by 6 GiB WSL memory cap
+    question: Measure CPU/GPU layer offload with a 14B Q4_K_M coding model under the 8 GiB WSL limit.
+    model: Qwen/Qwen2.5-Coder-14B-Instruct-GGUF
+    revision: d0a692ef765eefbf2fabb130b3cb2e8917e3d225
+    quant: Q4_K_M
+    storage_profile: ssd-wsl-ext4-c
+    max_context: 2048
+    gpu_layers: calibrate against current VRAM headroom
+    status: pinned; staged download and hybrid smoke pending
   moe:
     question: Measure MoE expert placement, cache behavior and MTP on an available implementation.
     model: Qwen/Qwen3.6-35B-A3B
