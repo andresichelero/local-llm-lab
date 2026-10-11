@@ -150,13 +150,18 @@ def main() -> int:
     model = AutoModelForCausalLM.from_pretrained(
         args.model_dir,
         quantization_config=quantization,
-        torch_dtype=torch.float16,
+        dtype=torch.float16,
         device_map={"": 0},
         low_cpu_mem_usage=True,
         local_files_only=True,
     )
     model.config.use_cache = False
-    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+    gradient_checkpointing_kwargs = {"use_reentrant": False}
+    model = prepare_model_for_kbit_training(
+        model,
+        use_gradient_checkpointing=True,
+        gradient_checkpointing_kwargs=gradient_checkpointing_kwargs,
+    )
     target_modules = ["q_proj", "k_proj", "v_proj", "o_proj"]
     available_suffixes = {name.rsplit(".", 1)[-1] for name, _ in model.named_modules()}
     absent = [name for name in target_modules if name not in available_suffixes]
@@ -174,8 +179,7 @@ def main() -> int:
         ),
     )
     trainable = [parameter for parameter in model.parameters() if parameter.requires_grad]
-    trainable_parameters = sum(parameter.numel() for parameter in trainable)
-    total_parameters = sum(parameter.numel() for parameter in model.parameters())
+    trainable_parameters, total_parameters = model.get_nb_trainable_parameters()
     if not trainable or trainable_parameters == 0:
         raise RuntimeError("LoRA produced no trainable parameters")
     model.print_trainable_parameters()
@@ -257,6 +261,7 @@ def main() -> int:
         "batch_size": 1,
         "gradient_accumulation_steps": 1,
         "gradient_checkpointing": True,
+        "gradient_checkpointing_kwargs": gradient_checkpointing_kwargs,
         "optimizer": "torch.optim.AdamW (32-bit states)",
         "learning_rate": 2e-4,
         "lora_rank": 8,
