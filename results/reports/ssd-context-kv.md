@@ -8,9 +8,11 @@ These are throughput and memory measurements, not a quality comparison. The prom
 |---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | 16384 | q4_0/q4_0 | 14352 | 1966.5 (1965.0 ± 3.1) | 59.37 (59.24 ± 2.24) | 7307 | 7.75 | 6143.0 | 78.42 | 202.41 | 1118.0 | 3/3 |
 | 32768 | q4_0/q4_0 | 28695 | 1811.5 (1811.1 ± 1.8) | 53.18 (53.06 ± 1.03) | 15856 | 16.35 | 6356.0 | 91.98 | 227.96 | 1115.0 | 3/3 |
+| 65536 | q4_0/q4_0 | 57374 | 1450.0 (1452.7 ± 6.0) | 45.68 (46.94 ± 3.27) | 39599 | 40.11 | 6876.0 | 93.58 | 225.08 | 1160.0 | 3/3 |
+| 32768 | q8_0/q8_0 | 28695 | 1652.2 (1650.6 ± 4.8) | 57.39 (56.70 ± 1.37) | 17384 | 17.84 | 6691.0 | 92.21 | 227.61 | 1114.0 | 3/3 |
 | 16384 | f16/f16 | 14352 | 1982.4 (1980.9 ± 4.2) | 59.52 (59.98 ± 2.14) | 7248 | 7.69 | 6456.0 | 87.09 | 223.94 | 1094.0 | 3/3 |
 | 16384 | q8_0/q8_0 | 14352 | 1939.7 (1937.5 ± 4.1) | 61.99 (61.94 ± 0.16) | 7408 | 7.83 | 6267.0 | 88.12 | 221.35 | 1106.0 | 3/3 |
 
-Interpretation: compare KV formats only at 16K, where prompt size and runtime settings were held constant. The 16K vs 32K Q4_0 rows show the cost of doubling prompt/context size on this setup. Any earlier HDD-backed values remain historical context; no HDD benchmark was run for this report.
+Interpretation: compare KV formats only when context and prompt sizes match. The 64K Q4_0 row is a capacity/throughput observation; it does not establish semantic long-context recall. Any earlier HDD-backed values remain historical context; no HDD benchmark was run for this report. All active benchmark I/O for these rows was on the C:-hosted WSL ext4 SSD; E: is archival storage only. The new raw run logs are archived at `E:\LocalLLMLabArchive\2026-10-11\qwen35-ssd-context-extreme-20261011\results.tar.gz` with a SHA-256 sidecar.
 
-Raw JSONL and one-second sampler files are in `results/raw/`; the consolidated CSV is `results/csv/ssd-context-kv.csv`. Source revision `b4125552fe3d8744bf7882b5f2a2dba16efd640e`, llama.cpp `d81235049384534c167caea52b85a694f6103d14`, model revision `3885219b6810b007914f3a7950a8d1b469d598a5`.
+Raw JSONL and one-second sampler files are in `results/raw/`; the consolidated CSV is `results/csv/ssd-context-kv.csv`. Source revisions represented: `8b11f97a15ae9aa67ff7b9842345f4bd3d883645`, `b4125552fe3d8744bf7882b5f2a2dba16efd640e`. llama.cpp `d81235049384534c167caea52b85a694f6103d14`, model revision `3885219b6810b007914f3a7950a8d1b469d598a5`.
