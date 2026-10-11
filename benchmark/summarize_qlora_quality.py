@@ -86,7 +86,7 @@ def main() -> int:
         "",
         "## Interpretation",
         "",
-        "Compare the base and adapter phases within this run: QLoRA uses an NF4 base while LoRA uses FP16 base weights. Repeated identical generations are retained as repeated observations but are not independent samples of model quality. A pass requires the exact function signature, allowed syntax, successful execution, and every listed test case. NLL scores only the fixed reference code, not all correct solutions. This synthetic arithmetic/code set is a pipeline and narrow generalization probe; it does not establish useful real-world fine-tuning gains.",
+        f"Compare `{phases[0]}` with `{phases[1]}` within this {sample['finetune_method'].upper()} run. The base uses {sample['base_weight_precision']} weights; the adapter was trained with the same precision. Repeated identical generations are retained as repeated observations but are not independent samples of model quality. A pass requires the exact function signature, allowed syntax, successful execution, and every listed test case. NLL scores only the fixed reference code, not all correct solutions. This synthetic arithmetic/code set is a pipeline and narrow generalization probe; it does not establish useful real-world fine-tuning gains.",
         "",
     ]
     args.report.write_text("\n".join(lines), encoding="utf-8")
