@@ -22,9 +22,12 @@ if str(REPO_ROOT) not in sys.path:
 from benchmark.provenance import git_provenance
 from benchmark.harness_eval import grade_workspace
 
-DEFAULT_ROOT = Path("/home/foxtrot/local-llm-benchmark")
+DEFAULT_ROOT = Path.home() / "local-llm-benchmark"
 DEFAULT_MODEL = "Qwen3.5-9B-Q4_K_M"
-MODEL_REVISION = "3885219b6810b007914f3a7950a8d1b469d598a5"
+DEFAULT_MODEL_REVISION = "3885219b6810b007914f3a7950a8d1b469d598a5"
+DEFAULT_MODEL_PATH = Path("models/gguf/Qwen3.5-9B-Q4_K_M.gguf")
+DEFAULT_SERVER_URL = "http://127.0.0.1:8080"
+DEFAULT_CONTEXT = 16384
 HARNESS_NAMES = ("pi", "opencode", "vibe")
 
 
@@ -204,11 +207,30 @@ def _read_server_log_after(path: Path, offset: int) -> str:
         return source.read().decode("utf-8", errors="replace")
 
 
-def _preflight(install_root: Path, model: str, context: int) -> dict[str, Any]:
-    model_path = install_root / "models/gguf/Qwen3.5-9B-Q4_K_M.gguf"
+def _filesystem_type(path: Path) -> str:
+    result = subprocess.run(
+        ["findmnt", "-n", "-o", "FSTYPE", "-T", str(path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
+def _preflight(
+    install_root: Path,
+    model: str,
+    model_path: Path,
+    context: int,
+    server_url: str,
+) -> dict[str, Any]:
     if not model_path.is_file():
-        raise RuntimeError(f"SSD model is missing: {model_path}; stage it from E: first")
-    url = "http://127.0.0.1:8080/v1/models"
+        raise RuntimeError(f"SSD model is missing: {model_path}")
+    for label, path in (("benchmark root", install_root), ("model", model_path)):
+        filesystem = _filesystem_type(path)
+        if filesystem != "ext4":
+            raise RuntimeError(f"{label} must be on the WSL ext4 SSD (found {filesystem}): {path}")
+    url = server_url.rstrip("/") + "/v1/models"
     with urllib.request.urlopen(url, timeout=5) as response:
         data = json.load(response)
     loaded = next((item for item in data.get("data", []) if item.get("id") == model), None)
@@ -217,7 +239,13 @@ def _preflight(install_root: Path, model: str, context: int) -> dict[str, Any]:
     model_context = int(loaded.get("meta", {}).get("n_ctx", 0) or 0)
     if model_context < context:
         raise RuntimeError(f"Server context {model_context} is below requested context {context}")
-    return {"model": model, "context": model_context, "model_bytes": model_path.stat().st_size}
+    return {
+        "model": model,
+        "context": model_context,
+        "model_bytes": model_path.stat().st_size,
+        "model_path": str(model_path),
+        "server_url": server_url.rstrip("/"),
+    }
 
 
 def _isolated_environment(
@@ -244,7 +272,15 @@ def _isolated_environment(
     return env
 
 
-def _prepare_run(harness: str, run_dir: Path, install_root: Path, prompt_text: str) -> Path:
+def _prepare_run(
+    harness: str,
+    run_dir: Path,
+    install_root: Path,
+    prompt_text: str,
+    model: str = DEFAULT_MODEL,
+    server_url: str = DEFAULT_SERVER_URL,
+    context: int = DEFAULT_CONTEXT,
+) -> Path:
     workspace = run_dir / "workspace"
     home = run_dir / "home"
     output = run_dir / "output"
@@ -262,13 +298,34 @@ def _prepare_run(harness: str, run_dir: Path, install_root: Path, prompt_text: s
     if harness == "pi":
         agent_dir = home / ".pi/agent"
         agent_dir.mkdir(parents=True)
-        shutil.copy2(REPO_ROOT / "benchmark/configs/harnesses/pi.models.json", agent_dir / "models.json")
+        config = json.loads((REPO_ROOT / "benchmark/configs/harnesses/pi.models.json").read_text(encoding="utf-8"))
+        provider = config["providers"]["local-llama"]
+        provider["baseUrl"] = server_url.rstrip("/") + "/v1"
+        provider["models"][0].update({"id": model, "name": model, "contextWindow": context})
+        (agent_dir / "models.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     elif harness == "opencode":
         config_dir = home / ".config/opencode"
         config_dir.mkdir(parents=True)
-        shutil.copy2(REPO_ROOT / "benchmark/configs/harnesses/opencode.json", config_dir / "opencode.json")
+        config = json.loads((REPO_ROOT / "benchmark/configs/harnesses/opencode.json").read_text(encoding="utf-8"))
+        config["model"] = f"local/{model}"
+        provider = config["provider"]["local"]
+        provider["options"]["baseURL"] = server_url.rstrip("/") + "/v1"
+        provider["models"] = {
+            model: {"name": model, "limit": {"context": context, "output": 1024}, "options": {"temperature": 0}}
+        }
+        (config_dir / "opencode.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     elif harness == "vibe":
-        shutil.copy2(REPO_ROOT / "benchmark/configs/harnesses/vibe.config.toml", home / "config.toml")
+        text = (REPO_ROOT / "benchmark/configs/harnesses/vibe.config.toml").read_text(encoding="utf-8")
+        replacements = {
+            'active_model = "Qwen3.5-9B-Q4_K_M"': f'active_model = {json.dumps(model)}',
+            'api_base = "http://127.0.0.1:8080/v1"': f'api_base = {json.dumps(server_url.rstrip("/") + "/v1")}',
+            'alias = "Qwen3.5-9B-Q4_K_M"': f'alias = {json.dumps(model)}',
+            "max_context_length = 16384": f"max_context_length = {context}",
+            "auto_compact_threshold = 15000": f"auto_compact_threshold = {int(context * 0.9)}",
+        }
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        (home / "config.toml").write_text(text, encoding="utf-8")
     else:
         raise ValueError(f"Unsupported harness: {harness}")
 
@@ -289,22 +346,30 @@ def run_one(
     max_turns: int,
     max_tokens: int,
     run_kind: str = "measurement",
+    model: str = DEFAULT_MODEL,
+    model_revision: str = DEFAULT_MODEL_REVISION,
+    model_path: Path | None = None,
+    server_url: str = DEFAULT_SERVER_URL,
+    context: int = DEFAULT_CONTEXT,
+    server_log: Path | None = None,
+    results_output: Path | None = None,
 ) -> dict[str, Any]:
     source_revision, source_tree_dirty = git_provenance(REPO_ROOT)
-    preflight = _preflight(install_root, DEFAULT_MODEL, 16384)
+    resolved_model_path = install_root / DEFAULT_MODEL_PATH if model_path is None else model_path
+    resolved_server_log = install_root / "logs/harness-llama-server.log" if server_log is None else server_log
+    preflight = _preflight(install_root, model, resolved_model_path, context, server_url)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     run_dir = install_root / "results/harness-runs" / f"{timestamp}-{harness}"
     run_dir.mkdir(parents=True, exist_ok=False)
     (run_dir / "tmp").mkdir()
     prompt = (REPO_ROOT / "benchmark/configs/harnesses/task_prompt.md").read_text(encoding="utf-8").strip()
-    prompt_file = _prepare_run(harness, run_dir, install_root, prompt)
+    prompt_file = _prepare_run(harness, run_dir, install_root, prompt, model, server_url, context)
     workspace = run_dir / "workspace"
     output_dir = run_dir / "output"
     stdout_path = run_dir / ("stdout.json" if harness == "vibe" else "events.jsonl")
     stderr_path = run_dir / "stderr.log"
     resource_path = run_dir / "resources.jsonl"
-    server_log = install_root / "logs/harness-llama-server.log"
-    server_offset = server_log.stat().st_size if server_log.exists() else 0
+    server_offset = resolved_server_log.stat().st_size if resolved_server_log.exists() else 0
     env = _isolated_environment(harness, run_dir, install_root, workspace)
     command = build_command(
         harness,
@@ -312,6 +377,7 @@ def run_one(
         prompt_file,
         workspace,
         output_dir,
+        model=model,
         max_turns=max_turns,
         max_tokens=max_tokens,
         time_limit=limit_seconds,
@@ -362,7 +428,7 @@ def run_one(
     else:
         events = _read_jsonl(events_path)
     usage = summarize_usage(harness, events, export)
-    server_text = _read_server_log_after(server_log, server_offset)
+    server_text = _read_server_log_after(resolved_server_log, server_offset)
     server_prompt_eval_tokens = parse_server_prompt_eval_tokens(server_text)
     resource_rows = _read_jsonl(resource_path)
     resources = summarize_resources(resource_rows)
@@ -375,8 +441,11 @@ def run_one(
         "run_kind": run_kind,
         "harness": harness,
         "harness_version": {"pi": "1.1.0", "opencode": "1.19.0", "vibe": "2.26.1"}[harness],
-        "model": DEFAULT_MODEL,
-        "model_revision": MODEL_REVISION,
+        "model": model,
+        "model_revision": model_revision,
+        "model_path": preflight["model_path"],
+        "model_bytes": preflight["model_bytes"],
+        "server_url": preflight["server_url"],
         "git_sha": source_revision,
         "source_tree_dirty": source_tree_dirty,
         "benchmark_valid": not source_tree_dirty,
@@ -397,7 +466,7 @@ def run_one(
         "run_dir": str(run_dir),
     }
     (run_dir / "metrics.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
-    summary_path = REPO_ROOT / "results/raw/harness-run-summary.jsonl"
+    summary_path = REPO_ROOT / "results/raw/harness-run-summary.jsonl" if results_output is None else results_output
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     with summary_path.open("a", encoding="utf-8") as summary:
         summary.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -413,21 +482,34 @@ def main() -> int:
     parser.add_argument("--max-tokens", type=int, default=100_000)
     parser.add_argument("--warmup", action="store_true", help="Run one warm-up record instead of measured repeats")
     parser.add_argument("--benchmark-root", type=Path, default=Path(os.getenv("BENCHMARK_ROOT", str(DEFAULT_ROOT))))
+    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--model-revision", default=DEFAULT_MODEL_REVISION)
+    parser.add_argument("--model-path", type=Path, default=None)
+    parser.add_argument("--server-url", default=DEFAULT_SERVER_URL)
+    parser.add_argument("--server-log", type=Path, default=None)
+    parser.add_argument("--context", type=int, default=DEFAULT_CONTEXT)
+    parser.add_argument("--results-output", type=Path, default=REPO_ROOT / "results/raw/harness-run-summary.jsonl")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    if args.repeat < 1 or args.limit_seconds < 1:
-        parser.error("--repeat and --limit-seconds must be positive")
+    if args.repeat < 1 or args.limit_seconds < 1 or args.context < 1:
+        parser.error("--repeat, --limit-seconds and --context must be positive")
     if args.warmup and args.repeat != 1:
         parser.error("--warmup runs one record; omit --repeat or set it to 1")
     harnesses = HARNESS_NAMES if args.harness == "all" else (args.harness,)
     if args.dry_run:
-        print(json.dumps({"harnesses": harnesses, "repeat": args.repeat, "model": DEFAULT_MODEL, "context_tokens": 16384, "benchmark_root": str(args.benchmark_root)}, indent=2))
+        model_path = args.model_path or (args.benchmark_root / DEFAULT_MODEL_PATH)
+        print(json.dumps({"harnesses": harnesses, "repeat": args.repeat, "model": args.model, "model_revision": args.model_revision, "model_path": str(model_path), "server_url": args.server_url, "context_tokens": args.context, "benchmark_root": str(args.benchmark_root), "results_output": str(args.results_output)}, indent=2))
         return 0
     for harness in harnesses:
         iterations = 1 if args.warmup else args.repeat
         run_kind = "warmup" if args.warmup else "measurement"
         for _ in range(iterations):
-            record = run_one(harness, args.benchmark_root, args.limit_seconds, args.max_turns, args.max_tokens, run_kind)
+            record = run_one(
+                harness, args.benchmark_root, args.limit_seconds, args.max_turns, args.max_tokens, run_kind,
+                model=args.model, model_revision=args.model_revision, model_path=args.model_path,
+                server_url=args.server_url, context=args.context, server_log=args.server_log,
+                results_output=args.results_output,
+            )
             print(json.dumps(record, ensure_ascii=False))
     return 0
 
