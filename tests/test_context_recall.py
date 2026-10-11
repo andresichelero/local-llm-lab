@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import unittest
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
 
 from benchmark.context_recall import TARGET_CODE, TARGET_STATION, answer_matches, make_prompt
 
@@ -22,6 +26,16 @@ class ContextRecallTests(unittest.TestCase):
     def test_prompt_rejects_empty_record_sets(self) -> None:
         with self.assertRaisesRegex(ValueError, "positive"):
             make_prompt(0)
+
+    def test_script_help_works_when_invoked_directly_outside_repo(self) -> None:
+        script = Path(__file__).resolve().parents[1] / "benchmark" / "context_recall.py"
+        with tempfile.TemporaryDirectory() as cwd:
+            result = subprocess.run(
+                [sys.executable, str(script), "--help"],
+                cwd=cwd, capture_output=True, text=True, check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":

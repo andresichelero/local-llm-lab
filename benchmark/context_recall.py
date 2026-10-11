@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -12,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
 from benchmark.provenance import git_provenance
 
 
@@ -196,8 +199,7 @@ def main() -> int:
     if args.repetitions < 1 or args.warmups < 0 or args.context <= args.target_tokens:
         parser.error("Require repetitions >= 1, warmups >= 0, and context > target tokens")
 
-    root = Path(__file__).resolve().parents[1]
-    args.git_sha, args.source_tree_dirty = git_provenance(root)
+    args.git_sha, args.source_tree_dirty = git_provenance(REPO_ROOT)
     try:
         args.runtime_commit = subprocess.run(
             ["git", "-C", str(args.runtime_source), "rev-parse", "HEAD"],
