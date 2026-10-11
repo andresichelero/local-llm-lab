@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -53,8 +54,9 @@ def long_prompt(url: str, target_tokens: int) -> tuple[str, int]:
 def gpu_sample() -> dict[str, str | None]:
     query = "memory.used,utilization.gpu,temperature.gpu,clocks.gr,power.draw"
     try:
+        executable = shutil.which("nvidia-smi") or ("/usr/lib/wsl/lib/nvidia-smi" if Path("/usr/lib/wsl/lib/nvidia-smi").is_file() else "nvidia-smi")
         result = subprocess.run(
-            ["nvidia-smi", f"--query-gpu={query}", "--format=csv,noheader,nounits"],
+            [executable, f"--query-gpu={query}", "--format=csv,noheader,nounits"],
             capture_output=True, text=True, check=True, timeout=5,
         )
         values = [item.strip() for item in result.stdout.strip().split(",")]
