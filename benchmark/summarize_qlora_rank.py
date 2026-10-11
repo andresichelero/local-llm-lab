@@ -42,7 +42,16 @@ def summarize(raw_dir: Path, repo_raw_dir: Path) -> list[dict]:
         adapter = [row for row in evaluation if row.get("phase") == "qlora_adapter"]
         if len(base) != 15 or len(adapter) != 15:
             raise ValueError(f"Rank {rank} must have 15 base and 15 adapter held-out task records")
-        if any(row.get("adapter_training_rank") != rank or row.get("storage_profile") != "ssd-wsl-ext4-c" for row in adapter):
+        expected_hashes = {str(row["adapter_sha256"]) for row in train}
+        if len(expected_hashes) != 1:
+            raise ValueError(f"Rank {rank} produced inconsistent adapter hashes across repeats")
+        if any(
+            row.get("adapter_training_rank") != rank
+            or row.get("adapter_training_alpha") != 2 * rank
+            or row.get("storage_profile") != "ssd-wsl-ext4-c"
+            or row.get("adapter_sha256") != train[0]["adapter_sha256"]
+            for row in adapter
+        ):
             raise ValueError(f"Rank {rank} held-out records have incorrect provenance")
         seconds = [float(row["training_seconds"]) for row in train]
         vram = [float(row["vram_peak_allocated_mib"]) for row in train]
