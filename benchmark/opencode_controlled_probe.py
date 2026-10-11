@@ -141,12 +141,17 @@ def workflow_gate(arm: str, task_success: bool, events: list[dict[str, Any]]) ->
             test_indices.append(index)
     if not test_indices or max(edit_indices) >= max(test_indices) or max(test_indices) >= reviewer_index:
         return False
-    if any(
-        str(event.get("part", {}).get("tool", "")).lower() in {"edit", "write"}
-        and _successful_tool_event(event)
-        for event in events[reviewer_index + 1:]
-    ):
-        return False
+    for event in events[reviewer_index + 1:]:
+        part = event.get("part", {})
+        state = part.get("state", {})
+        tool = str(part.get("tool", "")).lower()
+        input_text = json.dumps(state.get("input", {}), ensure_ascii=False).lower()
+        if (tool in {"edit", "write"} and _successful_tool_event(event)) or (
+            tool in {"bash", "shell"}
+            and re.search(r"python(?:3(?:\.\d+)?)?\s+-m\s+unittest\b", input_text)
+            and _successful_test_event(event)
+        ):
+            return False
     output = reviewer_state.get("output", reviewer_state.get("result", ""))
     if isinstance(output, dict):
         output = output.get("text", output.get("content", output.get("message", "")))

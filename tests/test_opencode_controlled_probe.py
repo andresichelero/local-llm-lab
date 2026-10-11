@@ -100,6 +100,9 @@ class ControlledProbeTests(unittest.TestCase):
         events[1], events[2] = events[2], events[1]
         events.append({"type": "tool_use", "part": {"tool": "edit", "state": {"status": "completed", "input": {}}}})
         self.assertFalse(workflow_gate("treatment", True, events))
+        events.pop()
+        events.append({"type": "tool_use", "part": {"tool": "bash", "state": {"status": "completed", "input": {"command": "python -m unittest"}, "metadata": {"exit": 0}}}})
+        self.assertFalse(workflow_gate("treatment", True, events))
 
 
 if __name__ == "__main__":
