@@ -27,4 +27,15 @@ The first attempt used the model's parent directory and failed before loading; i
 
 After these runs, the model already archived at `E:\local-llm-models\exllama\Qwen3.5-9B-exl3-2.5bpw` was verified against the pinned weight SHA-256. The active C:-SSD copy was removed to free benchmark space; no weight files were added to Git.
 
-No broad winner between ExLlamaV3 and llama.cpp is claimed: the model quantizations and tested prompts differ. Next useful comparisons are a matched same-family prompt, 8-bit versus 4-bit K/V at 16K, and a semantic long-context recall suite.
+## Matched short-prompt runtime check
+
+Both backends then received the same user question about why fixed seeds help benchmark reproducibility, with 2K context, greedy decoding, seed 1234, 32-token output cap, fp16 K/V, and prompt caching off. Both produced a correct, concise answer in all three repetitions.
+
+| Backend/model format | Formatted prompt tokens | Generated tokens | Generation median (range) | TTFT median | Sampled VRAM peak |
+|---|---:|---:|---:|---:|---:|
+| ExLlamaV3 1.6.1 / EXL3 2.50 bpw | 25 | 28 | 54.10 tok/s (51.93–54.65) | 55.71 ms | 4,259 MiB |
+| llama.cpp d8123504 / GGUF Q4_K_M | 29 | 24 | 58.38 tok/s (56.92–59.53) | 68.77 ms | 6,086 MiB |
+
+This is an end-to-end configuration comparison, not a backend-only speed test: EXL3 2.50 bpw and GGUF Q4_K_M store different quantized weights, use different tokenizer/chat formatting, and produced different answer lengths. The server's startup-to-ready time was 2,024 ms; ExLlama model-load time was not separately instrumented, so startup latency cannot be compared here. Raw records are `results/raw/exllama-qwen35-9b.jsonl` and `results/raw/llamacpp-qwen35-9b-gguf-q4km-2k-sameprompt.jsonl`.
+
+Remaining useful comparisons are semantic long-context recall, quantization quality retention, CPU/GPU hybrid offload, and coding/tool-use tasks. The current measurements do not establish a universal winner between ExLlamaV3 and llama.cpp.
