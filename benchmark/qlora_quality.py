@@ -133,11 +133,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--method", choices=("qlora", "lora"), default="qlora")
     parser.add_argument("--adapter-training-backend", choices=("transformers-peft", "unsloth"), default="transformers-peft")
     parser.add_argument("--adapter-training-optimizer", choices=("adamw32", "adamw8bit"), default="adamw32")
+    parser.add_argument("--adapter-training-rank", type=int, default=8)
+    parser.add_argument("--adapter-training-alpha", type=int, default=16)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--warmup", action="store_true")
     args = parser.parse_args()
-    if args.repeats < 1:
-        parser.error("--repeats must be at least 1")
+    if args.repeats < 1 or args.adapter_training_rank < 1 or args.adapter_training_alpha < 1:
+        parser.error("--repeats, --adapter-training-rank, and --adapter-training-alpha must be positive")
     return args
 
 
@@ -245,6 +247,8 @@ def main() -> int:
                     "finetune_method": args.method,
                     "adapter_training_backend": args.adapter_training_backend,
                     "adapter_training_optimizer": args.adapter_training_optimizer,
+                    "adapter_training_rank": args.adapter_training_rank,
+                    "adapter_training_alpha": args.adapter_training_alpha,
                     "base_weight_precision": base_precision,
                     "repeat": repeat,
                     "task_id": task["task_id"],

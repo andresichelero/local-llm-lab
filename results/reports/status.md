@@ -143,10 +143,11 @@
 
 ## Current constraints and next steps
 
-- WSL capacity is 8 GiB RAM and a 90 GiB virtual disk, with about 34 GiB currently free. Three clean HDD and three clean SSD QLoRA capacity repeats passed; direct LoRA-versus-QLoRA quality comparisons and training hyperparameter sweeps remain untested.
+- Current WSL limits are 8 GiB RAM, 8 processors, 4 GiB swap, and a 110 GiB virtual disk; the C:-backed ext4 filesystem had about 19 GiB free at the latest check. Active benchmarks must use this SSD-backed ext4 filesystem. HDDs are archive-only; earlier HDD measurements are retained as historical records and are not inputs to current SSD rankings.
+- The small-model LoRA-versus-QLoRA quality probe and the 7B AdamW32-versus-AdamW8bit comparison are complete and documented below. A controlled QLoRA rank sweep remains next: use the pinned 0.5B model, NF4, fixed dataset/seed/sequence length/steps, ranks 8/16/32, one warm-up plus three measurements, then evaluate each saved adapter on the same held-out tasks.
 - Free VRAM varied substantially with other Windows and WSL workloads: 4.6 GiB at first audit, 3.2–3.4 GiB during installation, and 7.2 GiB immediately before the successful smoke test.
 - The ExLlamaV3 C++ deferred file loader intermittently failed with WSL `Cannot allocate memory`; the Python streaming weight loader succeeded without changing inference kernels. One-shot 64K prefill also failed before the chunked retry succeeded. These failed attempts remain documented in `logs/exllama-benchmark.log`; not every failure currently has a structured JSONL event.
-- The small-model LoRA/QLoRA runtime comparison is complete, but quality comparisons and training hyperparameter sweeps remain untested. Remaining work includes Unsloth, additional quant formats and hybrid/MoE, harness installation/comparison, agentic context compaction, multiagent routing, and coding-task quality comparisons. No final winner is claimed across harnesses or model families.
+- Remaining work includes broader optimizer and rank sweeps, additional quant formats and hybrid/MoE comparisons, larger coding-task quality sets, and multiagent routing. No final winner is claimed across harnesses or model families.
 
 ## SSD-only context and KV checkpoint — 2026-10-11
 
