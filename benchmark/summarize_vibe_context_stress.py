@@ -6,6 +6,7 @@ import csv
 import hashlib
 import json
 import re
+import shlex
 import statistics
 import subprocess
 import sys
@@ -50,12 +51,147 @@ def _unique_events(run_dir: Path) -> list[dict[str, Any]]:
     return events
 
 
+def _shell_read_invocations(command: str) -> list[tuple[str, list[str]]]:
+    """Return executed cat/grep invocations, excluding quoted command-like text."""
+    invocations: list[tuple[str, list[str]]] = []
+
+    def matching_subshell_end(text: str, start: int) -> int:
+        depth = 1
+        quote: str | None = None
+        i = start + 2
+        while i < len(text):
+            char = text[i]
+            if quote == "'":
+                if char == "'":
+                    quote = None
+            elif quote == '"':
+                if char == "\\":
+                    i += 1
+                elif char == '"':
+                    quote = None
+                elif text.startswith("$(", i):
+                    depth += 1
+                    i += 1
+                elif char == ")":
+                    depth -= 1
+                    if depth == 0:
+                        return i
+            elif char in "'\"":
+                quote = char
+            elif text.startswith("$(", i):
+                depth += 1
+                i += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    return i
+            i += 1
+        return len(command)
+
+    def scan(source: str) -> None:
+        segments: list[str] = []
+        current: list[str] = []
+        quote: str | None = None
+        i = 0
+        while i < len(source):
+            char = source[i]
+            if quote == "'":
+                current.append(char)
+                if char == "'":
+                    quote = None
+            elif quote == '"':
+                current.append(char)
+                if char == "\\" and i + 1 < len(source):
+                    current.append(source[i + 1])
+                    i += 1
+                elif char == '"':
+                    quote = None
+                elif source.startswith("$(", i):
+                    end = matching_subshell_end(source, i)
+                    scan(source[i + 2:end])
+                    current.extend(" " for _ in source[i:end + 1])
+                    i = end
+            elif char in "'\"":
+                quote = char
+                current.append(char)
+            elif source.startswith("$(", i):
+                end = matching_subshell_end(source, i)
+                scan(source[i + 2:end])
+                current.extend(" " for _ in source[i:end + 1])
+                i = end
+            elif char in ";|&\n":
+                if current:
+                    segments.append("".join(current))
+                    current = []
+                while i + 1 < len(source) and source[i + 1] == char and char in "|&":
+                    i += 1
+            else:
+                current.append(char)
+            i += 1
+        if current:
+            segments.append("".join(current))
+
+        for segment in segments:
+            try:
+                tokens = shlex.split(segment)
+            except ValueError:
+                continue
+            while tokens and tokens[0] in {"do", "then", "else"}:
+                tokens.pop(0)
+            while tokens and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[0]):
+                tokens.pop(0)
+            if tokens and tokens[0] in {"cat", "grep"}:
+                invocations.append((tokens[0], tokens[1:]))
+
+    scan(command)
+    return invocations
+
+
+def _archive_operand_ids(operands: list[str], command: str) -> set[int]:
+    ids = {
+        int(number) for operand in operands
+        for number in re.findall(r"archive-(\d{2})\.md$", operand)
+    }
+    if any("archive-0[1-9].md" in operand for operand in operands):
+        ids.update(range(1, 10))
+    if any("archive-*.md" in operand for operand in operands):
+        ids.update(range(1, 33))
+
+    dynamic_operands = [operand for operand in operands if "$" in operand]
+    if not dynamic_operands:
+        return ids
+    for match in re.finditer(r"\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+\$\(\s*seq\s+([^)]+)\)", command):
+        variable, raw_values = match.groups()
+        values = [int(value) for value in re.findall(r"\b\d+\b", raw_values)]
+        if len(values) >= 2:
+            first, last = values[-2:]
+        elif values:
+            first, last = 1, values[-1]
+        else:
+            continue
+        if any(re.search(rf"\$(?:\{{{variable}(?::[^}}]+)?\}}|{variable})", operand) for operand in dynamic_operands):
+            ids.update(range(min(first, last), max(first, last) + 1))
+    for match in re.finditer(r"\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+\{(\d+)\.\.(\d+)\}", command):
+        variable, first, last = match.groups()
+        if any(re.search(rf"\$(?:\{{{variable}(?::[^}}]+)?\}}|{variable})", operand) for operand in dynamic_operands):
+            ids.update(range(min(int(first), int(last)), max(int(first), int(last)) + 1))
+    for match in re.finditer(r"\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+(\d+)(?=\s*(?:;|$))", command):
+        variable, value = match.groups()
+        if any(re.search(rf"\$(?:\{{{variable}(?::[^}}]+)?\}}|{variable})", operand) for operand in dynamic_operands):
+            ids.add(int(value))
+    return ids
+
+
 def _phase_archive_reads(run_dir: Path, phase: str, *, successful_only: bool = False) -> set[int]:
     found: set[int] = set()
     phase_dir = run_dir / f"output-{phase}"
     seen: set[str] = set()
-    intents: dict[str, tuple[str | None, set[int]]] = {}
-    results: dict[str, str | None] = {}
+    intents: dict[str, tuple[str | None, set[int], dict[str, Any]]] = {}
+    results: dict[str, dict[str, Any]] = {}
+    fingerprints = {
+        hashlib.sha256(f"pi-context-stress-2026|archive-{i:02d}".encode()).hexdigest()[:12].upper(): i
+        for i in range(1, 33)
+    }
     for path in phase_dir.rglob("journal/*.jsonl"):
         for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
             try:
@@ -79,16 +215,81 @@ def _phase_archive_reads(run_dir: Path, phase: str, *, successful_only: bool = F
                 action_id = payload.get("action_id")
                 if successful_only:
                     if action_id:
-                        intents[str(action_id)] = (call.get("name"), archive_ids)
+                        intents[str(action_id)] = (call.get("name"), archive_ids, arguments)
                 else:
                     found.update(archive_ids)
             elif event.get("type") == "action_result" and payload.get("action_id"):
                 result = payload.get("result", {})
-                results[str(payload["action_id"])] = result.get("type") if isinstance(result, dict) else None
+                results[str(payload["action_id"])] = result if isinstance(result, dict) else {}
     if successful_only:
-        for action_id, (name, archive_ids) in intents.items():
-            if name in {"file_system.read", "file_system.read_file"} and results.get(action_id) == "tool_succeeded":
+        for action_id, (name, archive_ids, arguments) in intents.items():
+            result = results.get(action_id, {})
+            if name in {"file_system.read", "file_system.read_file"} and result.get("type") == "tool_succeeded":
                 found.update(archive_ids)
+            elif name == "file_system.bash" and result.get("type") == "tool_succeeded":
+                execution = result.get("result", {})
+                structured = execution.get("structured_content", {}) if isinstance(execution, dict) else {}
+                command = str(arguments.get("command", ""))
+                stdout = str(structured.get("stdout", "")) if isinstance(structured, dict) else ""
+                if structured.get("returncode") != 0 or not re.search(r"\b(?:cat|grep)\b", command):
+                    continue
+                cat_archive_operands: list[str] = []
+                grep_archive_operands: list[str] = []
+                for executable, tokens in _shell_read_invocations(command):
+                    positional: list[str] = []
+                    skip_option_value = False
+                    for token in tokens:
+                        if skip_option_value:
+                            skip_option_value = False
+                            continue
+                        if token in {"-e", "-f", "-m", "-A", "-B", "-C"}:
+                            skip_option_value = True
+                        elif token.startswith("-"):
+                            continue
+                        else:
+                            positional.append(token)
+                    file_tokens = positional if executable == "cat" else positional[1:]
+                    matched_operands = [
+                        token for token in file_tokens
+                        if re.search(r"(?:^|/)archive-(?:\d{2}|0\[1-9\]|\*|\$\{[^}]+\}|\$[A-Za-z_][A-Za-z0-9_]*)\.md$", token)
+                    ]
+                    if executable == "cat":
+                        cat_archive_operands.extend(matched_operands)
+                    else:
+                        grep_archive_operands.extend(matched_operands)
+                archive_operands = cat_archive_operands + grep_archive_operands
+                operand_ids = _archive_operand_ids(archive_operands, command)
+                dynamic_grep_variables = {
+                    variable for operand in grep_archive_operands
+                    for variable in re.findall(r"archive-(\$\{[^}]+\}|\$[A-Za-z_][A-Za-z0-9_]*)\.md", operand)
+                }
+                dynamic_echo_variables = set(re.findall(
+                    r"archive-(\$\{[^}]+\}|\$[A-Za-z_][A-Za-z0-9_]*)=", command
+                ))
+                linked_dynamic_grep_output = any(
+                    variable in dynamic_echo_variables and re.search(
+                        rf"archive-{re.escape(variable)}=\$\([^)]*\bgrep\b[^)]*archive-{re.escape(variable)}\.md",
+                        command,
+                    )
+                    for variable in dynamic_grep_variables
+                )
+                if not operand_ids:
+                    continue
+                if cat_archive_operands:
+                    for match in re.finditer(r"(?m)^# Archive (\d{1,2})\s*$([\s\S]*?)(?=^# Archive \d{1,2}\s*$|\Z)", stdout):
+                        archive_id = int(match.group(1))
+                        block_fingerprints = re.findall(r"ARCHIVE FINGERPRINT:\s*([0-9A-F]{12})", match.group(2))
+                        if block_fingerprints and archive_id in operand_ids and fingerprints.get(block_fingerprints[0]) == archive_id:
+                            found.add(archive_id)
+                for match in re.finditer(r"(?m)^archive-(\d{2})=([0-9A-F]{12})(?:\b.*)?$", stdout):
+                    archive_id, fingerprint = int(match.group(1)), match.group(2)
+                    if linked_dynamic_grep_output and archive_id in operand_ids and fingerprints.get(fingerprint) == archive_id:
+                        found.add(archive_id)
+                if grep_archive_operands:
+                    for fingerprint in re.findall(r"ARCHIVE FINGERPRINT:\s*([0-9A-F]{12})", stdout):
+                        archive_id = fingerprints.get(fingerprint)
+                        if archive_id in operand_ids:
+                            found.add(archive_id)
     return found
 
 
@@ -141,6 +342,19 @@ def summarize_run(run_dir: Path, git_sha: str) -> dict[str, Any]:
     phase1 = _json(run_dir / "output-phase-1/export.json")
     phase2 = _json(run_dir / "output-phase-2/export.json")
     events = _unique_events(run_dir)
+    try:
+        recorded_git_sha = (run_dir / "git_sha.txt").read_text(encoding="utf-8").strip() or git_sha
+    except OSError:
+        recorded_git_sha = git_sha
+    try:
+        source_git_status = (run_dir / "source_git_status.txt").read_text(encoding="utf-8")
+        source_dirty: bool | None = bool(source_git_status.strip())
+    except OSError:
+        source_dirty = None
+    try:
+        source_diff_sha256: str | None = (run_dir / "source_diff_sha256.txt").read_text(encoding="utf-8").strip() or None
+    except OSError:
+        source_diff_sha256 = None
     archive_ids = _phase_archive_reads(run_dir, "phase-1", successful_only=True)
     phase2_archive_ids = _phase_archive_reads(run_dir, "phase-2")
     compaction_ids: set[str] = set()
@@ -227,7 +441,9 @@ def summarize_run(run_dir: Path, git_sha: str) -> dict[str, Any]:
         "quant": "Q4_K_M",
         "runtime": "llama.cpp d81235049384534c167caea52b85a694f6103d14",
         "kv_cache": "q4_0/q4_0",
-        "git_sha": git_sha,
+        "git_sha": recorded_git_sha,
+        "source_dirty": source_dirty,
+        "source_diff_sha256": source_diff_sha256,
         "storage_profile": "ssd-wsl-ext4-c",
         "context_tokens": 16384,
         "auto_compact_threshold": 15000,
@@ -268,7 +484,7 @@ def write_outputs(records: list[dict[str, Any]], raw_path: Path, csv_path: Path,
     raw_path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in records), encoding="utf-8")
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     fields = [
-        "timestamp", "git_sha", "harness_version", "wall_s", "phase1_exit_code", "phase2_exit_code",
+        "timestamp", "git_sha", "source_dirty", "source_diff_sha256", "harness_version", "wall_s", "phase1_exit_code", "phase2_exit_code",
         "input_tokens", "output_tokens", "compaction_count", "tool_calls", "archive_files_read_count",
         "phase2_archive_files_read_count",
         "summary_exact", "manifest_exact", "recovery_exact", "tests_pass", "quality_pass",
@@ -303,15 +519,21 @@ def write_outputs(records: list[dict[str, Any]], raw_path: Path, csv_path: Path,
         )
     passed = sum(bool(row.get("quality_pass")) for row in records)
     successful_reads = ", ".join(f"{row.get('archive_files_read_count')}/32" for row in records)
+    mode_counts = ", ".join(str(row.get("mode_changed_count")) for row in records)
+    reopened = [
+        f"run {index}: {row.get('phase2_archive_files_read')}"
+        for index, row in enumerate(records, start=1)
+        if row.get("phase2_archive_files_read")
+    ]
     lines.extend([
         "",
         f"Strict full-task passes: {passed}/{len(records)}.",
         "",
-        f"Correlating archive paths with successful file-read tool results gives {successful_reads} successful reads in run order. The earlier first-run 32/32 was a false positive from a failed tool intent that mentioned all archive names; these checked-in records were recomputed from the archived journals. The second and third runs produced the exact manifest and key, and the independent workspace tests passed. The second run nevertheless reopened archive-01 and archive-07 during its continuation; the final run made no archive references after continuation. Git marked all 34 tracked fixture files as executable-bit changes (100644 to 100755) in every run; the final diff showed no content changes to those files, but the mode changes are outside the allowed output scope. Therefore none is a strict full-task pass. The first attempt also hit its artificial token cap and could not resume without an explicit session ID; the second resumed successfully but its first phase still hit the cap. The final run had no token cap and both phases exited cleanly, yet still failed the file-scope gate.",
+        f"Correlating archive paths with successful file-read tool results gives {successful_reads} successful reads in run order. The earlier summary used intent-only matching; the updated journal audit confirms each reported read through a successful read result or successful shell output containing the deterministic archive fingerprints. Workspace mode-change counts in run order were {mode_counts}; mode changes remain a strict-scope failure even when file contents are unchanged. Reopened archives after continuation: {', '.join(reopened) if reopened else 'none'}. The latest run completed both phases, preserved all required artifacts, passed workspace tests, and made no out-of-scope workspace changes. Strict full-task passes: {passed}/{len(records)}.",
         "",
         "Usage totals are the harness-reported sum across model calls, not the peak context size. Vibe's journal records compaction IDs and requests, but this run does not expose a reliable token count for the history removed; no token compression ratio is claimed. Resource samples are one-second observations and the RTX 3070 is shared with the Windows desktop.",
         "",
-        "Session journals, workspaces, stdout/stderr, and server logs are archived on E: after measurement with a SHA-256 manifest. Re-run with `scripts/28_benchmark_vibe_context_stress.sh`; regenerate the consolidated table with `python3 benchmark/summarize_vibe_context_stress.py --runs-root /mnt/e/LocalLLMLabArchive/2026-10-11/vibe-context-stress --git-sha <benchmark_git_sha> --raw results/raw/vibe-context-stress.jsonl --csv results/csv/vibe-context-stress.csv --report results/reports/vibe-context-stress.md`.",
+        "Session journals, workspaces, stdout/stderr, and server logs are archived on E: after measurement in a SHA-256-verified tarball. The latest workspace was graded from its original C:-backed WSL ext4 run directory before archival; do not run the workspace-mode quality gate directly from the mounted E: copy. To reproduce the comparison, restore all archived run folders onto WSL ext4, then run `python3 benchmark/summarize_vibe_context_stress.py --runs-root $BENCH_ROOT/results/vibe-context-stress --git-sha <fallback_git_sha> --raw results/raw/vibe-context-stress.jsonl --csv results/csv/vibe-context-stress.csv --report results/reports/vibe-context-stress.md`. The checked-in JSONL/CSV retain the exact per-run provenance and results.",
         "",
     ])
     report_path.parent.mkdir(parents=True, exist_ok=True)

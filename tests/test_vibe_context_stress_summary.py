@@ -3,13 +3,58 @@ import json
 import subprocess
 from pathlib import Path
 
-from benchmark.summarize_vibe_context_stress import summarize_run
+from benchmark.summarize_vibe_context_stress import _phase_archive_reads, summarize_run
+
+
+def test_manifest_output_does_not_count_as_archive_reads(tmp_path: Path):
+    run = tmp_path / "run"
+    journal_dir = run / "output-phase-1/session/journal"
+    journal_dir.mkdir(parents=True)
+    fingerprint = hashlib.sha256(b"pi-context-stress-2026|archive-01").hexdigest()[:12].upper()
+    events = [
+        {
+            "type": "action_intent", "payload": {"kind": "tool", "action_id": "manifest", "request": {
+                "call": {"name": "file_system.bash", "arguments": {
+                    "command": "echo 'cat archive-01.md' >/dev/null && cat archive_manifest.txt",
+                }},
+            }},
+        },
+        {
+            "type": "action_result", "payload": {"action_id": "manifest", "result": {
+                "type": "tool_succeeded", "result": {"structured_content": {
+                    "returncode": 0, "stdout": f"# Archive 1\nARCHIVE FINGERPRINT: {fingerprint}\n",
+                }},
+            }},
+        },
+    ]
+    wrong_fingerprint = hashlib.sha256(b"pi-context-stress-2026|archive-02").hexdigest()[:12].upper()
+    events.extend([
+        {
+            "type": "action_intent", "payload": {"kind": "tool", "action_id": "wrong-file", "request": {
+                "call": {"name": "file_system.bash", "arguments": {"command": "cat archive-01.md"}},
+            }},
+        },
+        {
+            "type": "action_result", "payload": {"action_id": "wrong-file", "result": {
+                "type": "tool_succeeded", "result": {"structured_content": {
+                    "returncode": 0,
+                    "stdout": f"# Archive 2\nARCHIVE FINGERPRINT: {wrong_fingerprint}\n",
+                }},
+            }},
+        },
+    ])
+    (journal_dir / "events.jsonl").write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+
+    assert _phase_archive_reads(run, "phase-1", successful_only=True) == set()
 
 
 def test_grades_a_compacted_two_phase_continuation(tmp_path: Path):
     run = tmp_path / "20261011T000000Z"
     workspace = run / "workspace"
     workspace.mkdir(parents=True)
+    (run / "git_sha.txt").write_text("recorded-sha\n", encoding="utf-8")
+    (run / "source_git_status.txt").write_text(" M benchmark.py\n", encoding="utf-8")
+    (run / "source_diff_sha256.txt").write_text("a" * 64 + "\n", encoding="utf-8")
     for folder in ("output-phase-1", "output-phase-2"):
         (run / folder / "session/journal").mkdir(parents=True)
     (workspace / "test_result.py").write_text("import unittest\nclass T(unittest.TestCase):\n def test_ok(self): self.assertTrue(True)\n", encoding="utf-8")
@@ -38,7 +83,7 @@ def test_grades_a_compacted_two_phase_continuation(tmp_path: Path):
         "type": "action_intent", "record_sha256": "compact-event",
         "payload": {"kind": "completion", "request": {"purpose": "compaction", "compaction_id": "compact-1"}},
     }]
-    for i in range(1, 33):
+    for i in range(1, 31):
         events.append({
             "type": "action_intent", "record_sha256": f"tool-{i}",
             "payload": {"kind": "tool", "action_id": f"action-{i}", "request": {
@@ -49,14 +94,56 @@ def test_grades_a_compacted_two_phase_continuation(tmp_path: Path):
             "type": "action_result", "record_sha256": f"result-{i}",
             "payload": {"action_id": f"action-{i}", "result": {"type": "tool_succeeded"}},
         })
+    for i in (31, 32):
+        fingerprint = hashlib.sha256(f"pi-context-stress-2026|archive-{i:02d}".encode()).hexdigest()[:12].upper()
+        events.extend([
+            {
+                "type": "action_intent", "record_sha256": f"bash-tool-{i}",
+                "payload": {"kind": "tool", "action_id": f"bash-{i}", "request": {
+                    "call": {"name": "file_system.bash", "arguments": {"command": f"for i in {i}; do cat archive-$i.md; done"}},
+                }},
+            },
+            {
+                "type": "action_result", "record_sha256": f"bash-result-{i}",
+                "payload": {"action_id": f"bash-{i}", "result": {
+                    "type": "tool_succeeded", "result": {"structured_content": {
+                            "command": f"for i in {i}; do cat archive-$i.md; done", "returncode": 0,
+                        "stdout": f"# Archive {i}\nARCHIVE FINGERPRINT: {fingerprint}\n",
+                    }},
+                }},
+            },
+        ])
+    manifest = "\n".join(
+        f"archive-{i:02d}={hashlib.sha256(f'pi-context-stress-2026|archive-{i:02d}'.encode()).hexdigest()[:12].upper()}"
+        for i in range(1, 33)
+    )
+    events.extend([
+        {
+            "type": "action_intent", "record_sha256": "manifest-intent",
+            "payload": {"kind": "tool", "action_id": "manifest", "request": {
+                "call": {"name": "file_system.bash", "arguments": {"command": "cat archive_manifest.txt"}},
+            }},
+        },
+        {
+            "type": "action_result", "record_sha256": "manifest-result",
+            "payload": {"action_id": "manifest", "result": {
+                "type": "tool_succeeded", "result": {"structured_content": {
+                    "returncode": 0, "stdout": manifest,
+                }},
+            }},
+        },
+    ])
     journal = run / "output-phase-1/session/journal/0000000000000001.jsonl"
     journal.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
     (run / "resources.jsonl").write_text(json.dumps({"cpu_util_pct": 20, "ram_used_mb": 1000, "gpu": {"vram_used_mb": "6000"}}) + "\n", encoding="utf-8")
 
     record = summarize_run(run, "abc123")
+    assert record["git_sha"] == "recorded-sha"
+    assert record["source_dirty"] is True
+    assert record["source_diff_sha256"] == "a" * 64
     assert record["quality_pass"] is True
     assert record["compaction_count"] == 1
-    assert record["tool_calls"] == 32
+    assert record["tool_calls"] == 33
     assert record["archive_files_read_count"] == 32
     assert record["phase2_archive_files_read_count"] == 0
     assert record["wall_s"] == 3.0
@@ -64,20 +151,25 @@ def test_grades_a_compacted_two_phase_continuation(tmp_path: Path):
 
     events = [
         event for event in events
-        if event.get("payload", {}).get("action_id") != "action-32"
+        if event.get("payload", {}).get("action_id") != "bash-32"
     ]
     events.extend([
         {
             "type": "action_intent", "record_sha256": "failed-bulk-read-intent",
             "payload": {"kind": "tool", "action_id": "failed-bulk-read", "request": {
-                "call": {"name": "run_typescript", "arguments": {
+                "call": {"name": "file_system.bash", "arguments": {
                     "command": "cat " + " ".join(f"archive-{i:02d}.md" for i in range(1, 33)),
                 }},
             }},
         },
         {
             "type": "action_result", "record_sha256": "failed-bulk-read-result",
-            "payload": {"action_id": "failed-bulk-read", "result": {"type": "tool_failed"}},
+            "payload": {"action_id": "failed-bulk-read", "result": {
+                "type": "tool_succeeded", "result": {"structured_content": {
+                    "returncode": 1,
+                    "stdout": "archive-01.md archive-02.md " + " ".join(f"archive-{i:02d}.md" for i in range(3, 33)),
+                }},
+            }},
         },
     ])
     journal.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")

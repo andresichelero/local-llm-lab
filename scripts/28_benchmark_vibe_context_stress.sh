@@ -2,6 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+GIT_SHA="$(git -C "$ROOT" rev-parse HEAD)"
+GIT_STATUS="$(git -C "$ROOT" status --porcelain=v1)"
+GIT_DIFF_SHA256="$(git -C "$ROOT" diff --binary HEAD | sha256sum | awk '{print $1}')"
 BENCH_ROOT="${BENCHMARK_ROOT:-/home/foxtrot/local-llm-benchmark}"
 MODEL="${MODEL_PATH:-$BENCH_ROOT/models/gguf/Qwen3.5-9B-Q4_K_M.gguf}"
 SERVER="${LLAMA_SERVER:-$BENCH_ROOT/tools/llama-bin/llama-server}"
@@ -48,6 +51,9 @@ if curl --silent --fail "http://127.0.0.1:$PORT/health" >/dev/null; then
 fi
 
 mkdir -p "$WORKSPACE" "$HOME_DIR" "$RUN_DIR/output-phase-1" "$RUN_DIR/output-phase-2" "$LOG_DIR" "$STAGE_DIR/benchmark/configs/harnesses"
+printf '%s\n' "$GIT_SHA" >"$RUN_DIR/git_sha.txt"
+printf '%s\n' "$GIT_STATUS" >"$RUN_DIR/source_git_status.txt"
+printf '%s\n' "$GIT_DIFF_SHA256" >"$RUN_DIR/source_diff_sha256.txt"
 cp "$ROOT/benchmark/resource_sampler.py" "$STAGE_DIR/benchmark/resource_sampler.py"
 cp "$ROOT/benchmark/configs/harnesses/vibe.config.toml" "$STAGE_DIR/benchmark/configs/harnesses/vibe.config.toml"
 python3 - "$WORKSPACE" <<'PY'

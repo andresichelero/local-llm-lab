@@ -74,6 +74,9 @@ RUN_DIR="$(find "$TMP_DIR/results/vibe-context-stress" -mindepth 1 -maxdepth 1 -
 [[ -n "$RUN_DIR" ]] || { echo "Runner did not preserve its result directory" >&2; exit 1; }
 [[ "$(cat "$RUN_DIR/output-phase-1/ambient-token-visible.txt")" == False ]]
 [[ "$(cat "$RUN_DIR/output-phase-2/ambient-token-visible.txt")" == False ]]
+[[ "$(cat "$RUN_DIR/git_sha.txt")" == "$(git -C "$ROOT" rev-parse HEAD)" ]]
+[[ -s "$RUN_DIR/source_git_status.txt" ]]
+[[ "$(cat "$RUN_DIR/source_diff_sha256.txt")" =~ ^[0-9a-f]{64}$ ]]
 grep -q '^enable_telemetry = false$' "$RUN_DIR/home/config.toml"
 grep -q '^enable_update_checks = false$' "$RUN_DIR/home/config.toml"
 echo "runner smoke passed: D:-source checkout accepted; failed phase returned nonzero; credentials were isolated; artifacts preserved"
