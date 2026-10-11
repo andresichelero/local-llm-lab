@@ -66,3 +66,15 @@ OpenCode 1.19.0 ran the same fixed coding task, model revision, local llama.cpp 
 | OpenCode 1.19.0 | 5 | 5/5 | 19.98 | 7,592 | 59,495 | 7 | 4,103 MB |
 
 On this single task, Pi used substantially fewer harness-reported prompt tokens and finished about 16% sooner, while OpenCode followed the exact test-name specification on all five runs. Each harness has different token accounting and schemas, so token totals are directional overhead indicators, not a normalized tokenizer comparison. The result does not cover broader coding tasks, compaction, subagents, or MCP. OpenCode raw records, CSV, and report are in `results/raw/qwen35-4b-opencode-harness-20261011.jsonl`, `results/csv/harness-qwen35-4b-opencode.csv`, and `results/reports/harness-qwen35-4b-opencode.md`; E: is reserved for a checksum-verified post-run archive.
+
+## Qwen3.5-4B local-worker follow-up — Mistral Vibe, SSD only
+
+Mistral Vibe 2.26.1 used the same fixed coding task, Qwen3.5-4B Q4_K_M revision, local llama.cpp server, and settings as the Pi and OpenCode runs. All benchmark I/O stayed on C:-backed WSL ext4 SSD. One warm-up preceded five measured runs. All five exited cleanly, passed unit tests and the independent behavior probe, changed only the two allowed files, and had zero tool failures. None met the strict grader because the generated test names did not match the exact required identifiers.
+
+| Harness | Runs | Strict success | Wall s median | First prompt tokens median | Prompt tokens median | Tool calls median | VRAM peak median |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Pi 1.1.0 | 5 | 3/5 | 16.82 | 1,709 | 13,542 | 6 | 4,108 MB |
+| OpenCode 1.19.0 | 5 | 5/5 | 19.98 | 7,592 | 59,495 | 7 | 4,103 MB |
+| Mistral Vibe 2.26.1 | 5 | 0/5 | 20.02 | 8,088 | 54,225 | 6 | 4,105 MB |
+
+In this single-task sample, OpenCode was the only harness to follow the exact test-name requirement in all runs; Pi and Vibe still produced passing behavior and unit tests but missed that strict spec detail. Pi had lower reported prompt overhead and was faster. Vibe used fewer reported tokens than OpenCode but completed at a similar wall time. Harness counters and schemas differ, so token totals are directional rather than normalized. This does not establish general quality or measure compaction, subagents, or MCP. Vibe raw data, CSV, and report are in `results/raw/qwen35-4b-vibe-harness-20261011.jsonl`, `results/csv/harness-qwen35-4b-vibe.csv`, and `results/reports/harness-qwen35-4b-vibe.md`; its post-run archive is checksum-verified on E:.
