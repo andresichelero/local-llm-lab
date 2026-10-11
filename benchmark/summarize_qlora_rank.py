@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import statistics
 from pathlib import Path
 
@@ -22,7 +23,11 @@ def read_jsonl(path: Path) -> list[dict]:
 
 def summarize(raw_dir: Path, repo_raw_dir: Path) -> list[dict]:
     summaries = []
-    for rank in (8, 16, 32):
+    rank_files = sorted(raw_dir.glob("train-r*-rep-1.jsonl"))
+    ranks = [int(match.group(1)) for path in rank_files if (match := re.fullmatch(r"train-r(\d+)-rep-1\.jsonl", path.name))]
+    if not ranks:
+        raise ValueError(f"No rank sweep records found in {raw_dir}")
+    for rank in ranks:
         runs = [read_jsonl(raw_dir / f"train-r{rank}-rep-{repeat}.jsonl") for repeat in range(1, 4)]
         train = [rows[0] for rows in runs if len(rows) == 1]
         if len(train) != 3 or any(row.get("lora_rank") != rank or row.get("lora_alpha") != 2 * rank for row in train):
