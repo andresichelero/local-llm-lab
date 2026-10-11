@@ -5,7 +5,7 @@
 - The Qwen3.5-9B EXL3 2.50bpw snapshot was downloaded to C:-hosted WSL ext4, size/SHA-256 verified, and tested with ExLlamaV3 1.6.1+cu128.torch2.10.0 on the RTX 3070. No HDD was used for these tests.
 - One warm-up plus three measured runs passed at each setting: 2K/fp16 K/V/148-token prompt (56.78 tok/s median, 168 ms TTFT); 8K/fp16 K/V/7,171-token prompt (55.22 tok/s, 2.79 s TTFT); 16K/4-bit K/V/14,340-token prompt (53.72 tok/s, 5.84 s TTFT). All three deterministic outputs matched within their runs.
 - Data, caveats, versions, and the WSL GPU sampler fix are recorded in `results/reports/exllama-ssd.md`, `results/reports/status.md`, raw JSONL, and the summary CSV. Commit `c0de1d9` fixes package-version and WSL `nvidia-smi` reporting. The focused analysis limits claims to inference compatibility/throughput, not semantic context quality.
-- Keep the verified EXL3 snapshot on C: while follow-up inference comparisons are active; once this model's SSD benchmark phase is finished, archive it to E: without using E: for measurements. The WSL filesystem had about 25 GiB free immediately after this download/run sequence; recheck before another large model download.
+- The EXL3 SSD phase is complete. Its existing E: archive was SHA-256 verified against the pinned weight; the active C: copy was removed after testing, leaving about 30 GiB free in WSL. For any follow-up measurement, stage the model back to C: first; E: remains archive/storage only.
 
 ## Current objective
 

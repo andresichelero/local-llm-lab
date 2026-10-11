@@ -22,4 +22,6 @@ This establishes that the pinned EXL3 model and current ExLlama wheel load and g
 
 The first attempt used the model's parent directory and failed before loading; it was corrected to the verified snapshot directory. An initial sampler run also lacked GPU fields because the isolated PATH omitted WSL's `nvidia-smi`; the sampler now checks `/usr/lib/wsl/lib/nvidia-smi`, and the final traces contain GPU utilization, memory, temperature, clock and power. The valid final records have `source_tree_dirty=false` and source commit `c0de1d9b9385152512f235c59f65667501398189`.
 
+After these runs, the model already archived at `E:\local-llm-models\exllama\Qwen3.5-9B-exl3-2.5bpw` was verified against the pinned weight SHA-256. The active C:-SSD copy was removed to free benchmark space; no weight files were added to Git.
+
 No broad winner between ExLlamaV3 and llama.cpp is claimed: the model quantizations and tested prompts differ. Next useful comparisons are a matched same-family prompt, 8-bit versus 4-bit K/V at 16K, and a semantic long-context recall suite.

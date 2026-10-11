@@ -27,7 +27,7 @@ models:
     candidate_quant: EXL3 2.50bpw pinned; Q4_K_M GGUF comparison candidate
     estimated_weight_gib: 5.5
     realistic_context_tokens: 16384
-    status: ssd_inference_passed_at_2k_8k_16k_quality_unverified
+    status: ssd_inference_passed_archived_on_e_quality_unverified
     purpose: all/mostly-GPU quantization and KV comparison
     evidence: official model card and verified EXL3 repository commit, size and SHA-256 recorded in versions.lock
   - id: qwen3.8-27b

@@ -7,6 +7,7 @@
 - On the RTX 3070, one warm-up plus three measured runs passed for each configuration. With 148 prompt tokens / 2K context / fp16 K/V / 32 generated tokens: 56.78 tok/s median (55.68–58.76), 168.2 ms median TTFT. At 7,171 prompt tokens / 8K / fp16 K/V / 64 generated: 55.22 tok/s (53.36–56.52), 2.79 s median TTFT. At 14,340 prompt tokens / 16K / 4-bit K/V / 32 generated: 53.72 tok/s (51.36–54.21), 5.84 s median TTFT. Output was identical within each deterministic series.
 - Peak process-reserved VRAM was 3,220 MiB; paired one-second system samples showed up to 5,713 MiB total VRAM, 46 C, about 221 W, 3,680 MiB WSL RAM, and zero swap. System VRAM includes the Windows desktop and must not be interpreted as model-only allocation. Runs establish inference compatibility and throughput, not semantic long-context quality or quantization quality retention.
 - Raw model download and benchmark evidence: `results/raw/model-downloads-exl3.jsonl`, `results/raw/exllama-qwen35-9b.jsonl`, and `results/raw/exllama-qwen35-9b-resources.jsonl`; grouped CSV is `results/csv/summary.csv` and the focused analysis is `results/reports/exllama-ssd.md`.
+- After the SSD runs, the matching EXL3 archive already present at `E:\local-llm-models\exllama\Qwen3.5-9B-exl3-2.5bpw` was SHA-256 verified against the pinned model hash. The active 5.6 GiB WSL SSD snapshot was then removed, returning the C:-hosted WSL filesystem to about 30 GiB free. E: was used only for archival integrity verification, not performance testing.
 
 ## Latest checkpoint — Qwen GGUF inference on the SSD
 

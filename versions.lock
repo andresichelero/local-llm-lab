@@ -32,6 +32,7 @@ runtime.cuda: CUDA Toolkit 13.0.96 / nvcc 13.0.88, installed from NVIDIA WSL rep
 model.qwen35_9b_exl3.repo: turboderp/Qwen3.5-9B-exl3
 model.qwen35_9b_exl3.revision: d35e580c801b276c4d5ff97f27bd0fa79a0ef3b3 (2.50bpw)
 model.qwen35_9b_exl3.file: model.safetensors; size=5889564052; sha256=19e38d592d439a19205469aba6f477355aaa17d81f1f516b222a2abc7ba76d23
+model.qwen35_9b_exl3.archive: E:\local-llm-models\exllama\Qwen3.5-9B-exl3-2.5bpw; SHA-256 verified after SSD runs; active C: copy removed
 model.qwen35_9b_gguf.repo: unsloth/Qwen3.5-9B-GGUF
 model.qwen35_9b_gguf.revision: 3885219b6810b007914f3a7950a8d1b469d598a5
 model.qwen35_9b_gguf.file: Qwen3.5-9B-Q4_K_M.gguf; size=5680522464; sha256=03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8; license=Apache-2.0
