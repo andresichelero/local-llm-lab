@@ -236,13 +236,13 @@ models:
     architecture: dense hybrid Qwen3.5-style Gated DeltaNet/gated attention
     license: MIT
     context_claim: 262144 native; card describes extension up to 1,010,000
-    tool_use: tool-call markup requires recent parser-enabled server; local behavior untested
+    tool_use: official tool-call markup; local OpenAI-compatible function calls and coding-harness tool use passed on the pinned GGUF
     formats: [official GGUF Q4_K_M, Transformers BF16]
     candidate_quant: official Q4_K_M; 5629108704 bytes; SHA-256 5720d1f671b4996481274fffe01868c3c36e87c135cc8538471cc7bd6087b106
     estimated_weight_gib: 5.24
-    realistic_context_tokens: 2048 until quantized runtime and memory are tested
-    status: SSD inference and tool smoke passed 3/3; limited 2K-context quality/performance baseline, not a coding benchmark
-    purpose: compare agentic coding post-training against Qwen3.5-9B using matched SSD tests
+    realistic_context_tokens: 16384 tested; longer contexts not validated locally
+    status: 2K inference/tool probes passed 3/3; Pi, OpenCode and Mistral Vibe passed 3/3 on one 16K-context coding task
+    purpose: compare agentic coding post-training against Qwen3.5-9B using matched SSD inference and harness tests
     evidence: official model card and official publisher GGUF repository; author benchmarks use large contexts and 32 CPUs/48 GB RAM or more
   - id: mimo-v2.6-distill-qwen-9b
     repo: XiaomiMiMo/MiMo-V2.6-Distill-Qwen-9B

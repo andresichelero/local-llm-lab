@@ -77,7 +77,12 @@ def summarize_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return summaries
 
 
-def write_outputs(summaries: list[dict[str, Any]], csv_path: Path, markdown_path: Path, source: Path) -> None:
+def write_outputs(
+    summaries: list[dict[str, Any]],
+    csv_path: Path,
+    markdown_path: Path,
+    sources: list[Path],
+) -> None:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     markdown_path.parent.mkdir(parents=True, exist_ok=True)
     fields = list(GROUP_FIELDS) + ["measurement_count", "success_count", "success_rate"]
@@ -90,12 +95,12 @@ def write_outputs(summaries: list[dict[str, Any]], csv_path: Path, markdown_path
     lines = [
         "# Harness evaluation summary",
         "",
-        f"Source: `{source.as_posix()}`. Warm-up runs, invalid runs, and legacy rows without a Git revision are excluded; raw entries remain preserved.",
-        "All measured runs used the same deterministic coding fixture, Qwen3.5-9B Q4_K_M, llama.cpp, a local endpoint, 16K context, and Q4_0 KV cache. Token counts come from each harness's own usage records, including cached input where exposed.",
+        "Sources: " + ", ".join(f"`{source.as_posix()}`" for source in sources) + ". Warm-up runs, invalid runs, and rows without a Git revision are excluded; raw entries remain preserved.",
+        "Rows are grouped by harness, model, runtime, quantization, context, KV cache, and storage profile. Token counts come from each harness's own usage records, including cached input where exposed.",
         "Success requires clean harness exit, passing unit tests, passing behavior probe, and scoped edits.",
         "",
-        "| Harness | Version | Runs | Success | Wall s median (mean ± sd) | First prompt tokens median | Prompt tokens median | Tool calls median | RAM peak MB median | VRAM peak MB median |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Model | Harness | Version | Runs | Success | Wall s median (mean ± sd) | First prompt tokens median | Prompt tokens median | Tool calls median | RAM peak MB median | VRAM peak MB median |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in summaries:
         def fmt(value: Any) -> str:
@@ -104,13 +109,13 @@ def write_outputs(summaries: list[dict[str, Any]], csv_path: Path, markdown_path
         wall = f"{fmt(row['wall_s_median'])} ({fmt(row['wall_s_mean'])} ± {fmt(row['wall_s_stddev'])})"
         success = f"{row['success_count']}/{row['measurement_count']} ({row['success_rate']:.0%})"
         lines.append(
-            f"| {fmt(row['harness'])} | {fmt(row['harness_version'])} | {row['measurement_count']} | {success} | {wall} | "
+            f"| {fmt(row['model'])} | {fmt(row['harness'])} | {fmt(row['harness_version'])} | {row['measurement_count']} | {success} | {wall} | "
             f"{fmt(row['first_prompt_tokens_median'])} | {fmt(row['prompt_tokens_median'])} | {fmt(row['tool_calls_median'])} | "
             f"{fmt(row['ram_used_mb_peak_median'])} | {fmt(row['vram_used_mb_peak_median'])} |"
         )
     lines += [
         "",
-        "On this single coding task, all three harnesses passed 3/3 valid measurements. Pi had lower measured context overhead and wall time; this result does not test long-context compaction, subagents, MCP, or broader task success.",
+        "These measurements cover one fixed coding task and the exact model/harness configurations shown above. They do not establish broad coding quality or long-context, compaction, subagent, or MCP performance.",
         "Vibe first-prompt counts are read from journal usage events; llama.cpp prompt-evaluation work is stored separately and can be smaller when server prefix caching is active.",
         "See the raw JSONL for per-run quality details, tool errors, timing, resource samples, and excluded setup attempts.",
         "",
@@ -120,12 +125,14 @@ def write_outputs(summaries: list[dict[str, Any]], csv_path: Path, markdown_path
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=REPO_ROOT / "results/raw/harness-run-summary.jsonl")
+    parser.add_argument("--input", type=Path, action="append", dest="inputs", help="Input JSONL; repeat to combine model or harness runs")
     parser.add_argument("--csv", type=Path, default=REPO_ROOT / "results/csv/harness-evaluation.csv")
     parser.add_argument("--markdown", type=Path, default=REPO_ROOT / "results/reports/harness-evaluation.md")
     args = parser.parse_args()
-    summaries = summarize_records(read_records(args.input))
-    write_outputs(summaries, args.csv, args.markdown, args.input)
+    inputs = args.inputs or [REPO_ROOT / "results/raw/harness-run-summary.jsonl"]
+    records = [record for input_path in inputs for record in read_records(input_path)]
+    summaries = summarize_records(records)
+    write_outputs(summaries, args.csv, args.markdown, inputs)
     print(f"Wrote {len(summaries)} harness summaries to {args.csv} and {args.markdown}")
     return 0
 
