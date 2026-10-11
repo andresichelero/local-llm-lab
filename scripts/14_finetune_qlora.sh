@@ -12,6 +12,7 @@ RESOURCE_JSONL="${QLORA_RESOURCE_JSONL:-$ROOT/results/raw/qlora-smoke-resources.
 LOG_PATH="${QLORA_LOG_PATH:-$ROOT/logs/qlora-smoke-$(date -u +%Y%m%dT%H%M%SZ).log}"
 STEPS="${QLORA_STEPS:-8}"
 MAX_SEQ_LENGTH="${QLORA_MAX_SEQ_LENGTH:-192}"
+METHOD="${TRAINING_METHOD:-qlora}"
 DRY_RUN=0
 while (($#)); do
   case "$1" in
@@ -19,10 +20,11 @@ while (($#)); do
     --dry-run) DRY_RUN=1; shift ;;
     --steps) (($# >= 2)) || { echo "--steps needs a value" >&2; exit 2; }; STEPS="$2"; shift 2 ;;
     --max-seq-length) (($# >= 2)) || { echo "--max-seq-length needs a value" >&2; exit 2; }; MAX_SEQ_LENGTH="$2"; shift 2 ;;
+    --method) (($# >= 2)) || { echo "--method needs lora or qlora" >&2; exit 2; }; METHOD="$2"; shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
-ARGS=(--model-dir "$MODEL_DIR" --model-id "$MODEL_ID" --model-parameters "$MODEL_PARAMETERS" --output-root "$OUTPUT_ROOT" --result-jsonl "$RESULT_JSONL" --steps "$STEPS" --max-seq-length "$MAX_SEQ_LENGTH")
+ARGS=(--model-dir "$MODEL_DIR" --model-id "$MODEL_ID" --model-parameters "$MODEL_PARAMETERS" --method "$METHOD" --output-root "$OUTPUT_ROOT" --result-jsonl "$RESULT_JSONL" --steps "$STEPS" --max-seq-length "$MAX_SEQ_LENGTH")
 if ((DRY_RUN)); then
   "$PYTHON" "$ROOT/benchmark/qlora_smoke.py" "${ARGS[@]}" --dry-run
   exit 0

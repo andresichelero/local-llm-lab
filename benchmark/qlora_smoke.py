@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a deterministic tiny NF4 QLoRA SFT smoke test; save only the adapter outside Git."""
+"""Run a deterministic tiny LoRA/QLoRA SFT smoke test; save only adapters outside Git."""
 from __future__ import annotations
 
 import argparse
@@ -99,6 +99,7 @@ def main() -> int:
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--result-jsonl", type=Path, default=DEFAULT_RESULT)
+    parser.add_argument("--method", choices=("lora", "qlora"), default="qlora")
     parser.add_argument("--steps", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-seq-length", type=int, default=int(os.environ.get("TRAINING_MAX_SEQ_LENGTH", "192")))
@@ -107,11 +108,13 @@ def main() -> int:
     if args.steps < 1 or args.max_seq_length < 16:
         parser.error("--steps must be positive and --max-seq-length must be at least 16")
     model_slug = args.model_id.rsplit("/", 1)[-1].lower().replace(".", "").replace("-instruct", "")
-    adapter_path = args.output_root / f"{model_slug}-nf4-r8-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-seed{args.seed}"
+    method_slug = "nf4" if args.method == "qlora" else "fp16"
+    adapter_path = args.output_root / f"{model_slug}-{args.method}-{method_slug}-r8-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-seed{args.seed}"
     preflight = {
         "model_dir": str(args.model_dir),
         "model": args.model_id,
         "model_parameters": args.model_parameters,
+        "method": args.method,
         "dataset": str(args.dataset),
         "steps": args.steps,
         "seed": args.seed,
@@ -148,27 +151,40 @@ def main() -> int:
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
     rows = load_rows(args.dataset, tokenizer, args.max_seq_length)
-    quantization = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=torch.float16,
-    )
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model_dir,
-        quantization_config=quantization,
-        dtype=torch.float16,
-        device_map={"": 0},
-        low_cpu_mem_usage=True,
-        local_files_only=True,
-    )
+    if args.method == "qlora":
+        quantization = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.float16,
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_dir,
+            quantization_config=quantization,
+            dtype=torch.float16,
+            device_map={"": 0},
+            low_cpu_mem_usage=True,
+            local_files_only=True,
+        )
+        model = prepare_model_for_kbit_training(
+            model,
+            use_gradient_checkpointing=True,
+            gradient_checkpointing_kwargs={"use_reentrant": False},
+        )
+        quantization_label = "bitsandbytes NF4 with double quantization"
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_dir,
+            dtype=torch.float16,
+            device_map={"": 0},
+            low_cpu_mem_usage=True,
+            local_files_only=True,
+        )
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+        model.enable_input_require_grads()
+        quantization_label = "none (FP16 base weights)"
     model.config.use_cache = False
     gradient_checkpointing_kwargs = {"use_reentrant": False}
-    model = prepare_model_for_kbit_training(
-        model,
-        use_gradient_checkpointing=True,
-        gradient_checkpointing_kwargs=gradient_checkpointing_kwargs,
-    )
     target_modules = ["q_proj", "k_proj", "v_proj", "o_proj"]
     available_suffixes = {name.rsplit(".", 1)[-1] for name, _ in model.named_modules()}
     absent = [name for name in target_modules if name not in available_suffixes]
@@ -248,12 +264,12 @@ def main() -> int:
     git_sha, source_tree_dirty = git_metadata()
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "experiment": "qlora-smoke",
-        "method": "QLoRA",
+        "experiment": f"{args.method}-smoke",
+        "method": "QLoRA" if args.method == "qlora" else "LoRA",
         "model": args.model_id,
         "model_revision": model_revision,
         "model_parameters": args.model_parameters,
-        "quantization": "bitsandbytes NF4 with double quantization",
+        "quantization": quantization_label,
         "compute_dtype": "float16",
         "runtime": "Transformers + PEFT + bitsandbytes",
         "storage_profile": os.environ.get("QLORA_STORAGE_PROFILE", "unspecified"),

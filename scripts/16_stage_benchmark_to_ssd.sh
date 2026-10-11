@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODEL_NAME="Qwen2.5-Coder-7B-Instruct"
+MODEL_NAME="${MODEL_NAME:-Qwen2.5-Coder-7B-Instruct}"
+TRAINING_MODEL_ID="${TRAINING_MODEL_ID:-Qwen/${MODEL_NAME}}"
+TRAINING_MODEL_PARAMETERS="${TRAINING_MODEL_PARAMETERS:-7.62B}"
 DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
 BENCH_STORAGE_ROOT="${BENCH_STORAGE_ROOT:-${DATA_HOME}/local-llm-lab}"
 MODEL_SOURCE_DIR="${MODEL_SOURCE_DIR:-/mnt/e/local-llm-models/${MODEL_NAME}}"
@@ -18,8 +20,9 @@ Copy the pinned 7B model and isolated training environment from E: to the
 WSL Linux filesystem (stored on C: for this machine). Copies are resumable
 and never delete or modify the source directories.
 
-Override paths with MODEL_SOURCE_DIR, TRAINING_SOURCE_DIR,
-TRAINING_MODEL_DIR, TRAINING_ENV_DIR, and BENCH_STORAGE_ROOT.
+Select a different model with MODEL_NAME, MODEL_SOURCE_DIR, TRAINING_MODEL_ID,
+and TRAINING_MODEL_PARAMETERS. Override TRAINING_SOURCE_DIR, TRAINING_MODEL_DIR,
+TRAINING_ENV_DIR, and BENCH_STORAGE_ROOT for storage locations.
 EOF
 }
 
@@ -59,5 +62,5 @@ if [[ "$DRY_RUN" == false ]]; then
     "$TRAINING_ENV_DIR"
   printf '\nSSD staging complete. Use:\n'
   printf '  QLORA_STORAGE_PROFILE=%q TRAINING_ENV_DIR=%q TRAINING_MODEL_DIR=%q TRAINING_MODEL_ID=%q TRAINING_MODEL_PARAMETERS=%q QLORA_OUTPUT_ROOT=%q bash scripts/14_finetune_qlora.sh\n' \
-    "ssd-wsl-ext4-c" "$TRAINING_ENV_DIR" "$TRAINING_MODEL_DIR" "Qwen/Qwen2.5-Coder-7B-Instruct" "7.62B" "${BENCH_STORAGE_ROOT}/results/qlora"
+    "ssd-wsl-ext4-c" "$TRAINING_ENV_DIR" "$TRAINING_MODEL_DIR" "$TRAINING_MODEL_ID" "$TRAINING_MODEL_PARAMETERS" "${BENCH_STORAGE_ROOT}/results/qlora"
 fi
