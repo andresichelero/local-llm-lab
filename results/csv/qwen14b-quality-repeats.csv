@@ -1,0 +1,9 @@
+run_kind,repetition,mode,success,wall_time_s,prompt_tokens,completion_tokens,input_tokens,output_tokens,tool_calls,failed_tool_calls,retries,sample_count,sampled_vram_peak_mb,sampled_ram_peak_mb,git_sha,runtime_commit
+measurement,1,structured_json,True,2.1286,50,20,,,,,,22,6723,1044,d6586de44ab0bcf14fbc7f029e62aa169062e064,d81235049384534c167caea52b85a694f6103d14
+measurement,1,tool_round_trip,False,12.5894,,,,,0,1,0,22,6723,1044,d6586de44ab0bcf14fbc7f029e62aa169062e064,d81235049384534c167caea52b85a694f6103d14
+measurement,2,structured_json,True,2.2243,50,20,,,,,,22,6723,883,d6586de44ab0bcf14fbc7f029e62aa169062e064,d81235049384534c167caea52b85a694f6103d14
+measurement,2,tool_round_trip,False,12.7515,,,,,0,1,0,22,6723,883,d6586de44ab0bcf14fbc7f029e62aa169062e064,d81235049384534c167caea52b85a694f6103d14
+measurement,3,structured_json,True,2.1552,50,20,,,,,,21,6723,978,d6586de44ab0bcf14fbc7f029e62aa169062e064,d81235049384534c167caea52b85a694f6103d14
+measurement,3,tool_round_trip,False,12.5398,,,,,0,1,0,21,6723,978,d6586de44ab0bcf14fbc7f029e62aa169062e064,d81235049384534c167caea52b85a694f6103d14
+warmup,0,structured_json,True,2.1232,50,20,,,,,,24,6723,1061,d6586de44ab0bcf14fbc7f029e62aa169062e064,d81235049384534c167caea52b85a694f6103d14
+warmup,0,tool_round_trip,False,12.5419,,,,,0,1,0,24,6723,1061,d6586de44ab0bcf14fbc7f029e62aa169062e064,d81235049384534c167caea52b85a694f6103d14
