@@ -32,6 +32,17 @@ Do not use `--tier all` until the model matrix has been reviewed and each downlo
 
 See `results/reports/status.md` for the current ledger of what has been researched, installed, executed, measured, and deferred. `research/source-ledger.csv` classifies primary evidence separately from community reports. Community throughput claims are leads, not lab measurements.
 
+### Current SSD findings — 2026-10-11
+
+New benchmark runs use the C:-hosted WSL ext4 SSD for active model/runtime files, scratch workspaces, logs, resource traces, and raw outputs. E: is reserved for verified archives and historical records; no new HDD performance tests are part of this lab. Existing HDD comparisons are retained only as explicitly labeled historical context.
+
+- **Qwen3.5-9B, llama.cpp, 16K context:** median generation was 59.37 tok/s with q4_0 KV, 61.99 tok/s with q8_0, and 59.52 tok/s with f16 KV. A narrow planted-fact probe returned the exact fact in 3/3 repeats per KV format; this is not broad quality evidence. See [throughput/resource results](results/reports/ssd-context-kv.md) and the [recall probe](results/reports/context-recall.md).
+- **Qwen2.5-Coder-14B hybrid:** 32 GPU layers measured 11.73 tok/s and 350 ms median TTFT; 36 layers measured 13.92 tok/s and 289 ms, with less VRAM headroom. The tested structured tool call failed, so the result does not establish tool-use quality. See the [hybrid report](results/reports/qwen25-coder14b-hybrid.md).
+- **Local coding harnesses:** Pi, OpenCode, and Mistral Vibe each passed 3/3 runs on one fixed task. Pi used the least measured initial context (1,709 tokens) and had 19.92 s median wall time. Pi's separate context-compaction stress passed 0/4 under the full continuation and file-coverage contract. See the [harness comparison](results/reports/harness-evaluation.md) and [compaction stress](results/reports/pi-context-stress.md).
+- **Unsloth QLoRA:** the 7B capacity smoke completed three 8-step runs at 5,640 MiB median peak allocated VRAM. This validates fit for a short synthetic smoke, not useful adaptation quality or the maximum trainable model size. See the [7B capacity report](results/reports/unsloth-7b-capacity-smoke.md).
+
+These are machine-specific measurements with the Windows desktop sharing the RTX 3070. Check the linked reports and raw JSONL before applying the numbers to another run; each report states its prompt, repetition count, exclusions, and quality limitations. The next priorities are paired quality tests across model/quant/runtime configurations, broader coding and tool-use tasks, and reproducible router and multi-agent comparisons.
+
 ## Reproducibility rules
 
 - Each run records the git revision, model revision, runtime version, quantization, context, generation limit, and hardware readings when available.
