@@ -94,10 +94,13 @@ def run_generated_code(source: str, task: dict) -> tuple[bool, int, str | None]:
             return False, 0, f"unsupported syntax: {type(node).__name__}"
         if isinstance(node, ast.Name) and node.id not in {task["function"], *task["arguments"], *SAFE_CALLS}:
             return False, 0, f"unknown identifier: {node.id}"
-        if isinstance(node, ast.Call) and (
-            not isinstance(node.func, ast.Name) or node.func.id not in SAFE_CALLS or node.keywords
-        ):
-            return False, 0, "only positional calls to abs, max, and min are allowed"
+        if isinstance(node, ast.Call):
+            if not isinstance(node.func, ast.Name):
+                return False, 0, "only direct calls to abs, max, and min are allowed"
+            if node.func.id not in SAFE_CALLS:
+                return False, 0, f"call to unsupported function: {node.func.id}"
+            if node.keywords:
+                return False, 0, "keyword arguments are not allowed in generated calls"
     namespace: dict[str, object] = {}
     try:
         exec(compile(tree, "<held-out-model-output>", "exec"), {"__builtins__": {"abs": abs, "max": max, "min": min}}, namespace)
