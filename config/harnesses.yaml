@@ -4,7 +4,7 @@ harnesses:
   opencode: {upstream: https://github.com/anomalyco/opencode, version: 1.19.0, status: measured_local, result: results/reports/harness-evaluation.md, note: three valid local coding-task measurements passed; two earlier setup-invalid records retained and excluded}
   codex: {upstream: https://github.com/openai/codex, version: 0.162.0-alpha.17.2, status: local_llama_cpp_qwen35_responses_incompatibility, result: results/reports/codex-local-oss.md, parity: local OSS endpoint reached; tool schema and Qwen3.5 template incompatibilities prevented task completion}
   claude_code: {upstream: https://github.com/anthropics/claude-code, status: not_detected_on_path}
-  hermes: {upstream: https://github.com/NousResearch/hermes-agent, version: 0.21.6, status: installed_on_host, parity: existing user installation; inspect before changing}
+  hermes: {upstream: https://github.com/NousResearch/hermes-agent, version: 0.21.6, status: host_cli_startup_failed, parity: existing user installation; version command failed with missing hermes_cli module on 2026-10-11; recorded version unverified; user installation unchanged}
   mistral_vibe: {upstream: https://github.com/mistralai/mistral-vibe, version: 2.26.1, status: measured_local, result: results/reports/harness-evaluation.md, requirements: Python 3.12+}
   trueforge: {upstream: https://github.com/truefoundry/trueforge, version: 0.178.0, status: local_text_smoke_only, result: results/raw/trueforge-smoke.jsonl, requirements: Node.js 22.14+, note: local endpoint answered correctly; coding/tool benchmark blocked because bubblewrap and socat are missing}
   deepseek_harness: {status: explicitly_excluded_for_this_round}
