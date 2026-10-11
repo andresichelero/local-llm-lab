@@ -10,6 +10,7 @@ LLAMA_CPP_SOURCE="${LLAMA_CPP_SOURCE:-$BENCH_STORAGE_ROOT/tools/llama.cpp}"
 LLAMA_LIBRARY_DIR="${LLAMA_LIBRARY_DIR:-$BENCH_STORAGE_ROOT/tools/llama-bin}"
 LOG_DIR="${LOG_DIR:-$BENCH_STORAGE_ROOT/logs}"
 CONTEXT_TOKENS="${CONTEXT_TOKENS:-16384}"
+MODEL_ID="${MODEL_ID:-Qwen3.5-9B-Q4_K_M}"
 KV_TYPES="${KV_TYPES:-q4_0,q8_0,f16}"
 REPETITIONS="${REPETITIONS:-3}"
 WARMUPS="${WARMUPS:-1}"
@@ -27,7 +28,7 @@ The same invented fact is placed once near the middle of a tokenizer-sized promp
 
 Environment overrides: MODEL_PATH, MODEL_REVISION, LLAMA_SERVER, LLAMA_CPP_SOURCE,
 LLAMA_LIBRARY_DIR, BENCH_STORAGE_ROOT, LOG_DIR, OUTPUT_PREFIX, CONTEXT_TOKENS,
-KV_TYPES, REPETITIONS, WARMUPS, TARGET_TOKENS, PORT_BASE.
+MODEL_ID, KV_TYPES, REPETITIONS, WARMUPS, TARGET_TOKENS, PORT_BASE.
 EOF
 }
 
@@ -64,7 +65,7 @@ for kv_type in "${KV_LIST[@]}"; do
   archive_resources="$ROOT/results/raw/$(basename "$resources")"
   printf 'experiment=%s context=%s target_tokens=%s kv=%s warmups=%s repeats=%s port=%s\n' \
     "$experiment" "$CONTEXT_TOKENS" "$TARGET_TOKENS" "$kv_type" "$WARMUPS" "$REPETITIONS" "$PORT"
-  printf 'model=%s\nruntime=%s\noutput=%s\nresources=%s\n' "$MODEL_PATH" "$LLAMA_SERVER" "$output" "$resources"
+  printf 'model=%s\nmodel_id=%s\nruntime=%s\noutput=%s\nresources=%s\n' "$MODEL_PATH" "$MODEL_ID" "$LLAMA_SERVER" "$output" "$resources"
   if [[ "$DRY_RUN" == true ]]; then
     PORT=$((PORT + 1))
     continue
@@ -100,7 +101,7 @@ for kv_type in "${KV_LIST[@]}"; do
   done
   if ((ready == 0)); then tail -100 "$LOG_DIR/context-recall-$PORT.log" >&2; exit 1; fi
   if ! python3 "$ROOT/benchmark/context_recall.py" --url "http://127.0.0.1:$PORT" \
-    --model-revision "$MODEL_REVISION" --runtime-source "$LLAMA_CPP_SOURCE" \
+    --model-id "$MODEL_ID" --model-revision "$MODEL_REVISION" --runtime-source "$LLAMA_CPP_SOURCE" \
     --context "$CONTEXT_TOKENS" --target-tokens "$TARGET_TOKENS" --kv-type "$kv_type" \
     --repetitions "$REPETITIONS" --warmups "$WARMUPS" --experiment "$experiment" \
     --output "$output"; then RESULT=1; fi
