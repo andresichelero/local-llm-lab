@@ -6,9 +6,9 @@ Reproducible experiments for local inference, quantization, fine-tuning, and age
 
 - Windows 10 Pro 22H2, Ryzen 5 5600X, 32 GiB physical RAM, RTX 3070 8 GiB, NVIDIA driver 610.62.
 - Ubuntu 24.04.5 in WSL2, kernel 6.18.40.1, CUDA device visible through `nvidia-smi`.
-- The current user `.wslconfig` sets WSL to 8 GiB RAM, 8 processors, 4 GiB swap, and a 70 GiB default virtual disk. The previous file is backed up outside the repository.
+- The current user `.wslconfig` sets WSL to 8 GiB RAM, 8 processors, 4 GiB swap, and a 90 GiB default virtual disk. The previous file is backed up outside the repository.
 - Free VRAM has varied from about 4.6 GiB during the first audit to 3.2–3.4 GiB while other WSL and Windows workloads were active; the desktop shares this GPU.
-- The Ubuntu virtual disk is 70 GiB (68 GiB filesystem) with about 24 GiB available at the latest audit. E: has about 76 GiB free after downloading the pinned Qwen2.5-Coder-7B checkpoint. Current disk space changes; check it before downloads/builds.
+- The Ubuntu virtual disk is 90 GiB (88 GiB filesystem) with about 34 GiB free after staging the 7B model and training environment. Its VHD is stored on the C: Samsung 970 EVO Plus SSD. The verified Qwen2.5-Coder-7B checkpoint remains archived on E:; benchmark copies go under `/home/foxtrot/local-llm-benchmark` in the WSL Linux filesystem. Current free space changes, so check before downloads/builds.
 - CUDA Toolkit 13.0 was installed from NVIDIA's WSL repository. `nvcc` 13.0.88 is available. The Windows driver remains 610.62; no Linux NVIDIA driver was installed into WSL.
 
 The host, WSL and GPU can change while the lab runs. Re-run the audit before interpreting later benchmarks.
@@ -53,5 +53,7 @@ Reproduce the pinned GGUF download with `scripts/07_download_qwen35_gguf.sh --dr
 
 ## QLoRA capacity smoke
 
-The pinned QLoRA downloader supports `scripts/07_download_training_model.sh --profile qwen25-coder-0.5b|qwen25-coder-7b`. It verifies each file's revision, size, and digest before writing a manifest. One bounded Qwen2.5-Coder-7B run completed 8 NF4 QLoRA steps on the RTX 3070 at sequence length 192; see `results/raw/qlora-7b-smoke.jsonl` and `results/reports/status.md`. Model weights and adapters remain outside Git. This proves the short configuration fit once; it is not an adapter quality result or repeated benchmark yet.
+The pinned QLoRA downloader supports `scripts/07_download_training_model.sh --profile qwen25-coder-0.5b|qwen25-coder-7b`. It verifies each file's revision, size, and digest before writing a manifest. Qwen2.5-Coder-7B completed four 8-step NF4 QLoRA capacity runs on the RTX 3070 at sequence length 192; three runs have clean source revisions. On E: (HDD), the clean series median model load was 273.3 s, with an observed range of 265.9–545.4 s; highest sampled GPU use was 7,897 MiB. The synthetic eight-row smoke establishes fit and repeatability, not adapter quality. See `results/reports/qlora-7b-summary.md` and the raw JSONL.
+
+To stage the pinned model and isolated training environment from E: to the SSD-backed WSL Linux filesystem without deleting the archive, run `bash scripts/16_stage_benchmark_to_ssd.sh --dry-run`, then omit `--dry-run`. The destination defaults to ${XDG_DATA_HOME:-$HOME/.local/share}/local-llm-lab; set `BENCH_STORAGE_ROOT` to choose another WSL-native path. The copied virtual environment is checked for relocatability before the script reports the QLoRA command.
 

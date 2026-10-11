@@ -1,6 +1,6 @@
 schema_version: 1
 machine_profile:
-  wsl_memory_gib: 6
+  wsl_memory_gib: 8
   wsl_processors: 8
   wsl_swap_gib: 4
   gpu_vram_gib: 8
@@ -61,5 +61,5 @@ tiers:
     steps: 8
     seed: 42
     optimizer: torch.optim.AdamW (32-bit states)
-    status: one 8-step run passed; repeat measurements pending
+    status: four 8-step runs passed (three clean-source repeats); SSD staging is complete and an SSD run is next
 
