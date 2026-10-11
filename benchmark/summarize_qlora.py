@@ -17,7 +17,7 @@ DEFAULT_CSV = ROOT / "results/csv/qlora-7b-summary.csv"
 DEFAULT_REPORT = ROOT / "results/reports/qlora-7b-summary.md"
 GROUP_FIELDS = (
     "model", "model_revision", "quantization", "max_seq_length", "batch_size",
-    "lora_rank", "seed", "source_tree_dirty",
+    "lora_rank", "seed", "source_tree_dirty", "storage_profile",
 )
 RUN_METRICS = (
     "initial_loss", "final_loss", "total_seconds", "import_seconds", "model_load_seconds",
@@ -40,6 +40,16 @@ def number(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return parsed if parsed == parsed else None
+
+
+def storage_profile(run: dict[str, Any]) -> str:
+    profile = run.get("storage_profile")
+    if profile:
+        return str(profile)
+    # Legacy records predate this field; their adapter output path identifies E:.
+    if str(run.get("adapter_path", "")).startswith("/mnt/e/local-llm-results/"):
+        return "hdd-e"
+    return "unrecorded"
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -111,6 +121,7 @@ def main() -> int:
     for run in runs:
         if run.get("model") != "Qwen/Qwen2.5-Coder-7B-Instruct":
             continue
+        run["storage_profile"] = storage_profile(run)
         run["_resources"] = paired_samples(run, samples)
         key = tuple(run.get(field, "") for field in GROUP_FIELDS)
         grouped[key].append(run)
@@ -142,9 +153,9 @@ def main() -> int:
 
     lines = [
         "# QLoRA 7B capacity smoke summary", "",
-        "The first, pre-checkpoint run is grouped separately. Use the clean-source rows for the repeat series.", "",
-        "| Git revision | Clean source | Runs | Passed | Median load (s) | Median train (s) | Median total (s) | Peak sampled VRAM (MiB) | Peak RAM (MiB) |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "Runs are grouped by storage location and source cleanliness. Keep the HDD archive-backed and SSD ext4-backed series separate.", "",
+        "| Storage | Git revision | Clean source | Runs | Passed | Median load (s) | Median train (s) | Median total (s) | Peak sampled VRAM (MiB) | Peak RAM (MiB) |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     clean_groups = 0
     for key, values in sorted(grouped.items(), key=lambda item: str(item[0])):
@@ -154,14 +165,16 @@ def main() -> int:
         peak_ram = [r["ram_peak_mb"][0] for r in resource_data if r["ram_peak_mb"]]
         clean = key[GROUP_FIELDS.index("source_tree_dirty")] is False
         clean_groups += int(clean)
+        storage = key[GROUP_FIELDS.index("storage_profile")]
+        revisions = "; ".join(sorted({str(run.get("git_sha", "unknown"))[:7] for run in values}))
         lines.append(
-            f"| `{'; '.join(sorted({str(run.get('git_sha', 'unknown'))[:7] for run in values}))}` | {'yes' if clean else 'no'} | {len(values)} | "
+            f"| {storage} | {revisions} | {'yes' if clean else 'no'} | {len(values)} | "
             f"{sum(bool(run.get('success')) for run in values)} | {summary['model_load_seconds']['median']:.1f} | "
             f"{summary['training_seconds']['median']:.1f} | {summary['total_seconds']['median']:.1f} | "
             f"{max(peak_vram):.0f} | {max(peak_ram):.0f} |"
         )
     if not grouped:
-        lines.extend(["| No matching runs | — | 0 | 0 | — | — | — | — | — |"])
+        lines.extend(["| No matching runs | — | — | 0 | 0 | — | — | — | — | — |"])
     lines.extend([
         "", f"CSV with per-run mean, median, standard deviation, minimum, and maximum: `{args.csv.relative_to(ROOT).as_posix() if args.csv.is_relative_to(ROOT) else args.csv}`.",
         "The system sampler records total VRAM at one-second intervals; the Torch allocator's allocated and reserved peaks are separate fields. The first run reported reserved memory above physical VRAM, so use sampled total VRAM for capacity decisions.",

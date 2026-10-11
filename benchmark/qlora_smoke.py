@@ -256,6 +256,7 @@ def main() -> int:
         "quantization": "bitsandbytes NF4 with double quantization",
         "compute_dtype": "float16",
         "runtime": "Transformers + PEFT + bitsandbytes",
+        "storage_profile": os.environ.get("QLORA_STORAGE_PROFILE", "unspecified"),
         "torch_version": torch.__version__,
         "transformers_version": __import__("transformers").__version__,
         "peft_version": __import__("peft").__version__,
