@@ -94,7 +94,8 @@ def summarize_series(measurements: list[dict[str, Any]], samples: list[dict[str,
 def generate(input_dir: Path, csv_path: Path, markdown_path: Path | None = None) -> list[dict[str, Any]]:
     raw_files = sorted(
         path for path in input_dir.glob("qwen35-ssd-*.jsonl")
-        if not path.name.endswith("-resources.jsonl")
+        if path.name.startswith(("qwen35-ssd-context-", "qwen35-ssd-kv-"))
+        and not path.name.endswith("-resources.jsonl")
     )
     summaries = []
     for raw_path in raw_files:
@@ -134,11 +135,12 @@ def generate(input_dir: Path, csv_path: Path, markdown_path: Path | None = None)
                 f"{row.get('sampler_vram_mb_peak', 'n/a')} | {row.get('sampler_gpu_util_pct_mean', 'n/a')} | "
                 f"{row.get('sampler_power_w_mean', 'n/a')} | {row.get('ram_used_mb_peak', 'n/a')} | {row['success_count']}/{row['measurement_count']} |"
             )
+        source_revisions = ", ".join(f"`{sha}`" for sha in sorted({row["git_sha"] for row in summaries}))
         lines.extend([
             "",
-            "Interpretation: compare KV formats only at 16K, where prompt size and runtime settings were held constant. The 16K vs 32K Q4_0 rows show the cost of doubling prompt/context size on this setup. Any earlier HDD-backed values remain historical context; no HDD benchmark was run for this report.",
+            "Interpretation: compare KV formats only when context and prompt sizes match. The 64K Q4_0 row is a capacity/throughput observation; it does not establish semantic long-context recall. Any earlier HDD-backed values remain historical context; no HDD benchmark was run for this report. All active benchmark I/O for these rows was on the C:-hosted WSL ext4 SSD; E: is archival storage only. The new raw run logs are archived at `E:\\LocalLLMLabArchive\\2026-10-11\\qwen35-ssd-context-extreme-20261011\\results.tar.gz` with a SHA-256 sidecar.",
             "",
-            f"Raw JSONL and one-second sampler files are in `results/raw/`; the consolidated CSV is `results/csv/{csv_path.name}`. Source revision `{summaries[0]['git_sha']}`, llama.cpp `{summaries[0]['runtime_commit']}`, model revision `{summaries[0]['model_revision']}`.",
+            f"Raw JSONL and one-second sampler files are in `results/raw/`; the consolidated CSV is `results/csv/{csv_path.name}`. Source revisions represented: {source_revisions}. llama.cpp `{summaries[0]['runtime_commit']}`, model revision `{summaries[0]['model_revision']}`.",
             "",
         ])
         markdown_path.write_text("\n".join(lines), encoding="utf-8")
