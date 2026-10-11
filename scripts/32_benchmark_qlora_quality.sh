@@ -51,12 +51,12 @@ fi
 
 export BENCH_STORAGE_ROOT TRAINING_ENV_DIR TRAINING_PYTHON_BIN="$PYTHON" TRAINING_MODEL_DIR="$MODEL_DIR"
 export TRAINING_MODEL_ID=Qwen/Qwen2.5-Coder-0.5B-Instruct TRAINING_MODEL_PARAMETERS=0.49B
-export QLORA_STEPS=16 QLORA_MAX_SEQ_LENGTH=192 TRAINING_METHOD="$METHOD"
+export QLORA_STEPS=16 QLORA_MAX_SEQ_LENGTH=192 TRAINING_METHOD="$METHOD" TRAINING_OPTIMIZER=adamw32
 export QLORA_OUTPUT_ROOT="$BENCH_STORAGE_ROOT/results/qlora"
 export QLORA_RESULT_JSONL="$TRAIN_RESULT" QLORA_LOG_PATH="$TRAIN_LOG"
 export QLORA_RESOURCE_JSONL="$TRAIN_RESOURCES" QLORA_STORAGE_PROFILE=ssd-wsl-ext4-c
 
-bash "$ROOT/scripts/14_finetune_qlora.sh" --method "$METHOD" --steps 16 --max-seq-length 192 2>&1 | tee -a "$TRAIN_LOG"
+bash "$ROOT/scripts/14_finetune_qlora.sh" --method "$METHOD" --optimizer adamw32 --steps 16 --max-seq-length 192 2>&1 | tee -a "$TRAIN_LOG"
 cp "$TRAIN_RESULT" "$ROOT/results/raw/$(basename "$TRAIN_RESULT")"
 cp "$TRAIN_RESOURCES" "$ROOT/results/raw/$(basename "$TRAIN_RESOURCES")"
 cp "$TRAIN_LOG" "$ROOT/logs/$(basename "$TRAIN_LOG")"
