@@ -63,4 +63,16 @@ tiers:
     seed: 42
     optimizer: torch.optim.AdamW (32-bit states)
     status: seven 8-step runs passed (three clean HDD-source repeats and three clean SSD repeats, plus one preliminary HDD run)
+  context_kv_ssd:
+    question: Compare long-prefill performance and sampled VRAM for Qwen3.5-9B Q4_K_M from SSD at 16K/32K Q4_0 K/V, then compare Q8_0 and FP16 K/V at 16K.
+    model: unsloth/Qwen3.5-9B-GGUF
+    revision: 3885219b6810b007914f3a7950a8d1b469d598a5
+    quant: Q4_K_M
+    runtime: llama.cpp d81235049384534c167caea52b85a694f6103d14
+    storage_profile: ssd-wsl-ext4-c
+    warmups: 1
+    repetitions: 3
+    prompt_target_percent: 87.5
+    max_new_tokens: 64
+    status: in progress; results recorded by scripts/20_benchmark_context_kv.sh
 
