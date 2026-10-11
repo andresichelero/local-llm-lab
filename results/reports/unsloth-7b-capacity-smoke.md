@@ -24,3 +24,50 @@ Run-level metrics are in `results/csv/unsloth-7b-summary.csv`; raw records are i
 Storage audit correction: the initial launcher kept its working directory on the D: checkout, so Unsloth created a small 2.28 MB compiled cache there during these runs. We moved that generated cache to C: and corrected the launcher to run from the SSD storage root. All model shards, environment, training data, adapters, and measured logs/results were on C:; this small cache write is the only known D:-backed exception. No HDD speed measurement was made.
 
 The later storage-path verification smoke completed on the 0.5B fixture after the fix, and no cache was recreated in the D: checkout.
+
+
+## Clean provenance repeat — 2026-10-11
+
+After fixing the dirty-tree check to exclude generated , a fresh one-warm-up/three-measurement series completed from the SSD-backed WSL ext4 clone. Source revision was ; every record has  and . The pinned 7B model, Unsloth environment, dataset, cache, adapters, and active logs/results all lived under  on C:. E: was used only as the source/archive location for staging and post-run storage; there was no HDD benchmark.
+
+All three measurements completed 8/8 steps, had finite loss, and passed the deterministic post-training  AST probe. They produced the same adapter SHA-256 (), consistent with the fixed seed and tiny deterministic dataset. This is a pipeline/capacity smoke, not an adaptation-quality result; the base model already solved this toy probe before training.
+
+| Metric | Median (3 runs) | Range |
+|---|---:|---:|
+| Total wall time incl. imports (s) | 28.853 | 28.570–29.140 |
+| Imports (s) | 10.143 | 10.110–10.194 |
+| Model load (s) | 13.532 | 13.071–13.611 |
+| 8-step training (s) | 3.385 | 3.314–3.414 |
+| Torch peak allocated / reserved VRAM (MiB) | 5,640.3 / 5,772 | unchanged across runs |
+| Sampled system VRAM peak (MiB) | 6,723 |  |
+| Sampled WSL RAM peak (MiB) | 2,858 |  |
+| Sampled swap peak (MiB) | 16 |  |
+| Peak GPU temperature (C) | 45 |  |
+
+The sampler ran at one-second intervals (127 samples total); its mean GPU utilization was 13.15% and mean board power 59.88 W across setup, loading, training, and probe phases, so those averages should not be interpreted as training-only utilization. The 16 MiB peak swap reading is negligible relative to the 4 GiB configured swap.
+
+The prior warm-up plus interrupted repetition with invalid provenance is preserved but explicitly excluded from all summaries in . The clean JSONL, one-second traces, and logs are stored in  and . A post-run archive, including one representative adapter (all four adapter hashes matched), was stored on E: and checksummed.
+
+## Clean provenance repeat — 2026-10-11
+
+After fixing the dirty-tree check to exclude generated results/**, a fresh one-warm-up/three-measurement series completed from the SSD-backed WSL ext4 clone. Source revision was dcb2abc4541fc38b70a043209e4feb84afa0daa3; every record has source_tree_dirty=false and storage_profile=ssd-wsl-ext4-c. The pinned 7B model, Unsloth environment, dataset, cache, adapters, and active logs/results all lived under /home/foxtrot/local-llm-benchmark on C:. E: was used only as the source/archive location for staging and post-run storage; there was no HDD benchmark.
+
+All three measurements completed 8/8 steps, had finite loss, and passed the deterministic post-training add(a, b) AST probe. They produced the same adapter SHA-256 (28e2b3e464aa29f7d5ffb5e5d00495e9dcc4993c6c40e41fb2040ff49a31c858), consistent with the fixed seed and tiny deterministic dataset. This is a pipeline/capacity smoke, not an adaptation-quality result; the base model already solved this toy probe before training.
+
+| Metric | Median (3 runs) | Range |
+|---|---:|---:|
+| Total wall time incl. imports (s) | 28.853 | 28.570–29.140 |
+| Imports (s) | 10.143 | 10.110–10.194 |
+| Model load (s) | 13.532 | 13.071–13.611 |
+| 8-step training (s) | 3.385 | 3.314–3.414 |
+| Torch peak allocated / reserved VRAM (MiB) | 5,640.3 / 5,772 | unchanged across runs |
+| Sampled system VRAM peak (MiB) | 6,723 |  |
+| Sampled WSL RAM peak (MiB) | 2,858 |  |
+| Sampled swap peak (MiB) | 16 |  |
+| Peak GPU temperature (C) | 45 |  |
+
+The sampler ran at one-second intervals (127 samples total); its mean GPU utilization was 13.15% and mean board power 59.88 W across setup, loading, training, and probe phases, so those averages should not be interpreted as training-only utilization. The 16 MiB peak swap reading is negligible relative to the 4 GiB configured swap.
+
+The prior warm-up plus interrupted repetition with invalid provenance is preserved but explicitly excluded from all summaries in results/raw/archive/qlora7b-provenance-invalid-20261011/. The clean JSONL, one-second traces, and logs are stored in results/raw/qlora7b-clean-20261011* and logs/qlora7b-clean-20261011-*.log. A post-run archive, including one representative adapter (all four adapter hashes matched), was stored on E: and checksummed.
+
+CSV per-measurement summary: `results/csv/unsloth-7b-clean-20261011.csv`. E: archive: `E:\LocalLLMLabArchive\2026-10-11\qlora7b-clean-20261011\qlora7b-clean-20261011.tar.gz`; SHA-256 `261def338918489d65e4e04812f87951e9a0950ea87904fe1c4221fa67c267cb`. The tar contains raw records, traces, logs, this report snapshot, and one representative adapter; its adapter weight SHA-256 matches the run records.
