@@ -1,5 +1,10 @@
 # Execution status — updated 2026-10-11
 
+## SSD-only launcher guard
+
+- The standard llama.cpp inference and JSON/tool quality launchers now default to the C:-hosted WSL ext4 runtime bundle and fail before inference if the model, executable, llama.cpp libraries, benchmark root, or output directories are not ext4-backed.
+- Verified both launchers pass dry-run with the SSD Qwen3.5-9B model/runtime and that a model path on `/mnt/e` is rejected. The dedicated repeated-quality runner independently enforces the same SSD constraint.
+
 ## Qwen3.5-9B structured output and tool-call repeatability — 2026-10-11
 
 - Ran one warm-up plus five measurements each for strict JSON output and a real `add(19, 23)` tool round trip against the pinned Q4_K_M model on the C:-hosted WSL ext4 SSD. All ten measured checks passed; every tool call returned structured arguments, result 42, and a final answer, with no retries.

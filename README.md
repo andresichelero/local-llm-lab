@@ -34,7 +34,7 @@ See `results/reports/status.md` for the current ledger of what has been research
 
 ### Current SSD findings — 2026-10-11
 
-New benchmark runs use the C:-hosted WSL ext4 SSD for active model/runtime files, scratch workspaces, logs, resource traces, and raw outputs. E: is reserved for verified archives and historical records; no new HDD performance tests are part of this lab. Existing HDD comparisons are retained only as explicitly labeled historical context.
+New benchmark runs use the C:-hosted WSL ext4 SSD for active model/runtime files, scratch workspaces, logs, resource traces, and raw outputs. The core llama.cpp inference and quality launchers now check the model, executable, shared libraries, benchmark root, and output directories before starting; HDD-backed model/runtime/library paths are rejected. E: is reserved for verified archives and historical records; no new HDD performance tests are part of this lab. Existing HDD comparisons are retained only as explicitly labeled historical context.
 
 - **Qwen3.5-9B, llama.cpp, 16K context:** median generation was 59.37 tok/s with q4_0 KV, 61.99 tok/s with q8_0, and 59.52 tok/s with f16 KV. A narrow planted-fact probe returned the exact fact in 3/3 repeats per KV format; this is not broad quality evidence. See [throughput/resource results](results/reports/ssd-context-kv.md) and the [recall probe](results/reports/context-recall.md).
 - **Qwen3.5-9B output/tool reliability:** a separate five-repeat SSD series passed exact JSON and a real `add(19, 23)` tool round trip 5/5 each. Median wall time was 0.493 s for JSON and 1.512 s for the complete tool round trip. This covers two fixed prompts only; see the [repeatability report](results/reports/qwen35-tool-reliability.md).
