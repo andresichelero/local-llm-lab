@@ -44,7 +44,11 @@ def read_records(path: Path) -> list[dict[str, Any]]:
 def summarize_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: dict[tuple[Any, ...], list[dict[str, Any]]] = defaultdict(list)
     for record in records:
-        if record.get("run_kind", "measurement") == "warmup" or record.get("benchmark_valid") is False:
+        if (
+            record.get("run_kind", "measurement") == "warmup"
+            or record.get("benchmark_valid") is False
+            or not record.get("git_sha")
+        ):
             continue
         groups[tuple(record.get(field) for field in GROUP_FIELDS)].append(record)
 
@@ -86,7 +90,7 @@ def write_outputs(summaries: list[dict[str, Any]], csv_path: Path, markdown_path
     lines = [
         "# Harness evaluation summary",
         "",
-        f"Source: `{source.as_posix()}`. Warm-up runs and records marked `benchmark_valid: false` are excluded; raw entries remain preserved.",
+        f"Source: `{source.as_posix()}`. Warm-up runs, invalid runs, and legacy rows without a Git revision are excluded; raw entries remain preserved.",
         "All measured runs used the same deterministic coding fixture, Qwen3.5-9B Q4_K_M, llama.cpp, a local endpoint, 16K context, and Q4_0 KV cache. Token counts come from each harness's own usage records, including cached input where exposed.",
         "Success requires clean harness exit, passing unit tests, passing behavior probe, and scoped edits.",
         "",

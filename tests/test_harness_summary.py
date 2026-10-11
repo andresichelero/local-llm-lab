@@ -13,10 +13,11 @@ class HarnessSummaryTests(unittest.TestCase):
         self.assertTrue(callable(summarize_records), "harness result summarizer is not implemented")
         records = [
             {"harness": "pi", "run_kind": "warmup", "success": True, "wall_s": 900},
-            {"harness": "pi", "run_kind": "measurement", "success": True, "wall_s": 10, "prompt_tokens": 100, "first_prompt_tokens": 50, "vram_used_mb_peak": 6000},
-            {"harness": "pi", "run_kind": "measurement", "success": True, "wall_s": 20, "prompt_tokens": 200, "first_prompt_tokens": 50, "vram_used_mb_peak": 6200},
-            {"harness": "pi", "run_kind": "measurement", "success": False, "wall_s": 30, "prompt_tokens": 300, "first_prompt_tokens": 50, "vram_used_mb_peak": 6400},
-            {"harness": "pi", "run_kind": "measurement", "benchmark_valid": False, "success": False, "wall_s": 999},
+            {"harness": "pi", "run_kind": "measurement", "git_sha": "a" * 40, "success": True, "wall_s": 10, "prompt_tokens": 100, "first_prompt_tokens": 50, "vram_used_mb_peak": 6000},
+            {"harness": "pi", "run_kind": "measurement", "git_sha": "a" * 40, "success": True, "wall_s": 20, "prompt_tokens": 200, "first_prompt_tokens": 50, "vram_used_mb_peak": 6200},
+            {"harness": "pi", "run_kind": "measurement", "git_sha": "a" * 40, "success": False, "wall_s": 30, "prompt_tokens": 300, "first_prompt_tokens": 50, "vram_used_mb_peak": 6400},
+            {"harness": "pi", "run_kind": "measurement", "benchmark_valid": False, "git_sha": "a" * 40, "success": False, "wall_s": 999},
+            {"harness": "pi", "run_kind": "measurement", "success": True, "wall_s": 888},
         ]
 
         result = summarize_records(records)

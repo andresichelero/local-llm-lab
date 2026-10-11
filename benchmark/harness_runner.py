@@ -15,15 +15,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from benchmark.provenance import git_provenance
 from benchmark.harness_eval import grade_workspace
 
 DEFAULT_ROOT = Path("/home/foxtrot/local-llm-benchmark")
 DEFAULT_MODEL = "Qwen3.5-9B-Q4_K_M"
+MODEL_REVISION = "3885219b6810b007914f3a7950a8d1b469d598a5"
 HARNESS_NAMES = ("pi", "opencode", "vibe")
 
 
@@ -284,6 +285,7 @@ def run_one(
     max_tokens: int,
     run_kind: str = "measurement",
 ) -> dict[str, Any]:
+    source_revision, source_tree_dirty = git_provenance(REPO_ROOT)
     preflight = _preflight(install_root, DEFAULT_MODEL, 16384)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     run_dir = install_root / "results/harness-runs" / f"{timestamp}-{harness}"
@@ -368,6 +370,10 @@ def run_one(
         "harness": harness,
         "harness_version": {"pi": "1.1.0", "opencode": "1.19.0", "vibe": "2.26.1"}[harness],
         "model": DEFAULT_MODEL,
+        "model_revision": MODEL_REVISION,
+        "git_sha": source_revision,
+        "source_tree_dirty": source_tree_dirty,
+        "benchmark_valid": not source_tree_dirty,
         "runtime": "llama.cpp v0.6.0-dev d81235049",
         "quant": "Q4_K_M",
         "context_tokens": preflight["context"],

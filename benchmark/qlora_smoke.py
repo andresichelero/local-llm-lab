@@ -6,14 +6,20 @@ import argparse
 import ast
 import hashlib
 import json
+import math
 import os
 import random
-import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from benchmark.provenance import git_provenance
+
 DEFAULT_MODEL = Path(os.environ.get("TRAINING_MODEL_DIR", "/mnt/e/local-llm-models/Qwen2.5-Coder-0.5B-Instruct"))
 DEFAULT_DATASET = ROOT / "benchmark/data/qlora-smoke.jsonl"
 DEFAULT_OUTPUT = Path(os.environ.get("QLORA_OUTPUT_ROOT", "/mnt/e/local-llm-results/qlora"))
@@ -55,12 +61,21 @@ def expected_add_function(source: str) -> bool:
 
 
 def git_metadata() -> tuple[str, bool]:
-    sha = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
-    dirty = subprocess.run(
-        ["git", "-C", str(ROOT), "diff", "--quiet", "HEAD", "--", ".", ":(exclude)results/**"],
-        check=False,
-    ).returncode != 0
-    return sha, dirty
+    return git_provenance(ROOT)
+
+
+def successful_training(
+    steps_completed: int,
+    expected_steps: int,
+    losses: list[float],
+    trained_probe_passed: bool,
+) -> bool:
+    return (
+        steps_completed == expected_steps
+        and len(losses) == expected_steps
+        and all(math.isfinite(value) for value in losses)
+        and trained_probe_passed
+    )
 
 
 def load_rows(dataset: Path, tokenizer: object, max_length: int) -> list[dict[str, object]]:
@@ -315,13 +330,15 @@ def main() -> int:
         "adapter_sha256": sha256(adapter_file),
         "git_sha": git_sha,
         "source_tree_dirty": source_tree_dirty,
-        "success": len(losses) == args.steps and all(torch.isfinite(torch.tensor(value)) for value in losses),
+        "success": successful_training(
+            len(losses), args.steps, losses, expected_add_function(after_probe)
+        ),
     }
     args.result_jsonl.parent.mkdir(parents=True, exist_ok=True)
     with args.result_jsonl.open("a", encoding="utf-8") as target:
         target.write(json.dumps(record, sort_keys=True) + "\n")
     print(json.dumps(record, sort_keys=True), flush=True)
-    return 0
+    return 0 if record["success"] else 1
 
 
 if __name__ == "__main__":
