@@ -32,6 +32,19 @@ Do not use `--tier all` until the model matrix has been reviewed and each downlo
 
 See `results/reports/status.md` for the current ledger of what has been researched, installed, executed, measured, and deferred. `research/source-ledger.csv` classifies primary evidence separately from community reports. Community throughput claims are leads, not lab measurements.
 
+### Current SSD findings — 2026-10-11
+
+New benchmark runs use the C:-hosted WSL ext4 SSD for active model/runtime files, scratch workspaces, logs, resource traces, and raw outputs. The core llama.cpp inference and quality launchers now check the model, executable, shared libraries, benchmark root, and output directories before starting; HDD-backed model/runtime/library paths are rejected. E: is reserved for verified archives and historical records; no new HDD performance tests are part of this lab. Existing HDD comparisons are retained only as explicitly labeled historical context.
+
+- **Qwen3.5-9B, llama.cpp, 16K context:** median generation was 59.37 tok/s with q4_0 KV, 61.99 tok/s with q8_0, and 59.52 tok/s with f16 KV. A narrow planted-fact probe returned the exact fact in 3/3 repeats per KV format; this is not broad quality evidence. See [throughput/resource results](results/reports/ssd-context-kv.md) and the [recall probe](results/reports/context-recall.md).
+- **Qwen3.5-9B output/tool reliability:** a separate five-repeat SSD series passed exact JSON and a real `add(19, 23)` tool round trip 5/5 each. Median wall time was 0.493 s for JSON and 1.512 s for the complete tool round trip. This covers two fixed prompts only; see the [repeatability report](results/reports/qwen35-tool-reliability.md).
+- **Qwen2.5-Coder-14B hybrid:** 32 GPU layers measured 11.73 tok/s and 350 ms median TTFT; 36 layers measured 13.92 tok/s and 289 ms, with less VRAM headroom. The tested structured tool call failed, so the result does not establish tool-use quality. See the [hybrid report](results/reports/qwen25-coder14b-hybrid.md).
+- **Qwen2.5-Coder-14B tool repeatability:** at 32 GPU layers, strict JSON passed 3/3, while the required structured tool call passed 0/3; the model emitted a textual pseudo-call each time. The temporary SSD model copy was removed after verifying the E: archive checksum. See the [repeatability report](results/reports/qwen14b-tool-reliability.md).
+- **Local coding harnesses:** Pi, OpenCode, and Mistral Vibe each passed 3/3 runs on one fixed task. Pi used the least measured initial context (1,709 tokens) and had 19.92 s median wall time. Pi's separate context-compaction stress passed 0/4 under the full continuation and file-coverage contract. See the [harness comparison](results/reports/harness-evaluation.md) and [compaction stress](results/reports/pi-context-stress.md).
+- **Unsloth QLoRA:** the 7B capacity smoke completed three 8-step runs at 5,640 MiB median peak allocated VRAM. This validates fit for a short synthetic smoke, not useful adaptation quality or the maximum trainable model size. See the [7B capacity report](results/reports/unsloth-7b-capacity-smoke.md).
+
+These are machine-specific measurements with the Windows desktop sharing the RTX 3070. Check the linked reports and raw JSONL before applying the numbers to another run; each report states its prompt, repetition count, exclusions, and quality limitations. The next priorities are paired quality tests across model/quant/runtime configurations, broader coding and tool-use tasks, and reproducible router and multi-agent comparisons.
+
 ## Reproducibility rules
 
 - Each run records the git revision, model revision, runtime version, quantization, context, generation limit, and hardware readings when available.
@@ -94,4 +107,8 @@ TrueForge 0.178.0 is installed and its isolated local UI returned the exact expe
 ## SSD-only context and KV follow-up
 
 Context/KV runs use `scripts/20_benchmark_context_kv.sh`. The pinned Qwen3.5-9B GGUF, llama.cpp executable, active JSONL, resource samples, and server logs stay on the C:-hosted WSL ext4 filesystem for the whole run. After every requested configuration completes, JSONL and sampler files are copied into `results/raw/` in this checkout for Git history; they are not read back from D: or E: during inference. A deterministic exact-recall probe at 16K also returned the same invented fact in 3/3 measurements for q4_0, q8_0, and f16 KV; this is one narrow probe, not a general quality result. The initial interrupted attempts are preserved under `results/raw/exploratory-invalid/` and excluded from analysis. See [context/KV throughput results](results/reports/ssd-context-kv.md), [long-context recall results](results/reports/context-recall.md), and the [consolidated CSV](results/csv/ssd-context-kv.csv).
+
+## Additional 2026 coding-model candidates
+
+The current research pass added Microsoft FrogNano-4B-2609, Ornith-1.0-9B, and Xiaomi MiMo-V2.6-Distill-Qwen-9B to `config/models.yaml`. These are research candidates only, not installed or locally benchmarked. FrogNano's official repository metadata and model-card license table conflict; its download is deferred pending clarification. The other two official BF16 repositories list roughly 19 GB of weights each, so a suitable pinned quantization and an SSD-space check are prerequisites. See [the candidate review](research/2026-coding-model-candidates.md) and [source ledger](research/source-ledger.csv). All inference and performance testing stays on the SSD-backed WSL ext4 filesystem; E: is archival storage only.
 

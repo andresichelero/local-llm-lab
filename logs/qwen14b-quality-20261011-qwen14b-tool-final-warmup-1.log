@@ -1,0 +1,26 @@
+0.00.074.939 I srv  llama_server: initializing ...
+0.00.074.964 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.075.338 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.078.403 I srv    load_model: loading model '/home/foxtrot/local-llm-benchmark/models/hybrid/qwen2.5-coder-14b-instruct-q4_k_m.gguf'
+0.00.643.853 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.06.083.621 I cmn          init: llama threadpool init, n_threads = 4
+0.07.984.727 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 2048, kv_unified = 'true'
+0.07.990.791 I srv  llama_server: model loaded
+0.07.990.810 I srv  llama_server: listening on http://127.0.0.1:18230
+0.09.007.785 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = -1
+0.09.007.987 I slot launch_slot_: id  3 | task 0 | processing task, is_child = 0
+0.11.110.636 I slot print_timing: id  3 | task 0 | prompt eval time =     400.27 ms /    50 tokens (    8.01 ms per token,   124.91 tokens per second)
+0.11.110.653 I slot print_timing: id  3 | task 0 |        eval time =    1702.32 ms /    20 tokens (   89.60 ms per token,    11.16 tokens per second)
+0.11.110.654 I slot print_timing: id  3 | task 0 |       total time =    2102.60 ms /    70 tokens
+0.11.110.659 I slot print_timing: id  3 | task 0 |    graphs reused =         19
+0.11.110.711 I slot      release: id  3 | task 0 | stop processing: n_tokens = 69, truncated = 0
+0.11.115.664 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = -1
+0.11.115.785 I slot launch_slot_: id  2 | task 21 | processing task, is_child = 0
+0.21.043.135 I slot print_timing: id  2 | task 21 | n_gen =    100, tg =  10.86 t/s, tg_3s =  10.97 t/s
+0.23.652.527 I slot print_timing: id  2 | task 21 | prompt eval time =     799.63 ms /   200 tokens (    4.00 ms per token,   250.12 tokens per second)
+0.23.652.545 I slot print_timing: id  2 | task 21 |        eval time =   11727.70 ms /   128 tokens (   92.34 ms per token,    10.83 tokens per second)
+0.23.652.546 I slot print_timing: id  2 | task 21 |       total time =   12527.33 ms /   328 tokens
+0.23.652.547 I slot print_timing: id  2 | task 21 |    graphs reused =        144
+0.23.652.595 I slot      release: id  2 | task 21 | stop processing: n_tokens = 327, truncated = 0
+0.23.663.240 I srv    operator(): operator(): cleaning up before exit...
+0.23.663.955 W ~llama_context:      CUDA0 compute buffer size of  88.6846 MiB, does not match expectation of  72.1221 MiB

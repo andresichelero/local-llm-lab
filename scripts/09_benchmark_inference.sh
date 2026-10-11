@@ -4,9 +4,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BENCH_STORAGE_ROOT="${BENCH_STORAGE_ROOT:-${HOME}/local-llm-benchmark}"
 MODEL="${MODEL_PATH:-${MODEL_DIR:-$BENCH_STORAGE_ROOT/models}/granite-4.1-3b-Q4_K_M.gguf}"
 MODEL_REVISION="${MODEL_REVISION:-}"
-STORAGE_PROFILE="${STORAGE_PROFILE:-unknown}"
-SERVER="${LLAMA_SERVER:-$ROOT/tools/llama.cpp/build/bin/llama-server}"
-RUNTIME_STORAGE_PROFILE="${RUNTIME_STORAGE_PROFILE:-unknown}"
+STORAGE_PROFILE="${STORAGE_PROFILE:-ssd-wsl-ext4-c}"
+SERVER="${LLAMA_SERVER:-$BENCH_STORAGE_ROOT/tools/llama-bin/llama-server}"
+LLAMA_LIBRARY_DIR="${LLAMA_LIBRARY_DIR:-$BENCH_STORAGE_ROOT/tools/llama-bin}"
+RUNTIME_STORAGE_PROFILE="${RUNTIME_STORAGE_PROFILE:-ssd-wsl-ext4-c}"
 RUNTIME_SOURCE="${LLAMA_CPP_SOURCE:-$ROOT/tools/llama.cpp}"
 PORT="${PORT:-18180}"
 OUTPUT="${OUTPUT:-$BENCH_STORAGE_ROOT/results/raw/tier0.jsonl}"
@@ -26,10 +27,11 @@ REPETITIONS="${REPETITIONS:-3}"
 WARMUPS="${WARMUPS:-1}"
 MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-64}"
 INPUT_TOKENS="${INPUT_TOKENS:-0}"
+DRY_RUN=false
 if [[ "${1:-}" == "--help" ]]; then
   cat <<'EOF'
 Run one local llama.cpp inference series (one warm-up, then repeated prompts).
-Environment: MODEL_PATH, MODEL_REVISION, STORAGE_PROFILE, LLAMA_SERVER, RUNTIME_STORAGE_PROFILE,
+Environment: MODEL_PATH, MODEL_REVISION, STORAGE_PROFILE, LLAMA_SERVER, LLAMA_LIBRARY_DIR, RUNTIME_STORAGE_PROFILE,
 PORT, OUTPUT, RESOURCE_OUTPUT, EXPERIMENT, CTX_SIZE,
 GPU_LAYERS, BATCH_SIZE, UBATCH_SIZE, FLASH_ATTN=on|off, KV_TYPE_K/V,
 REASONING=auto|on|off, CACHE_PROMPT=on|off, INPUT_TOKENS, MAX_NEW_TOKENS, REPETITIONS, WARMUPS,
@@ -40,7 +42,7 @@ EOF
 fi
 if [[ "${1:-}" == "--dry-run" ]]; then
   printf 'model=%s\nmodel_revision=%s\nstorage_profile=%s\nserver=%s\nruntime_storage_profile=%s\nport=%s\ncontext=%s\ngpu_layers=%s\nflash_attention=%s\nkv_k=%s\nkv_v=%s\noutput=%s\n' "$MODEL" "$MODEL_REVISION" "$STORAGE_PROFILE" "$SERVER" "$RUNTIME_STORAGE_PROFILE" "$PORT" "$CTX_SIZE" "$GPU_LAYERS" "$FLASH_ATTN" "$KV_TYPE_K" "$KV_TYPE_V" "$OUTPUT"
-  exit 0
+  DRY_RUN=true
 fi
 if [[ ! -x "$SERVER" ]]; then echo "llama-server missing: $SERVER" >&2; exit 1; fi
 if [[ ! -f "$MODEL" ]]; then echo "Model file not found: $MODEL" >&2; exit 1; fi
@@ -49,7 +51,6 @@ SHA="$(git -C "$ROOT" rev-parse HEAD)"
 if ! git -C "$ROOT" diff --quiet HEAD -- . ':(exclude)results/**'; then SOURCE_DIRTY=true; else SOURCE_DIRTY=false; fi
 RUNTIME_COMMIT="$(git -C "$RUNTIME_SOURCE" rev-parse HEAD 2>/dev/null || echo unknown)"
 LOG="${LOG_PATH:-$BENCH_STORAGE_ROOT/logs/llama-server-$PORT.log}"
-mkdir -p "$(dirname "$OUTPUT")" "$(dirname "$RESOURCE_OUTPUT")" "$(dirname "$LOG")"
 if [[ "$CACHE_PROMPT" == on ]]; then
   CACHE_PROMPT_ARG=--cache-prompt
 elif [[ "$CACHE_PROMPT" == off ]]; then
@@ -58,10 +59,23 @@ else
   echo "CACHE_PROMPT must be on or off" >&2
   exit 2
 fi
+source "$ROOT/scripts/lib/ssd_preflight.sh"
+require_wsl_ext4_path "$BENCH_STORAGE_ROOT" "benchmark storage root"
+require_wsl_ext4_path "$MODEL" "model"
+require_llama_cpp_ssd_bundle "$SERVER" "$LLAMA_LIBRARY_DIR"
+for output_dir in "$(dirname "$OUTPUT")" "$(dirname "$RESOURCE_OUTPUT")" "$(dirname "$LOG")"; do
+  require_wsl_ext4_destination "$output_dir" "benchmark output directory"
+done
+if [[ "$DRY_RUN" == true ]]; then
+  printf 'SSD preflight passed: model/runtime/libraries/output paths are on WSL ext4.\n'
+  exit 0
+fi
+mkdir -p "$(dirname "$OUTPUT")" "$(dirname "$RESOURCE_OUTPUT")" "$(dirname "$LOG")"
 python3 "$ROOT/benchmark/resource_sampler.py" --output "$RESOURCE_OUTPUT" --interval 1 &
 SAMPLER_PID=$!
 SERVER_START_NS="$(date +%s%N)"
-"$SERVER" --model "$MODEL" --host 127.0.0.1 --port "$PORT" --ctx-size "$CTX_SIZE" --n-gpu-layers "$GPU_LAYERS" --batch-size "$BATCH_SIZE" --ubatch-size "$UBATCH_SIZE" --flash-attn "$FLASH_ATTN" --cache-type-k "$KV_TYPE_K" --cache-type-v "$KV_TYPE_V" --reasoning "$REASONING" "$CACHE_PROMPT_ARG" >"$LOG" 2>&1 &
+LD_LIBRARY_PATH="$LLAMA_LIBRARY_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  "$SERVER" --model "$MODEL" --host 127.0.0.1 --port "$PORT" --ctx-size "$CTX_SIZE" --n-gpu-layers "$GPU_LAYERS" --batch-size "$BATCH_SIZE" --ubatch-size "$UBATCH_SIZE" --flash-attn "$FLASH_ATTN" --cache-type-k "$KV_TYPE_K" --cache-type-v "$KV_TYPE_V" --reasoning "$REASONING" "$CACHE_PROMPT_ARG" >"$LOG" 2>&1 &
 PID=$!
 cleanup() { kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; kill "$SAMPLER_PID" 2>/dev/null || true; wait "$SAMPLER_PID" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
