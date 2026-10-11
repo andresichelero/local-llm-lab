@@ -94,14 +94,14 @@ const samples = [{ label: 'start', usage: usage(), entries: sessionManager.getEn
 const t0 = Date.now();
 let phase1Error;
 try {
-  await session.prompt('We are in a synthetic benchmark repo. Inspect archive-01.md through archive-20.md using the read tool, in batches. Find the exact ARCHIVE RECOVERY KEY in archive-07.md and preserve it in summary.md as `recovery_key: <exact value>`. Also include exactly `archive_count: 32` and a short description. Run `python3 test_result.py` and fix summary.md if needed. The next task will ask you to recover this key after context compaction.');
+  await session.prompt('We are in a synthetic benchmark repo. Inspect archive-01.md through archive-32.md using the read tool, in batches. Find the exact ARCHIVE RECOVERY KEY in archive-07.md and preserve it in summary.md as `recovery_key: <exact value>`. Also include exactly `archive_count: 32` and a short description. Run `python3 test_result.py` and fix summary.md if needed. The next task will ask you to recover this key after context compaction.');
 } catch (error) { phase1Error = String(error); }
 await session.waitForIdle();
 samples.push({ label: 'after_phase_1', usage: usage(), entries: sessionManager.getEntryCount() });
 
 let phase2Error;
 try {
-  await session.prompt('Continue the same repository task after the context pressure. Inspect archive-21.md through archive-32.md, verify the summary reports all 32 files, then recover the exact key you were asked to preserve earlier and write it into recovery.txt. Do not reopen archive-07.md; use the retained task state or summary.md. Run `python3 test_result.py` and report the key and whether compaction occurred.');
+  await session.prompt('This is a new continuation task after the archive inspection and context compaction. Using the exact key preserved in the task state or summary.md, write only that key into recovery.txt. Do not reopen any archive file. Run `python3 test_result.py` and report the recovered key and whether compaction occurred.');
 } catch (error) { phase2Error = String(error); }
 await session.waitForIdle();
 samples.push({ label: 'after_phase_2', usage: usage(), entries: sessionManager.getEntryCount() });
