@@ -69,6 +69,10 @@ After testing, keep the hash-verified archive on E: and remove only the temporar
 
 The benchmark helper `scripts/17_stage_llamacpp_to_ssd.sh` copies the built runtime to WSL ext4 without deleting the D: source, checks that files match, compares the build version, and verifies that llama/ggml libraries resolve from the SSD copy. `scripts/18_stage_qwen35_gguf_to_ssd.sh` restages the pinned GGUF from E: and refuses to overwrite a different destination. `scripts/09_benchmark_inference.sh` now records model/runtime paths, storage profiles, model revision, and server startup-to-ready time. GPU sharing with the Windows desktop produced a later lower-throughput run with higher baseline VRAM use; it is reported separately rather than attributed to the drive.
 
+## Pi context compaction stress
+
+The Pi SDK stress runner uses an isolated agent directory and scratch workspace on the C:-hosted WSL SSD; it does not use the user's Pi settings. Four local trials exercised a 16K Qwen3.5-9B Q4_K_M session with automatic compaction and a continuation task. Compaction occurred, but no trial passed the full independent quality contract: the transcripts showed skipped archive files, failed continuation, or context overflow. One apparent pass had only read 7 of 32 files. The stricter probe adds per-file fingerprints and test checks so future results cannot pass on a plausible summary alone. See [Pi compaction results](results/reports/pi-context-stress.md) and raw attempts in `results/raw/pi-context-stress*.jsonl`.
+
 ## Local coding-harness comparison
 
 Pi 1.1.0, OpenCode 1.19.0, and Mistral Vibe 2.26.1 each ran one warm-up and three measured repeats against the same deterministic coding task and local Qwen3.5-9B Q4_K_M endpoint. The server used llama.cpp `d81235049`, 16K context, Q4_0 KV, and the WSL-native SSD. All nine valid measured runs passed the five unit tests, independent behavior probe, and change-scope check; each harness passed 3/3.
