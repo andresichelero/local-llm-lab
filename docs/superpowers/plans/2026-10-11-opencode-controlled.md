@@ -30,8 +30,8 @@
 
 - [x] Verify clean checkout, live PR head/base/checks, host/WSL resources, processes, model hash and runtime dependencies.
 - [x] Independently review and integrate PR34 with expected-head guard; fast-forward main and create feature branch.
-- [ ] Write results/reports/audit-continuation-20261011.md with comparative table, primary evidence, measured/installed/researched/incomplete distinctions and gaps.
-- [ ] Correct status.md step-result reversal, README/source ledger Vibe total (1/4), and cite baseline selected raw rows 21–29.
+- [x] Write results/reports/audit-continuation-20261011.md with comparative table, primary evidence, measured/installed/researched/incomplete distinctions and gaps.
+- [x] Correct status.md step-result reversal, README/source ledger Vibe total (1/4), and cite baseline selected raw rows 21–29.
 
 ## Task 2: Effective-profile and bounded compatibility gate
 
