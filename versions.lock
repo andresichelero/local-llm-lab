@@ -89,6 +89,6 @@ model.qwen35_4b_gguf.revision: 4168f45a16a1290d65a4ec0fa312ae917a4c15d6
 model.qwen35_4b_gguf.file: Qwen_Qwen3.5-4B-Q4_K_M.gguf; size=3013027808; sha256=13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983; license=Apache-2.0
 model.qwen35_4b_gguf.path: /home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf
 model.qwen35_4b_gguf.runtime: llama.cpp commit d81235049384534c167caea52b85a694f6103d14; CUDA RTX 3070, 99 GPU layers, Flash Attention on
-model.qwen35_4b_gguf.benchmark: C-hosted WSL ext4 SSD only; 2K/4K/8K/16K context; Q4_0/Q8_0 KV; 1 warm-up + 3 throughput repetitions; exact synthetic 16K recall 3/3 for both KV modes; structured JSON and function tool round trip passed
-model.qwen35_4b_gguf.status: local CUDA inference and functional smoke passed; Q4_0/Q8_0 KV and synthetic exact recall measured through 16K; see results/reports/qwen35-4b-ssd-baseline.md
+model.qwen35_4b_gguf.benchmark: C-hosted WSL ext4 SSD only; 2K/4K/8K/16K/32K context; Q4_0/Q8_0 KV; 1 warm-up + 3 throughput repetitions; exact synthetic recall passed 3/3 at 16K for both KV modes and 3/3 at 32K with Q4_0; structured JSON and function tool round trip passed
+model.qwen35_4b_gguf.status: local CUDA inference and functional smoke passed; Q4_0/Q8_0 KV and synthetic exact recall measured through 32K; see results/reports/qwen35-4b-ssd-baseline.md and results/csv/qwen35-4b-ssd-context-kv.csv
 

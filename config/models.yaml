@@ -41,8 +41,8 @@ models:
     formats: [Transformers, community-GGUF]
     candidate_quant: Q4_K_M; bartowski revision 4168f45a16a1290d65a4ec0fa312ae917a4c15d6, SHA-256 in versions.lock
     estimated_weight_gib: 2.8
-    realistic_context_tokens: 16384
-    status: llama_cpp_cuda_passed_through_16k; q4_0_q8_0_kv_and_recall_measured; json_and_tool_smoke_passed
+    realistic_context_tokens: 32768
+    status: llama_cpp_cuda_passed_through_32k; q4_0_q8_0_kv_measured; q4_0_recall_passed; json_and_tool_smoke_passed
     purpose: compact local worker and small-model harness comparison
     evidence: official model card observed 2026-10-11; pinned community GGUF and local C-SSD/WSL CUDA benchmark recorded in results/reports/qwen35-4b-ssd-baseline.md
   - id: qwen3.5-2b
