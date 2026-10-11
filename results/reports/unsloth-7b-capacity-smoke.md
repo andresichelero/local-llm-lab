@@ -85,3 +85,20 @@ A matched one-warm-up/three-measurement run changed only `lora_dropout` from 0.0
 On this eight-step smoke, dropout zero was 2.8% faster for the training segment and 0.5% faster end-to-end, while using 22.7 MiB more Torch-allocated VRAM. These small differences do not establish a meaningful speed advantage. Dropout changes regularization, the base model already passed the probe, and no adapter-quality comparison was performed. Raw records/traces are `results/raw/qlora7b-dropout0-20261011*`; the per-run CSV is `results/csv/unsloth-7b-dropout0-20261011.csv`; logs are `logs/qlora7b-dropout0-20261011-*.log`.
 
 E: archive for the dropout-zero comparison: `E:\LocalLLMLabArchive\2026-10-11\qlora7b-dropout0-20261011\qlora7b-dropout0-20261011.tar.gz`; SHA-256 `924fb785e248d0df888f73c71dd51a77e84a7cebebeccea18a0aa24b72e0539a`. The representative adapter hash in that archive matches the dropout-zero JSONL.
+
+
+## Long-context training capacity — 2026-10-11
+
+The offline fixture generator (`scripts/27_generate_qlora_long_context_fixture.py`) created eight identical deterministic calibration examples with measured prompt and full-sequence lengths. The 512/1,024 configurations used a 1,026-token fixture (dataset SHA-256 `e9a633839e892cb3c944373a24b7b3b5b1c9cb599844da7995eb04d79664dd00`, 357-token prompts); the 2,048 configuration used a separate exact 2,048-token fixture (SHA-256 `010934fac4f4b25015e7262e672fe78c965316bf517e73a29bddfc4436b68b46`). The fixtures and tokenizer-count manifests are checked in under `benchmark/fixtures/`.
+
+All three sequence settings completed one warm-up plus three measured 8-step NF4 QLoRA runs on the RTX 3070. Every row has `success=true`, clean source provenance at `9762d37d8e62dd9333c65d5d75bffa7e9506a2df`, and `ssd-wsl-ext4-c` storage. The post-training deterministic `add(a,b)` probe passed at each length. No run used a CPU/HDD model path.
+
+| Sequence length | Median training (s) | Median total (s) | Torch allocated / reserved peak (MiB) | Sampled total VRAM peak (MiB) | Sampled RAM / swap peak (MiB) | Peak temp (C) |
+|---:|---:|---:|---:|---:|---:|---:|
+| 512 | 9.055 | 35.765 | 5,752 / 5,830 | 6,792 | 3,019 / 30 | 51 |
+| 1,024 | 14.742 | 42.396 | 5,898 / 6,074 | 7,036 | 3,149 / 30 | 55 |
+| 2,048 | 22.729 | 49.411 | 6,178 / 6,562 | 7,541 | 3,350 / 30 | 62 |
+
+The 2,048-token configuration fit but left only about 650 MiB of measured VRAM headroom on an RTX 3070 that also drives the desktop. Treat it as the largest sequence length demonstrated in this smoke, not a safe universal ceiling or the maximum possible context; larger lengths, ranks, batches, and real datasets remain untested. Loss falls on the repeated synthetic calibration data and is not a quality metric. Per-run records, one-second traces, logs, and summary CSV are `results/raw/qlora-context{512,1024,2048}-20261011*`, `logs/qlora-context*-20261011-*.log`, and `results/csv/unsloth-7b-context-scaling-20261011.csv`.
+
+The long-context post-run archive is `E:\LocalLLMLabArchive\2026-10-11\qlora-7b-context-scaling-20261011\qlora-7b-context-scaling-20261011.tar.gz` (SHA-256 `7b065d8189df8c95750c213119a5e9fcd1db4e5718d1bbad6ee809205bd97aaf`). It contains the raw rows, traces, logs, fixtures, report snapshot, and one SHA-verified adapter per sequence length; no base-model weights.
