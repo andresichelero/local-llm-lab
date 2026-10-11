@@ -45,6 +45,17 @@ training.peft: 0.21.2
 training.bitsandbytes: 0.50.2
 training.accelerate: 1.15.0
 training.trl: 1.14.1
+training.unsloth: 2026.10.3
+training.unsloth_zoo: 2026.10.3
+training.unsloth.python: 3.12.3; isolated at /home/foxtrot/local-llm-benchmark/envs/unsloth
+training.unsloth.torch: 2.10.0+cu128
+training.unsloth.transformers: 5.17.0
+training.unsloth.peft: 0.21.2
+training.unsloth.bitsandbytes: 0.50.2
+training.unsloth.xformers: 0.0.34
+training.unsloth.triton: 3.6.0
+training.unsloth.cuda: 12.8; GPU RTX 3070 sm_86
+training.unsloth.install: isolated SSD WSL env; Unsloth 2026.10.3, Transformers 5.17.0, TRL 1.13.0, PyTorch 2.10.0+cu128
 model.qwen25_coder_7b_instruct.repo: Qwen/Qwen2.5-Coder-7B-Instruct
 model.qwen25_coder_7b_instruct.revision: c03e6d358207e414f1eca0bb1891e29f1db0e242
 model.qwen25_coder_7b_instruct.license: Apache-2.0

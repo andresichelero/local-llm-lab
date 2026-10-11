@@ -1,5 +1,13 @@
 # Execution status — updated 2026-10-11
 
+## Unsloth QLoRA smoke — 2026-10-11
+
+- Installed Unsloth 2026.10.3 into an isolated Python 3.12 environment on C:-hosted WSL ext4. Torch 2.10.0+cu128 detected the RTX 3070; package versions and reproducible commands are pinned in `versions.lock`, `config/runtimes.yaml`, and `scripts/24_finetune_unsloth.sh`.
+- One warm-up and three measured 8-step NF4 QLoRA runs passed. The post-training `add(a,b)` output passed static AST checks in each run. Median training time was 2.334 s and PyTorch allocated peak VRAM was 507 MiB; compared with the earlier PEFT QLoRA smoke (2.214 s, 886 MiB), this was slightly slower but used less allocated VRAM. This tiny synthetic task is a pipeline/memory check, not an adaptation-quality comparison.
+- All measured model/data/environment/cache/output I/O used C:-backed WSL ext4. E: supplied the model archive only; D: is the repository checkout and received completed records after the runs. No HDD-backed benchmark ran in this checkpoint. Historical disk measurements elsewhere remain historical records only.
+- `lora_dropout=0.05` caused Unsloth to skip fused LoRA kernels; optional torchcodec audio support emitted a native-library warning, irrelevant to this text-only run. The first attempted run trained but hit a provenance-path error before logging; the script was fixed and the full protocol then passed.
+- Details: `results/reports/unsloth-qlora-smoke.md`; raw JSONL and one-second traces in `results/raw/unsloth-*`; adapter outputs remain outside Git under `/home/foxtrot/local-llm-benchmark/results/unsloth`. Five successful adapters were also copied to `E:\\local-llm-results\\unsloth-20261011` and hash-verified.
+
 ## Codex OSS local endpoint probe — 2026-10-11
 
 - Tested installed Codex CLI 0.162.0-alpha.17.2 with Qwen3.5-9B Q4_K_M served by llama.cpp from the C: SSD-backed WSL ext4 filesystem. The scratch coding task lived on C:; no changes were made to the main lab repo or personal Codex configuration.

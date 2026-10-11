@@ -1,5 +1,14 @@
 # Resume point — 2026-10-11
 
+## Latest follow-up — Unsloth QLoRA SSD smoke
+
+- User clarified the benchmark storage policy: use only the C: SSD-backed WSL ext4 for all active model/runtime/data/cache/result I/O. HDDs, including E:, are for archives and historical results only. D: currently holds the Git checkout; completed small benchmark records are copied there after timing. No new HDD tests are planned.
+- Installed Unsloth 2026.10.3 in `/home/foxtrot/local-llm-benchmark/envs/unsloth`, using Torch 2.10.0+cu128, Transformers 5.17.0, TRL 1.13.0, PEFT 0.21.2, bitsandbytes 0.50.2, xformers 0.0.34 and Triton 3.6.0. Pinned versions are in `versions.lock`; see `config/runtimes.yaml`.
+- One warm-up and three measured Qwen2.5-Coder-0.5B NF4 QLoRA runs completed on the RTX 3070, each with 8/8 finite-loss steps and an AST-passing deterministic code probe. Median training was 2.334 s; allocated VRAM peak 507 MiB. Relative to prior PEFT QLoRA smoke, it was slightly slower (2.214 s PEFT) but used less allocated VRAM (886 MiB PEFT). This validates pipeline/memory only; base model passed the probe before training.
+- Findings and files: `results/reports/unsloth-qlora-smoke.md`, `results/csv/unsloth-smoke-summary.csv`, `results/raw/unsloth-smoke.jsonl`, and `results/raw/unsloth-{warmup-1,rep-1,rep-2,rep-3}-resources.jsonl`. Five successful adapter files were copied to `E:\\local-llm-results\\unsloth-20261011` and SHA-256 verified; active SSD copies remain for reproduction.
+- First attempted run completed training but failed while looking up Git provenance because the copied runner had no `.git` directory on the SSD runtime root. Added `LAB_REPOSITORY_ROOT`, then the full protocol passed. The raw rows correctly reference base commit `b22ff53` and indicate dirty source because these edits were under test.
+- Focused regression assertions, Unsloth-env `py_compile`, full warm-up/repetition runner, shell syntax and dry-run still need final validation/commit after this handoff entry. Pytest was not installed in the default Python interpreters; check `py -3.12 -m pytest` as prior project checks used that interpreter. Commit/push only `feat/context-kv-ssd-bench`; never push main/master or model weights.
+
 ## Latest follow-up — Codex OSS against local Qwen3.5 endpoint
 
 - The installed Codex CLI `0.162.0-alpha.17.2` was exercised with `--oss` and `CODEX_OSS_BASE_URL` against the SSD-resident Qwen3.5-9B llama.cpp server. Scratch repo and model/runtime were on C:; no API credentials or user config were read, and no paid endpoint was used.

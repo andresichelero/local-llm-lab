@@ -34,6 +34,15 @@ runtimes:
     rationale: Optional SFT training interface; first baseline uses a small deterministic local dataset.
   unsloth:
     upstream: https://github.com/unslothai/unsloth
-    status: defer_until_peft_baseline
-    rationale: Upstream supports PyTorch 2.10 and CUDA 12.8, but install only after standard QLoRA validates under this WSL memory cap.
+    status: installed_ssd_smoke_passed
+    version: 2026.10.3
+    python: 3.12
+    torch: 2.10.0+cu128
+    transformers: 5.17.0
+    trl: 1.13.0
+    peft: 0.21.2
+    bitsandbytes: 0.50.2
+    xformers: 0.0.34
+    storage_root: ${BENCH_STORAGE_ROOT}/envs/unsloth
+    rationale: Isolated C:-SSD WSL env passed one warm-up and three RTX 3070 QLoRA training smokes. Lower allocated VRAM than PEFT baseline, but this short run was not faster; lora_dropout=0.05 disables fused LoRA kernels.
 
