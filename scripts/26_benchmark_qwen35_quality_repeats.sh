@@ -69,6 +69,8 @@ echo "experiment_stamp=$STAMP"
 
 run_one() {
   local label="$1" port="$2"
+  local output="$BENCH_STORAGE_ROOT/results/raw/${RUN_LABEL}-quality-${STAMP}-${label}.jsonl"
+  local status=0
   BENCH_STORAGE_ROOT="$BENCH_STORAGE_ROOT" \
   MODEL_PATH="$MODEL_PATH" \
   LLAMA_SERVER="$LLAMA_SERVER" \
@@ -76,10 +78,17 @@ run_one() {
   PORT="$port" \
   MODEL_ID="$MODEL_ID" \
   CTX_SIZE="$CTX_SIZE" GPU_LAYERS="$GPU_LAYERS" KV_CACHE_K="$KV_CACHE_K" KV_CACHE_V="$KV_CACHE_V" REASONING="$REASONING" \
-  OUTPUT="$BENCH_STORAGE_ROOT/results/raw/${RUN_LABEL}-quality-${STAMP}-${label}.jsonl" \
+  OUTPUT="$output" \
   RESOURCE_OUTPUT="$BENCH_STORAGE_ROOT/results/raw/${RUN_LABEL}-quality-${STAMP}-${label}-resources.jsonl" \
   LOG_PATH="$BENCH_STORAGE_ROOT/logs/${RUN_LABEL}-quality-${STAMP}-${label}.log" \
-    bash "$ROOT/scripts/10_quality_smoke.sh"
+    bash "$ROOT/scripts/10_quality_smoke.sh" || status=$?
+  if [[ ! -f "$output" ]] || [[ "$(wc -l < "$output")" -ne 2 ]]; then
+    echo "Quality runner did not produce both result rows for $label (exit $status)." >&2
+    return 1
+  fi
+  if ((status != 0)); then
+    echo "Recorded model quality failure(s) for $label; continuing repetitions." >&2
+  fi
 }
 
 for ((i=1; i<=WARMUPS; i++)); do
