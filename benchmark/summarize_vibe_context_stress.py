@@ -56,19 +56,24 @@ def _shell_read_invocations(command: str) -> list[tuple[str, list[str]]]:
     invocations: list[tuple[str, list[str]]] = []
     if re.search(r"\b(?:if|elif|else|fi|while|until|case|esac)\b", command):
         return invocations
-    if re.search(r"&&|\|\|", command):
-        normalized = " ".join(command.split())
-        supported_seq_loop = (
-            'for i in $(seq -w 1 32); do echo "=== archive-0${i}.md ===" && '
-            'cat "archive-0${i}.md"; done' in normalized
-        )
-        supported_brace_loop = (
-            'for i in {10..32}; do echo "archive-${i:0:2}=$(grep \'ARCHIVE FINGERPRINT:\' '
-            'archive-${i:0:2}.md | sed \'s/.*ARCHIVE FINGERPRINT:[[:space:]]*//\')"; done' in normalized
-        )
-        supported_cd_grep = bool(re.search(r"^cd\s+\S+\s+&&\s+grep\b", command)) and "||" not in command
-        if not (supported_seq_loop or supported_brace_loop or supported_cd_grep):
-            return invocations
+    normalized = " ".join(command.split())
+    body = normalized
+    cd_prefix = re.match(r"^cd\s+[^;&|]+\s+&&\s+(.*)$", normalized)
+    if cd_prefix:
+        body = cd_prefix.group(1)
+    supported_seq_loop = body == (
+        'for i in $(seq -w 1 32); do echo "=== archive-0${i}.md ===" && '
+        'cat "archive-0${i}.md"; done'
+    )
+    supported_brace_loop = body == (
+        'for i in {10..32}; do echo "archive-${i:0:2}=$(grep \'ARCHIVE FINGERPRINT:\' '
+        'archive-${i:0:2}.md | sed \'s/.*ARCHIVE FINGERPRINT:[[:space:]]*//\')"; done'
+    )
+    supported_fingerprint_grep = body == 'grep -h "ARCHIVE FINGERPRINT:" archive-0[1-9].md'
+    if any(operator in normalized for operator in (";", "&&", "||", "|")) and not (
+        supported_seq_loop or supported_brace_loop or supported_fingerprint_grep
+    ):
+        return invocations
 
     def matching_subshell_end(text: str, start: int) -> int:
         depth = 1

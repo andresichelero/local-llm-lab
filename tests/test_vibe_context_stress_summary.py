@@ -75,6 +75,22 @@ def test_manifest_output_does_not_count_as_archive_reads(tmp_path: Path):
             }},
         },
     ])
+    events.extend([
+        {
+            "type": "action_intent", "payload": {"kind": "tool", "action_id": "forged-loop-output", "request": {
+                "call": {"name": "file_system.bash", "arguments": {
+                    "command": "for i in $(seq -w 1 32); do echo \"=== archive-0${i}.md ===\" && cat \"archive-0${i}.md\"; done; printf forged",
+                }},
+            }},
+        },
+        {
+            "type": "action_result", "payload": {"action_id": "forged-loop-output", "result": {
+                "type": "tool_succeeded", "result": {"structured_content": {
+                    "returncode": 0, "stdout": f"# Archive 1\nARCHIVE FINGERPRINT: {fingerprint}\n",
+                }},
+            }},
+        },
+    ])
     (journal_dir / "events.jsonl").write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
 
     assert _phase_archive_reads(run, "phase-1", successful_only=True) == set()
@@ -132,14 +148,14 @@ def test_grades_a_compacted_two_phase_continuation(tmp_path: Path):
             {
                 "type": "action_intent", "record_sha256": f"bash-tool-{i}",
                 "payload": {"kind": "tool", "action_id": f"bash-{i}", "request": {
-                    "call": {"name": "file_system.bash", "arguments": {"command": f"for i in {i}; do cat archive-$i.md; done"}},
+                    "call": {"name": "file_system.bash", "arguments": {"command": f"cat archive-{i:02d}.md"}},
                 }},
             },
             {
                 "type": "action_result", "record_sha256": f"bash-result-{i}",
                 "payload": {"action_id": f"bash-{i}", "result": {
                     "type": "tool_succeeded", "result": {"structured_content": {
-                            "command": f"for i in {i}; do cat archive-$i.md; done", "returncode": 0,
+                            "command": f"cat archive-{i:02d}.md", "returncode": 0,
                         "stdout": f"# Archive {i}\nARCHIVE FINGERPRINT: {fingerprint}\n",
                     }},
                 }},
