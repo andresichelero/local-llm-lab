@@ -24,8 +24,10 @@ class QloraQualityTests(unittest.TestCase):
         self.assertEqual(model_id_from_manifest({"repo_id": "Qwen/Qwen2.5-Coder-0.5B-Instruct"}), "Qwen/Qwen2.5-Coder-0.5B-Instruct")
 
     def test_quality_cli_records_adapter_training_backend(self):
-        with patch("sys.argv", ["qlora_quality.py", "--adapter", "adapter", "--adapter-training-backend", "unsloth"]):
-            self.assertEqual(parse_args().adapter_training_backend, "unsloth")
+        with patch("sys.argv", ["qlora_quality.py", "--adapter", "adapter", "--adapter-training-backend", "unsloth", "--adapter-training-optimizer", "adamw8bit"]):
+            args = parse_args()
+            self.assertEqual(args.adapter_training_backend, "unsloth")
+            self.assertEqual(args.adapter_training_optimizer, "adamw8bit")
 
     def test_valid_function_passes_multiple_held_out_cases(self):
         result = run_generated_code("def difference_of_cubes(a, b):\n    return a ** 3 - b ** 3", TASK)

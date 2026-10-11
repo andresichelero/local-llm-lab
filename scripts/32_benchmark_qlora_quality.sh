@@ -78,7 +78,7 @@ cleanup() { kill "$SAMPLER_PID" 2>/dev/null || true; wait "$SAMPLER_PID" 2>/dev/
 trap cleanup EXIT INT TERM
 "$PYTHON" "$ROOT/benchmark/qlora_quality.py" \
   --model-dir "$MODEL_DIR" --adapter "$ADAPTER_PATH" --dataset "$QUALITY_DATASET" \
-  --output "$QUALITY_RESULT" --method "$METHOD" --adapter-training-backend transformers-peft --repeats 3 --warmup 2>&1 | tee -a "$QUALITY_LOG"
+  --output "$QUALITY_RESULT" --method "$METHOD" --adapter-training-backend transformers-peft --adapter-training-optimizer adamw32 --repeats 3 --warmup 2>&1 | tee -a "$QUALITY_LOG"
 cleanup
 trap - EXIT INT TERM
 
