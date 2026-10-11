@@ -124,14 +124,14 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/l
 python3 "$ROOT/benchmark/resource_sampler.py" --output "$RUN_DIR/resources.jsonl" --interval 1 >/dev/null 2>&1 &
 SAMPLER_PID=$!
 set +e
-"$VIBE" --prompt-file "$RUN_DIR/phase-1.md" --workdir "$WORKSPACE" --trust --auto-approve --max-turns 40 --max-tokens 250000 --time-limit 240 --output json --output-dir "$RUN_DIR/output-phase-1" >"$RUN_DIR/stdout-phase-1.json" 2>"$RUN_DIR/stderr-phase-1.log"
+"$VIBE" --prompt-file "$RUN_DIR/phase-1.md" --workdir "$WORKSPACE" --trust --auto-approve --max-turns 40 --time-limit 240 --output json --output-dir "$RUN_DIR/output-phase-1" >"$RUN_DIR/stdout-phase-1.json" 2>"$RUN_DIR/stderr-phase-1.log"
 phase1_status=$?
 SESSION_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("session_id", ""))' "$RUN_DIR/output-phase-1/export.json")"
 if [[ -z "$SESSION_ID" ]]; then
   echo "Vibe did not export a session ID; cannot run the continuation phase." >&2
   phase2_status=4
 else
-  "$VIBE" --resume "$SESSION_ID" --prompt-file "$RUN_DIR/phase-2.md" --workdir "$WORKSPACE" --trust --auto-approve --max-turns 20 --max-tokens 350000 --time-limit 240 --output json --output-dir "$RUN_DIR/output-phase-2" >"$RUN_DIR/stdout-phase-2.json" 2>"$RUN_DIR/stderr-phase-2.log"
+  "$VIBE" --resume "$SESSION_ID" --prompt-file "$RUN_DIR/phase-2.md" --workdir "$WORKSPACE" --trust --auto-approve --max-turns 20 --time-limit 240 --output json --output-dir "$RUN_DIR/output-phase-2" >"$RUN_DIR/stdout-phase-2.json" 2>"$RUN_DIR/stderr-phase-2.log"
   phase2_status=$?
 fi
 set -e
