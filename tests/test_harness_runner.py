@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import unittest
@@ -11,6 +12,7 @@ try:
         build_command,
         parse_server_prompt_eval_tokens,
         _isolated_environment,
+        _preflight,
         _prepare_run,
         summarize_resources,
         summarize_usage,
@@ -19,12 +21,32 @@ except ImportError:
     build_command = None  # type: ignore[assignment]
     parse_server_prompt_eval_tokens = None  # type: ignore[assignment]
     _isolated_environment = None  # type: ignore[assignment]
+    _preflight = None  # type: ignore[assignment]
     _prepare_run = None  # type: ignore[assignment]
     summarize_resources = None  # type: ignore[assignment]
     summarize_usage = None  # type: ignore[assignment]
 
 
 class HarnessRunnerTests(unittest.TestCase):
+    def test_preflight_rejects_non_ssd_log_or_result_destinations(self) -> None:
+        self.assertTrue(callable(_preflight), "harness SSD preflight is not implemented")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "source"
+            source.mkdir()
+            model = root / "model.gguf"
+            model.write_bytes(b"fixture")
+            server_log = root / "logs/server.log"
+            results = root / "results/summary.jsonl"
+            with patch("benchmark.harness_runner.REPO_ROOT", source), patch(
+                "benchmark.harness_runner._filesystem_type",
+                side_effect=["ext4", "ext4", "ext4", "ext4", "drvfs"],
+            ) as filesystem_type, patch("benchmark.harness_runner.urllib.request.urlopen") as urlopen:
+                with self.assertRaisesRegex(RuntimeError, "results output must be on the WSL ext4 SSD"):
+                    _preflight(root, "local-model", model, 4096, "http://127.0.0.1:8080", server_log, results)
+            self.assertEqual(filesystem_type.call_count, 5)
+            urlopen.assert_not_called()
+
     def test_opencode_config_is_outside_task_workspace(self) -> None:
         self.assertTrue(callable(_prepare_run), "harness workspace preparation is not implemented")
         with tempfile.TemporaryDirectory() as temp:
@@ -51,6 +73,35 @@ class HarnessRunnerTests(unittest.TestCase):
             self.assertFalse((run_dir / "workspace/opencode.json").exists())
             self.assertTrue((run_dir / "home/.config/opencode/opencode.json").is_file())
             self.assertFalse((run_dir / "workspace/src/__pycache__").exists())
+
+    def test_prepare_run_uses_requested_local_model_and_ssd_endpoint(self) -> None:
+        self.assertTrue(callable(_prepare_run), "harness workspace preparation is not implemented")
+        model = "ornith-ai/Ornith-1.0-9B-GGUF"
+        server_url = "http://127.0.0.1:8091"
+        context = 8192
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for harness in ("pi", "opencode", "vibe"):
+                run_dir = root / harness
+                run_dir.mkdir()
+                _prepare_run(harness, run_dir, root, "Do the controlled task.", model, server_url, context)
+
+                if harness == "pi":
+                    config = json.loads((run_dir / "home/.pi/agent/models.json").read_text(encoding="utf-8"))
+                    provider = config["providers"]["local-llama"]
+                    self.assertEqual(provider["baseUrl"], server_url + "/v1")
+                    self.assertEqual(provider["models"][0]["id"], model)
+                    self.assertEqual(provider["models"][0]["contextWindow"], context)
+                elif harness == "opencode":
+                    config = json.loads((run_dir / "home/.config/opencode/opencode.json").read_text(encoding="utf-8"))
+                    self.assertEqual(config["model"], f"local/{model}")
+                    self.assertEqual(config["provider"]["local"]["options"]["baseURL"], server_url + "/v1")
+                    self.assertEqual(config["provider"]["local"]["models"][model]["limit"]["context"], context)
+                else:
+                    config = (run_dir / "home/config.toml").read_text(encoding="utf-8")
+                    self.assertIn(f'active_model = "{model}"', config)
+                    self.assertIn(f'api_base = "{server_url}/v1"', config)
+                    self.assertIn(f"max_context_length = {context}", config)
 
     def test_isolated_environment_points_pwd_at_benchmark_workspace(self) -> None:
         self.assertTrue(callable(_isolated_environment), "isolated environment builder is not implemented")

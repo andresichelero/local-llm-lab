@@ -1,0 +1,5 @@
+model,mode,n,successes,median_wall_time_s,mean_wall_time_s,stdev_wall_time_s
+Qwen3.5-9B Q4_K_M,structured_json,5,5,0.4925,0.48228,0.019825791283073678
+Qwen3.5-9B Q4_K_M,tool_round_trip,5,5,1.5115,1.48872,0.06660444429615787
+Ornith-1.0-9B Q4_K_M,structured_json,3,3,0.3286,0.3212,0.019578559701877985
+Ornith-1.0-9B Q4_K_M,tool_round_trip,3,3,1.4072,1.4033333333333333,0.020969104256818673

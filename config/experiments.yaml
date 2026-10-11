@@ -10,6 +10,7 @@ defaults:
   repetitions: 3
   temperature: 0
   seed: 1234
+  storage_policy: "all active inference, runtime, scratch, logs and raw outputs on C-backed WSL ext4; E: archival only"
 tiers:
   small:
     question: Can a 3B Q4 model serve as a reliable Tier 0 CUDA baseline under the current memory cap?
@@ -84,4 +85,23 @@ tiers:
     prompt_target_percent: 87.5
     max_new_tokens: 64
     status: in progress; results recorded by scripts/20_benchmark_context_kv.sh
+  coding_agentic_ssd:
+    question: Can the official Ornith 9B Q4_K_M GGUF load on the RTX 3070 and reliably produce strict JSON and a real structured tool round trip in llama.cpp?
+    model: ornith-ai/Ornith-1.0-9B-GGUF
+    revision: 3296bc7a404871a72ac3f1903f561459c09b5c17
+    file: ornith-1.0-9b-Q4_K_M.gguf
+    size_bytes: 5629108704
+    sha256: 5720d1f671b4996481274fffe01868c3c36e87c135cc8538471cc7bd6087b106
+    quant: Q4_K_M
+    runtime: llama.cpp d81235049384534c167caea52b85a694f6103d14
+    storage_profile: ssd-wsl-ext4-c
+    context: 2048
+    gpu_layers: 99
+    kv_cache: f16/f16
+    flash_attention: on
+    temperature: 0
+    seed: 1234
+    warmups: 1
+    repetitions: 3
+    status: completed; 3/3 strict JSON and 3/3 real tool round trips; 3 streaming performance repeats; no coding-agent task yet
 

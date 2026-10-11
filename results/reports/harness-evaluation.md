@@ -13,3 +13,18 @@ Success requires clean harness exit, passing unit tests, passing behavior probe,
 On this single coding task, all three harnesses passed 3/3 valid measurements. Pi had lower measured context overhead and wall time; this result does not test long-context compaction, subagents, MCP, or broader task success.
 Vibe first-prompt counts are read from journal usage events; llama.cpp prompt-evaluation work is stored separately and can be smaller when server prefix caching is active.
 See the raw JSONL for per-run quality details, tool errors, timing, resource samples, and excluded setup attempts.
+
+## Pi model follow-up: Qwen3.5 vs Ornith-1.0 — SSD only
+
+Pi 1.1.0 was rerun on the same deterministic coding fixture with the pinned Ornith-1.0-9B Q4_K_M GGUF (revision `3296bc7a404871a72ac3f1903f561459c09b5c17`). The runtime remained llama.cpp `d81235049384534c167caea52b85a694f6103d14`, with 16K context, Q4_0 K/V, 99 GPU layers, Flash Attention on, reasoning off, and prompt caching off. The model, runtime, task workspaces, logs, and resource samples stayed on the C:-backed WSL ext4 SSD; E: was not used for performance I/O.
+
+| Model | Measured runs | Success | Wall s median (mean ± sd) | First prompt tokens median | Prompt tokens median | Tool calls median | Tool failures | VRAM peak MB median |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Qwen3.5-9B Q4_K_M | 3 | 3/3 | 19.92 (19.57 ± 2.65) | 1,709 | 13,875 | 6 | 0 | 6,145 |
+| Ornith-1.0-9B Q4_K_M | 3 | 3/3 | 25.13 (24.45 ± 3.19) | 1,709 | 14,343 | 6 | 0 | 6,164 |
+
+All six measured coding runs passed the independent behavior probe and five unit tests, and changed only the two files permitted by the fixture. On these runs, Ornith took about 26% longer at the median; both models had the same observed task success and Pi's initial harness context was identical. This small, single-task sample does not establish a general model ranking. The resource sampler reports system-wide WSL/GPU snapshots, so its RAM values are not directly comparable across sessions.
+
+Ornith raw metrics are in `results/raw/harness-ornith-pi.jsonl`; per-run agent events and resource samples are in the adjacent `harness-ornith-pi-*.jsonl` files, with the aggregate table in `results/csv/harness-ornith-pi.csv`. The runner now accepts model, revision, GGUF path, endpoint, context, server log, and output path arguments while retaining the Qwen defaults. Reproduce on WSL ext4 with the pinned model staged on the C: SSD, the llama.cpp server started with the settings above and alias `ornith-ai/Ornith-1.0-9B-GGUF`, then run one `--warmup` and `--repeat 3` using `benchmark/harness_runner.py --harness pi --model ornith-ai/Ornith-1.0-9B-GGUF --model-revision 3296bc7a404871a72ac3f1903f561459c09b5c17 --model-path "$HOME/local-llm-benchmark/models/gguf/ornith-1.0-9b/ornith-1.0-9b-Q4_K_M.gguf" --context 16384 --server-url http://127.0.0.1:8080 --benchmark-root "$HOME/local-llm-benchmark"`. The runner checks the source checkout, benchmark root, model, server log, and result destination for WSL ext4 before it starts a run; the downloader applies the same SSD check to `MODEL_DIR` and uses that destination's filesystem for its free-space check.
+
+After testing, the model and full run directories were copied to `E:\LocalLLMLabArchive\2026-10-11\ornith-pi-harness`; the archived model's SHA-256 was verified before removing its temporary SSD copy. E: served only as post-run archive storage, never as a benchmark source.

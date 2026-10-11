@@ -230,20 +230,20 @@ models:
     evidence: official model card; benchmark claims are owner-reported and Leaf-specific
   - id: ornith-1.0-9b
     repo: ornith-ai/Ornith-1.0-9B
-    revision: 024bce7 (model-card revision observed 2026-10-11; resolve full SHA before download)
+    revision: 3296bc7a404871a72ac3f1903f561459c09b5c17
     params: 9B
     active_params: 9B
     architecture: dense hybrid Qwen3.5-style Gated DeltaNet/gated attention
     license: MIT
     context_claim: 262144 native; card describes extension up to 1,010,000
     tool_use: tool-call markup requires recent parser-enabled server; local behavior untested
-    formats: [Transformers, community quantization unverified]
-    candidate_quant: none pinned; BF16 weights about 19 GB, quant required for RTX 3070
-    estimated_weight_gib: 17.7 (approximate BF16 weights)
+    formats: [official GGUF Q4_K_M, Transformers BF16]
+    candidate_quant: official Q4_K_M; 5629108704 bytes; SHA-256 5720d1f671b4996481274fffe01868c3c36e87c135cc8538471cc7bd6087b106
+    estimated_weight_gib: 5.24
     realistic_context_tokens: 2048 until quantized runtime and memory are tested
-    status: high-priority coding candidate; not downloaded
+    status: SSD inference and tool smoke passed 3/3; limited 2K-context quality/performance baseline, not a coding benchmark
     purpose: compare agentic coding post-training against Qwen3.5-9B using matched SSD tests
-    evidence: official model card; reported agent benchmarks use large contexts and 32 CPUs/48 GB RAM or more
+    evidence: official model card and official publisher GGUF repository; author benchmarks use large contexts and 32 CPUs/48 GB RAM or more
   - id: mimo-v2.6-distill-qwen-9b
     repo: XiaomiMiMo/MiMo-V2.6-Distill-Qwen-9B
     revision: 2367e86 (model-card revision observed 2026-10-11; resolve full SHA before download)
