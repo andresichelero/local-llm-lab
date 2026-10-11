@@ -70,7 +70,8 @@ def main() -> int:
         "timestamp", "git_sha", "elapsed_ms", "compaction_event_count", "tool_call_start_count",
         "archive_files_read_count", "archive_files_read", "summary_exists", "manifest_exact",
         "key_preserved_in_summary", "recovery_exact_match", "test_exit_code", "source_tree_dirty",
-        "quality_pass", "storage_profile",
+        "quality_pass", "storage_profile", "context_after_phase_1", "context_after_phase_2",
+        "compaction_tokens_before", "compaction_summary_chars",
     ]
     args.csv.parent.mkdir(parents=True, exist_ok=True)
     with args.csv.open("w", newline="", encoding="utf-8") as stream:
@@ -79,6 +80,15 @@ def main() -> int:
         for record in records:
             row = dict(record)
             row["archive_files_read"] = ";".join(f"{number:02d}" for number in record["archive_files_read"])
+            samples = {item.get("label"): item.get("usage", {}).get("tokens") for item in record.get("context_samples", [])}
+            row["context_after_phase_1"] = samples.get("after_phase_1")
+            row["context_after_phase_2"] = samples.get("after_phase_2")
+            row["compaction_tokens_before"] = ";".join(
+                str(item.get("tokensBefore")) for item in record.get("compaction_events", [])
+            )
+            row["compaction_summary_chars"] = ";".join(
+                str(item.get("summaryChars")) for item in record.get("compaction_events", [])
+            )
             writer.writerow(row)
 
     lines = [
@@ -106,11 +116,11 @@ def main() -> int:
         "",
         f"Full quality passes: {passed}/{len(records)}. Earlier attempts remain in the raw data and are not omitted from this assessment.",
         "",
-        "The first run read all 32 files and passed the summary test, but failed recovery and then exposed a cleanup API error. A subsequent run preserved the key in `summary.md` and passed its then-current test, but its transcript showed only 7/32 files read; this apparent pass is rejected by the independent read audit. The stricter run read 20/32 files, preserved the key, and passed its summary-only test, yet still failed continuation. The final strict run reached 15/32 files after five compaction events, left context usage above the configured 16K window, and produced neither summary nor manifest; its deterministic test failed.",
+        "The first run read all 32 files and passed the summary test, but failed recovery and then exposed a cleanup API error. Later runs preserved parts of the state but failed the full contract; transcript inspection rejected an apparent pass that had read only 7/32 archives. The fourth run read 15/32 files, overflowed the configured context and produced neither summary nor manifest. The fifth run lasted 225.7 seconds, made 31 read-tool calls and covered 31/32 archive files, but produced no summary or manifest; its workspace tests failed. Pi reported 16,828 tokens after phase 1 and 16,906 after phase 2 against a 16,384-token context (102.7% and 103.2%). It emitted nine compaction start events, yet context remained over limit and no continuation key was recovered.",
         "",
-        "This machine-specific sample shows that compaction events alone do not establish task continuity. Under this 9B local model and tool-heavy 16K workload, Pi's compaction summary and the new continuation prompt were unreliable: the harness sometimes repeated the earlier summary task, skipped files, or overflowed before producing artifacts. The exact key was recovered in one run, but no run passed the full independent quality contract. Treat Pi as a promising low-overhead harness for bounded tasks, not yet as validated for long-context continuation on this model. The final record's context estimate reached 16,879 tokens (103.0% of the configured window); that overrun is part of the observed failure, not a valid performance measurement.",
+        "This machine-specific sample shows that compaction events alone do not establish task continuity. Across five runs, none passed the full independent quality contract. The existing records include context estimates, pre-compaction context counts and summary character lengths, but they do not measure the tokenized content removed by each compaction, so a token compression ratio cannot be calculated reliably. Treat Pi as a low-overhead option for bounded tasks, not as validated for long-context continuation with this model and workload. The fifth run's over-limit context is part of its failure, not a valid performance result.",
         "",
-        "The early attempts are retained in `results/raw/pi-context-stress-exploratory-invalid.jsonl`; the pre-audit apparent pass is retained in `results/raw/pi-context-stress.jsonl`. Session transcripts remain on the SSD run directories referenced by each JSONL record. Recreate with `scripts/22_benchmark_pi_context_stress.sh`; regenerate this table with `python3 benchmark/summarize_pi_context_stress.py --raw results/raw/pi-context-stress.jsonl --raw results/raw/pi-context-stress-exploratory-invalid.jsonl --csv results/csv/pi-context-stress.csv --report results/reports/pi-context-stress.md`.",
+        "The early attempts are retained in `results/raw/pi-context-stress-exploratory-invalid.jsonl`; the pre-audit apparent pass is retained in `results/raw/pi-context-stress.jsonl`. The fifth trial's session, workspace, and server log were copied to `E:\\LocalLLMLabArchive\\2026-10-11\\pi-context-stress\\20261011T135433Z` after measurement and checksum verification; C:-backed WSL ext4 was used for all benchmark execution. Recreate with `scripts/22_benchmark_pi_context_stress.sh`; regenerate this table with `python3 benchmark/summarize_pi_context_stress.py --raw results/raw/pi-context-stress.jsonl --raw results/raw/pi-context-stress-exploratory-invalid.jsonl --csv results/csv/pi-context-stress.csv --report results/reports/pi-context-stress.md`.",
         "",
     ])
     args.report.parent.mkdir(parents=True, exist_ok=True)
