@@ -1,0 +1,23 @@
+0.00.084.170 I srv  llama_server: initializing ...
+0.00.084.196 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.088.788 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.092.226 I srv    load_model: loading model '/home/foxtrot/local-llm-benchmark/models/gguf/Qwen3.5-9B-Q4_K_M.gguf'
+0.05.642.414 I cmn          init: llama threadpool init, n_threads = 4
+0.05.803.841 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 2048, kv_unified = 'true'
+0.05.816.710 I srv  llama_server: model loaded
+0.05.816.732 I srv  llama_server: listening on http://127.0.0.1:18180
+0.06.940.747 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = -1
+0.06.940.863 I slot launch_slot_: id  3 | task 0 | processing task, is_child = 0
+0.07.586.857 I slot print_timing: id  3 | task 0 | prompt eval time =     213.59 ms /    29 tokens (    7.37 ms per token,   135.78 tokens per second)
+0.07.586.879 I slot print_timing: id  3 | task 0 |        eval time =     432.33 ms /    24 tokens (   18.80 ms per token,    53.20 tokens per second)
+0.07.586.880 I slot print_timing: id  3 | task 0 |       total time =     645.91 ms /    53 tokens
+0.07.586.887 I slot print_timing: id  3 | task 0 |    graphs reused =         23
+0.07.586.926 I slot      release: id  3 | task 0 | stop processing: n_tokens = 52, truncated = 0
+0.07.648.224 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, f_sim_best = 1.000 (> 0.100 thold), f_keep = 0.558
+0.07.648.575 I slot launch_slot_: id  3 | task 26 | processing task, is_child = 0
+0.08.148.347 I slot print_timing: id  3 | task 26 | prompt eval time =      82.23 ms /    29 tokens (    2.84 ms per token,   352.68 tokens per second)
+0.08.148.370 I slot print_timing: id  3 | task 26 |        eval time =     417.48 ms /    24 tokens (   18.15 ms per token,    55.09 tokens per second)
+0.08.148.371 I slot print_timing: id  3 | task 26 |       total time =     499.71 ms /    53 tokens
+0.08.148.372 I slot print_timing: id  3 | task 26 |    graphs reused =         45
+0.08.148.394 I slot      release: id  3 | task 26 | stop processing: n_tokens = 52, truncated = 0
+0.08.223.621 I srv    operator(): operator(): cleaning up before exit...

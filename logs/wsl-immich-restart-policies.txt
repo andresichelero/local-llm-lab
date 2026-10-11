@@ -1,0 +1,4 @@
+/immich_server always
+/immich_machine_learning always
+/immich_postgres always
+/immich_redis always

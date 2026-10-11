@@ -1,6 +1,6 @@
 # Tier 0 summary
 
-Clean-source measured runs: 75 across 22 configurations.
+Clean-source measured runs: 91 across 28 configurations.
 Preliminary or dirty-source runs excluded from the table: 9 (all records remain separated by experiment and commit in the CSV).
 
 | Experiment | Context | Prompt | Max output | KV K/V | Prompt cache | Reasoning | Runs | TTFT median (ms) | Prompt median (tok/s) | Generation median (tok/s) | Max sampled VRAM (MiB) |
@@ -20,6 +20,12 @@ Preliminary or dirty-source runs excluded from the table: 9 (all records remain 
 | llama-cpp-qwen35-9b-gguf-q4km-long-32k-q4kv | 32768 | 28695 | 64 | q4_0/q4_0 | off | off | 3 | 15781.85 | 1820.07 | 54.41 | 6147 |
 | llama-cpp-qwen35-9b-gguf-q4km-long-8k | 8192 | 7206 | 64 | f16/f16 | on | off | 3 | 65.39 | — | 64.90 | 5999 |
 | llama-cpp-qwen35-9b-gguf-q4km-long-8k-nocache | 8192 | 7206 | 64 | f16/f16 | off | off | 3 | 3474.49 | 2077.56 | 64.98 | 6000 |
+| qwen35_9b_gguf_16k_q4kv_ssd | 16384 | 14380 | 64 | q4_0/q4_0 | off | off | 3 | 7324.97 | 1965.55 | 62.04 | 6191 |
+| qwen35_9b_gguf_2k_full_ssd_runtime | 2048 | 29 | 64 | f16/f16 | off | off | 3 | 85.27 | 351.08 | 52.75 | 6700 |
+| qwen35_9b_gguf_2k_ssd_profiled | 2048 | 29 | 64 | f16/f16 | off | off | 3 | 71.34 | 418.94 | 65.51 | 6212 |
+| qwen35_9b_gguf_2k_ssd_runtime_profiled | 2048 | 29 | 64 | f16/f16 | off | off | 3 | 78.82 | 376.94 | 52.18 | 6658 |
+| qwen35_9b_gguf_2k_ssd_startup_repeat | 2048 | 29 | 64 | f16/f16 | off | off | 1 | 85.03 | 352.68 | 57.49 | 6217 |
+| qwen35_9b_gguf_ssd_storage | 2048 | 29 | 64 | f16/f16 | off | off | 3 | 69.97 | 429.97 | 63.23 | 6022 |
 | tier0-ctx-16k-q4 | 16384 | 25 | 64 | q4_0/q4_0 | on | auto | 3 | 16.62 | — | 125.36 | 3541 |
 | tier0-ctx-32k-f16 | 32768 | 25 | 64 | f16/f16 | on | auto | 3 | 12.35 | — | 133.46 | 5721 |
 | tier0-ctx-64k-q4 | 65536 | 25 | 64 | q4_0/q4_0 | on | auto | 3 | 17.66 | — | 124.89 | 4729 |

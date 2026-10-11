@@ -1,0 +1,21 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "local/Qwen3.5-9B-Q4_K_M",
+  "provider": {
+    "local": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Local llama.cpp on WSL SSD",
+      "options": {
+        "baseURL": "http://127.0.0.1:8080/v1",
+        "apiKey": "local"
+      },
+      "models": {
+        "Qwen3.5-9B-Q4_K_M": {
+          "name": "Qwen3.5-9B-Q4_K_M",
+          "limit": { "context": 16384, "output": 1024 },
+          "options": { "temperature": 0 }
+        }
+      }
+    }
+  }
+}

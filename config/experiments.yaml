@@ -1,6 +1,6 @@
 schema_version: 1
 machine_profile:
-  wsl_memory_gib: 6
+  wsl_memory_gib: 8
   wsl_processors: 8
   wsl_swap_gib: 4
   gpu_vram_gib: 8
@@ -35,6 +35,32 @@ tiers:
     model: Qwen/Qwen3.6-35B-A3B
     status: deferred pending local RAM budget and supported quant format
   training:
-    question: Determine whether a small LoRA run can complete in the available 6 GiB WSL memory and 8 GiB GPU.
-    status: deferred pending PyTorch install footprint and free space
+    question: Compare LoRA FP16 and QLoRA NF4 training cost on the RTX 3070 with identical settings.
+    model: Qwen/Qwen2.5-Coder-0.5B-Instruct
+    revision: ea3f2471cf1b1f0db85067f1ef93848e38e88c25
+    method: QLoRA NF4 with double quantization
+    comparison_methods: [LoRA FP16, QLoRA NF4 with double quantization]
+    rank: 8
+    batch_size: 1
+    gradient_accumulation_steps: 1
+    gradient_checkpointing: true
+    max_seq_length: 192
+    steps: 8
+    seed: 42
+    optimizer: torch.optim.AdamW (32-bit states)
+    status: completed: one warm-up and three measured repeats per method; see results/reports/lora-qlora-comparison.md
+  training_7b:
+    question: Determine the largest model that completes bounded QLoRA on the RTX 3070 with 8 GiB WSL RAM.
+    model: Qwen/Qwen2.5-Coder-7B-Instruct
+    revision: c03e6d358207e414f1eca0bb1891e29f1db0e242
+    method: QLoRA NF4 with double quantization
+    rank: 8
+    batch_size: 1
+    gradient_accumulation_steps: 1
+    gradient_checkpointing: true
+    max_seq_length: 192
+    steps: 8
+    seed: 42
+    optimizer: torch.optim.AdamW (32-bit states)
+    status: seven 8-step runs passed (three clean HDD-source repeats and three clean SSD repeats, plus one preliminary HDD run)
 

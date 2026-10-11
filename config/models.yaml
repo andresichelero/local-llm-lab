@@ -122,8 +122,9 @@ models:
     evidence: official-model-card
   - id: qwen2.5-coder-7b
     repo: Qwen/Qwen2.5-Coder-7B-Instruct
-    params: 7B
-    active_params: 7B
+    revision: c03e6d358207e414f1eca0bb1891e29f1db0e242
+    params: 7.62B
+    active_params: 7.62B
     architecture: dense
     license: Apache-2.0
     context_claim: 32768
@@ -132,9 +133,25 @@ models:
     candidate_quant: Q4_K_M
     estimated_weight_gib: 4.3
     realistic_context_tokens: 2048
-    status: candidate
-    purpose: code-generation baseline with deterministic tests
-    evidence: official-model-card
+    status: bounded_qlora_smoke_passed_once
+    purpose: verify whether a 7.62B model can complete a short QLoRA run in 8 GiB WSL RAM and 8 GiB VRAM
+    evidence: official model card, immutable model revision, and per-file hashes recorded in versions.lock
+  - id: qwen2.5-coder-0.5b-qlora-smoke
+    repo: Qwen/Qwen2.5-Coder-0.5B-Instruct
+    revision: ea3f2471cf1b1f0db85067f1ef93848e38e88c25
+    params: 0.49B
+    active_params: 0.49B
+    architecture: dense Qwen2 causal language model
+    license: Apache-2.0
+    context_claim: 32768
+    tool_use: not evaluated; selected only for the bounded training smoke
+    formats: [Transformers, bitsandbytes NF4]
+    candidate_quant: bitsandbytes NF4 with double quantization
+    estimated_weight_gib: 0.92
+    realistic_context_tokens: 192 for the first 6 GiB WSL training run
+    status: qlora_smoke_passed_8_steps
+    purpose: isolate whether RTX 3070 QLoRA works end-to-end with a tiny deterministic coding set
+    evidence: official model card and immutable revision; safetensors size and SHA-256 recorded in versions.lock
   - id: qwen2.5-coder-14b
     repo: Qwen/Qwen2.5-Coder-14B-Instruct
     params: 14B
