@@ -1,7 +1,8 @@
+import csv
 import json
 from pathlib import Path
 
-from benchmark.summarize_pi_context_stress import load_records, quality_pass, read_archive_ids
+from benchmark.summarize_pi_context_stress import load_records, main, quality_pass, read_archive_ids
 
 
 def test_reads_archive_paths_from_pi_tool_calls(tmp_path: Path):
@@ -54,3 +55,28 @@ def test_loader_summarizes_actual_reads_and_completeness(tmp_path: Path):
     record = load_records([raw])[0]
     assert record["archive_files_read_count"] == 32
     assert record["quality_pass"] is True
+
+
+def test_report_exports_context_and_compaction_observations(tmp_path: Path, monkeypatch):
+    raw = tmp_path / "raw.jsonl"
+    raw.write_text(json.dumps({
+        "timestamp": "2026-10-11T00:00:00Z",
+        "session_stats": {},
+        "context_samples": [
+            {"label": "after_phase_1", "usage": {"tokens": 16828}},
+            {"label": "after_phase_2", "usage": {"tokens": 16906}},
+        ],
+        "compaction_events": [{"tokensBefore": 16651, "summaryChars": 1743}],
+    }) + "\n", encoding="utf-8")
+    csv_path = tmp_path / "summary.csv"
+    report_path = tmp_path / "report.md"
+    monkeypatch.setattr("sys.argv", [
+        "summarize", "--raw", str(raw), "--csv", str(csv_path), "--report", str(report_path),
+    ])
+
+    assert main() == 0
+    row = next(csv.DictReader(csv_path.open(encoding="utf-8", newline="")))
+    assert row["context_after_phase_1"] == "16828"
+    assert row["context_after_phase_2"] == "16906"
+    assert row["compaction_tokens_before"] == "16651"
+    assert row["compaction_summary_chars"] == "1743"

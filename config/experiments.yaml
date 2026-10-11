@@ -122,4 +122,18 @@ tiers:
     repetitions: 3
     harnesses: [Pi 1.1.0, OpenCode 1.19.0, Mistral Vibe 2.26.1]
     status: completed; all three harnesses passed 3/3 on the fixed task; results in results/reports/harness-evaluation.md
+  pi_context_compaction_stress_ssd:
+    question: Does Pi preserve exact task state across automatic compaction and a continuation prompt under a 32-file tool-heavy workload?
+    model: Qwen3.5-9B-GGUF
+    revision: 3885219b6810b007914f3a7950a8d1b469d598a5
+    quant: Q4_K_M
+    runtime: llama.cpp d81235049384534c167caea52b85a694f6103d14
+    storage_profile: ssd-wsl-ext4-c
+    context: 16384
+    kv_cache: q4_0/q4_0
+    flash_attention: on
+    reserve_tokens: 2048
+    keep_recent_tokens: 4096
+    repetitions: 5
+    status: completed; 0/5 passed the full continuity and exact-file-coverage contract; fifth run read 31/32 files, emitted nine compaction starts, and exceeded the context estimate; token compression ratio unavailable
 
