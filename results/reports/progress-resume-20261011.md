@@ -4,7 +4,7 @@ Updated: 2026-10-11 (America/Sao_Paulo)
 
 ## Current state
 
-- Repository: `andresichelero/local-llm-lab`; local checkout is on `main`, clean after fast-forward to merge commit `58ba9ad81a874b94f2b14d0c2799f29c99a9c4c7`.
+- Repository: `andresichelero/local-llm-lab`; at the time this checkpoint was prepared, the checkout was clean on `main` after fast-forward to merge commit `58ba9ad81a874b94f2b14d0c2799f29c99a9c4c7`.
 - PR #33 was merged at 2026-10-11 20:44 UTC after CodeQL JavaScript, Python, and aggregate checks passed.
 - The PR records the OpenCode subagent probe, raw event streams, and its limitations. Its profile was corrected before merge: `autoupdate: false`, local llama.cpp model endpoint, primary task delegation restricted to two named workers, and both `bash` and `edit` denied to subagents.
 - Profile JSON and permission assertions passed locally. The OpenCode profile itself was not reloaded by the runtime after this correction.
@@ -34,3 +34,4 @@ Updated: 2026-10-11 (America/Sao_Paulo)
 ## Scope still open
 
 The overall research mission is not complete. The merged probe only establishes short read-only subagent compatibility and documents failed/incomplete coding attempts. It does not establish the best multi-agent setup, routing design, compaction quality, or a general runtime/model ranking.
+
