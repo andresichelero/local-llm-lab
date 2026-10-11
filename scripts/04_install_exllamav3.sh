@@ -73,6 +73,6 @@ from importlib.metadata import version
 assert torch.__version__.startswith("2.10.0+cu128"), torch.__version__
 assert torch.cuda.is_available(), "PyTorch cannot see CUDA"
 print(f"torch={torch.__version__}; cuda={torch.version.cuda}; gpu={torch.cuda.get_device_name(0)}")
-assert version("exllamav3") == "1.6.1", version("exllamav3")
+assert version("exllamav3") == "1.6.1+cu128.torch2.10.0", version("exllamav3")
 print(f"exllamav3={version('exllamav3')}")
 PY

@@ -7,8 +7,8 @@ runtimes:
     install: official source build with CUDA if the WSL toolkit can be added within the disk budget; otherwise use a verified upstream Windows CUDA release and mark the host difference.
   exllamav3:
     upstream: https://github.com/turboderp-org/exllamav3
-    status: selected_for_ssd_validation
-    version: 1.6.1
+    status: installed_on_ssd_cuda_detected_model_smoke_pending
+    version: 1.6.1+cu128.torch2.10.0
     torch: 2.10.0+cu128
     python: 3.12
     storage_root: ${BENCH_STORAGE_ROOT}/envs/exllamav3

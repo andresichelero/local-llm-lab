@@ -23,7 +23,8 @@ runtime.llama_cpp_target: v0.6.0; exact tag checkout=d81235049384534c167caea52b8
 runtime.exllamav3: v1.6.1; official CPython 3.12 CUDA 12.8 / Torch 2.10 wheel sha256=8ff5e579afae47773cbedbf03f174d7696d4ea6f258ec6e8579bde92fc52e39e; SHA confirmed from GitHub release API 2026-10-11 after release page listed stale digest
 runtime.exllamav3.python: 3.12.3
 runtime.exllamav3.torch: 2.10.0+cu128
-runtime.exllamav3.install_status: downloaded to C: SSD cache; wheel digest verified against GitHub release asset API; installation pending
+runtime.exllamav3.distribution_version: 1.6.1+cu128.torch2.10.0
+runtime.exllamav3.install_status: installed on C: SSD; Torch CUDA smoke saw RTX 3070; exact package-version assertion was corrected to include wheel local-version suffix
 runtime.torch: not installed
 model.granite_4_1_3b_gguf: ibm-granite/granite-4.1-3b-GGUF@ab4701481089b58a082ef63cc1cee738887293ff
 model.granite_4_1_3b_gguf.file: granite-4.1-3b-Q4_K_M.gguf; size=2099501664; sha256=662b0626cd58f443baea23559b469df6576a81d349649c59413b36a9fb32eb29
