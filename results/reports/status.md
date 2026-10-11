@@ -1,5 +1,12 @@
 # Execution status — updated 2026-10-11
 
+## Qwen3.5-9B structured output and tool-call repeatability — 2026-10-11
+
+- Ran one warm-up plus five measurements each for strict JSON output and a real `add(19, 23)` tool round trip against the pinned Q4_K_M model on the C:-hosted WSL ext4 SSD. All ten measured checks passed; every tool call returned structured arguments, result 42, and a final answer, with no retries.
+- Median wall time was 0.4925 s for JSON and 1.5115 s for the two-request tool round trip. Median per-run sampled system VRAM peak was 6,080 MiB; median WSL RAM peak was 1,276 MiB. This is repeatability evidence for two fixed short prompts, not broad model quality.
+- The runner checks model/runtime/storage are ext4 and validates the dynamic loader resolves llama.cpp libraries from the SSD runtime bundle. No HDD inference or disk-performance test was run. Active model, runtime libraries, server logs, raw output and samples stayed on SSD; completed records were copied to the checkout after each run.
+- Report and consolidated data: `results/reports/qwen35-tool-reliability.md`, `results/csv/qwen35-quality-repeats.csv`, and `results/raw/qwen35-quality-20261011-qwen35-tool-*`.
+
 ## Unsloth QLoRA 7B capacity smoke — 2026-10-11
 
 - Staged the pinned 15.23 GB Qwen2.5-Coder-7B-Instruct archive from E: into C:-backed WSL ext4 after checking the free-space reserve; all four copied weight shards passed their pinned SHA-256 checks. The new script refuses an incomplete destination and reports insufficient SSD space before copying.
