@@ -22,14 +22,14 @@ models:
     architecture: dense hybrid attention/linear attention; verify exact card config
     license: Apache-2.0
     context_claim: 262144
-    tool_use: model-card capability; local tool-call behavior unmeasured
+    tool_use: local fixed JSON and add-tool round trips passed; broader tool-use quality remains unmeasured
     formats: [Transformers, community-GGUF, community-EXL3]
     candidate_quant: EXL3 2.50bpw pinned; Q4_K_M GGUF comparison candidate
     estimated_weight_gib: 5.5
     realistic_context_tokens: 16384
-    status: ssd_inference_passed_archived_on_e_quality_unverified
+    status: ssd_inference_and_fixed_tool_coding_probes_passed; active_gguf_verified_on_c; broad_quality_unverified
     purpose: all/mostly-GPU quantization and KV comparison
-    evidence: official model card and verified EXL3 repository commit, size and SHA-256 recorded in versions.lock
+    evidence: pinned revisions and hashes in versions.lock; local reports qwen35-tool-reliability.md and harness-evaluation.md; 9B GGUF hash reverified on C in audit-continuation-20261011.md
   - id: qwen3.5-4b
     repo: Qwen/Qwen3.5-4B
     params: 4B
@@ -37,7 +37,7 @@ models:
     architecture: dense multimodal hybrid attention/linear attention
     license: Apache-2.0
     context_claim: 262144 native; model card documents agent/tool use and MTP
-    tool_use: upstream Qwen-Agent/Qwen Code guidance; not locally measured
+    tool_use: local JSON/tool smoke passed; 45 strict coding-harness measurements across three fixed tasks; broader tool-use quality unmeasured
     formats: [Transformers, community-GGUF]
     candidate_quant: Q4_K_M; bartowski revision 4168f45a16a1290d65a4ec0fa312ae917a4c15d6, SHA-256 in versions.lock
     estimated_weight_gib: 2.8

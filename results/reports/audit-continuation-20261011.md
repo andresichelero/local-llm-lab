@@ -39,7 +39,8 @@ Other established report findings were read but not independently recomputed in 
 | Installed | CUDA llama.cpp, ExLlama/PyTorch training stacks, bitsandbytes/PEFT/Unsloth, local harness environments. This audit verifies active llama/OpenCode and model paths; it does not import every installed stack again. |
 | Executed/measured | SSD inference, weight/KV/context configurations, narrow JSON/tool/coding probes, synthetic training capacity/quality, rank/optimizer runs, compaction and exploratory delegation. |
 | Incomplete | Reliable multiagent coding/review, broader unsaturated quality, long tool-heavy continuity, Codex local interoperability, generalized adaptation gains. |
-| Not established | Operational/semantic router and fallback-cloud cost/quality; broader model/weight-quant sweeps; MoE/expert caching; MTP/speculation benefit; remaining named harnesses. No overall winner or complete matrix is claimed. |
+| Implemented but not measured end to end | `router/rules.py` has deterministic semantic shortlists and health/exclusion filtering; its unit tests are not evidence of routing quality, live endpoint behavior or cost. |
+| Not established | Measured routing and fallback-cloud cost/quality; broader model/weight-quant sweeps; MoE/expert caching; MTP/speculation benefit; remaining named harnesses. No overall winner or complete matrix is claimed. |
 
 The next priority is the cheapest missing operational gate: can the corrected OpenCode profile actually execute a bounded delegated workflow? It uses already verified assets, needs no weight download, and separates tool compatibility from coding success. If calibration fails, the evidence favors deterministic routing/failure escalation work before further cap tuning. A full Cartesian matrix is unnecessary.
 

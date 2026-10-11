@@ -1,0 +1,25 @@
+# Lab validation environment and baseline run
+
+Date: 2026-10-11
+
+A test-only Python 3.12 virtual environment was created on WSL ext4 at `/home/foxtrot/local-llm-benchmark/envs/lab-validation`, after confirming 16,882,032,640 bytes free (the 8 GiB preflight minimum was met). No packages were installed globally and no source dependencies changed.
+
+Installed to match the existing Windows Python 3.12 test environment:
+
+- pytest 9.1.1
+- pluggy 1.6.0
+- iniconfig 2.3.0
+- packaging 24.2
+- Pygments 2.20.0
+
+The baseline source was streamed from `git archive HEAD` at `db190b0620c1688c2bf8a3ebf2f6aaba6ee7b0f7` into `/home/foxtrot/local-llm-benchmark/source-snapshots/lab-validation-baseline-db190b0`. The extracted snapshot is 10 MiB on WSL ext4 and contains no `.git`, model weights, or environments. Pytest's cache was directed to `/tmp/pytest-cache-baseline-db190b0`; Python bytecode writing was disabled.
+
+Command:
+
+```sh
+wsl -d Ubuntu-24.04 --cd /home/foxtrot/local-llm-benchmark/source-snapshots/lab-validation-baseline-db190b0 -- env PYTHONDONTWRITEBYTECODE=1 /home/foxtrot/local-llm-benchmark/envs/lab-validation/bin/python -m pytest -q -o cache_dir=/tmp/pytest-cache-baseline-db190b0
+```
+
+Result: **73 passed, 3 subtests passed in 0.89 seconds**.
+
+Additional read-only checks passed: AST parsing of 55 tracked Python files; `bash -n` on all shell files under `scripts/` and `tests/`. No lint, typecheck, or Node validation configuration was found. A prior Windows-hosted pytest run had 72 passes and one launcher failure because it passed a Windows `D:\...` path to Bash; the Linux run above resolves that environment-specific failure.
