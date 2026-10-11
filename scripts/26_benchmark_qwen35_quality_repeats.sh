@@ -10,13 +10,21 @@ REPETITIONS="${REPETITIONS:-5}"
 WARMUPS="${WARMUPS:-1}"
 PORT_BASE="${PORT_BASE:-18230}"
 STAMP="${STAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
+RUN_LABEL="${RUN_LABEL:-qwen35}"
+MODEL_ID="${MODEL_ID:-Qwen3.5-9B-Q4_K_M}"
+CTX_SIZE="${CTX_SIZE:-2048}"
+GPU_LAYERS="${GPU_LAYERS:-99}"
+KV_CACHE_K="${KV_CACHE_K:-f16}"
+KV_CACHE_V="${KV_CACHE_V:-f16}"
+REASONING="${REASONING:-off}"
 
 usage() {
   cat <<'EOF'
 Run repeated Qwen3.5-9B JSON and tool-round-trip quality probes on WSL ext4 SSD.
 
-Environment: BENCH_STORAGE_ROOT, MODEL_PATH, RUNTIME_DIR, LLAMA_SERVER,
-REPETITIONS (default 5), WARMUPS (default 1), PORT_BASE (default 18230), STAMP.
+Environment: BENCH_STORAGE_ROOT, MODEL_PATH, RUNTIME_DIR, LLAMA_SERVER, RUN_LABEL,
+MODEL_ID, CTX_SIZE, GPU_LAYERS, KV_CACHE_K/V, REASONING, REPETITIONS (default 5),
+WARMUPS (default 1), PORT_BASE (default 18230), STAMP.
 Use --dry-run to verify paths and show planned repetitions without starting inference.
 EOF
 }
@@ -55,6 +63,7 @@ echo "runtime=$LLAMA_SERVER"
 echo "runtime_libraries=$RUNTIME_DIR"
 echo "storage=$BENCH_STORAGE_ROOT"
 echo "warmups=$WARMUPS repetitions=$REPETITIONS"
+echo "model_id=$MODEL_ID context=$CTX_SIZE gpu_layers=$GPU_LAYERS kv=$KV_CACHE_K/$KV_CACHE_V reasoning=$REASONING"
 echo "experiment_stamp=$STAMP"
 [[ "$DRY_RUN" == true ]] && exit 0
 
@@ -65,11 +74,11 @@ run_one() {
   LLAMA_SERVER="$LLAMA_SERVER" \
   LD_LIBRARY_PATH="$RUNTIME_DIR" \
   PORT="$port" \
-  MODEL_ID="Qwen3.5-9B-Q4_K_M" \
-  CTX_SIZE=2048 GPU_LAYERS=99 KV_CACHE_K=f16 KV_CACHE_V=f16 REASONING=off \
-  OUTPUT="$BENCH_STORAGE_ROOT/results/raw/qwen35-quality-${STAMP}-${label}.jsonl" \
-  RESOURCE_OUTPUT="$BENCH_STORAGE_ROOT/results/raw/qwen35-quality-${STAMP}-${label}-resources.jsonl" \
-  LOG_PATH="$BENCH_STORAGE_ROOT/logs/qwen35-quality-${STAMP}-${label}.log" \
+  MODEL_ID="$MODEL_ID" \
+  CTX_SIZE="$CTX_SIZE" GPU_LAYERS="$GPU_LAYERS" KV_CACHE_K="$KV_CACHE_K" KV_CACHE_V="$KV_CACHE_V" REASONING="$REASONING" \
+  OUTPUT="$BENCH_STORAGE_ROOT/results/raw/${RUN_LABEL}-quality-${STAMP}-${label}.jsonl" \
+  RESOURCE_OUTPUT="$BENCH_STORAGE_ROOT/results/raw/${RUN_LABEL}-quality-${STAMP}-${label}-resources.jsonl" \
+  LOG_PATH="$BENCH_STORAGE_ROOT/logs/${RUN_LABEL}-quality-${STAMP}-${label}.log" \
     bash "$ROOT/scripts/10_quality_smoke.sh"
 }
 
