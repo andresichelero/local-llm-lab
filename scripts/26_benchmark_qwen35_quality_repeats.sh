@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BENCH_STORAGE_ROOT="${BENCH_STORAGE_ROOT:-/home/foxtrot/local-llm-benchmark}"
+BENCH_STORAGE_ROOT="${BENCH_STORAGE_ROOT:-${HOME}/local-llm-benchmark}"
 MODEL_PATH="${MODEL_PATH:-$BENCH_STORAGE_ROOT/models/gguf/Qwen3.5-9B-Q4_K_M.gguf}"
 RUNTIME_DIR="${RUNTIME_DIR:-$BENCH_STORAGE_ROOT/tools/llama-bin}"
 LLAMA_SERVER="${LLAMA_SERVER:-$RUNTIME_DIR/llama-server}"
