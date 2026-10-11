@@ -80,6 +80,8 @@ An isolated Unsloth 2026.10.3 environment on the C:-backed WSL SSD completed sep
 
 The same isolated Unsloth environment completed three 8-step QLoRA smokes on the pinned 7.62B Qwen2.5-Coder-7B model using SSD-backed WSL ext4. Median Torch-allocated VRAM was 5,640 MiB (5,772 MiB reserved) and sampled system VRAM peaked at 6,705 MiB; the previous SSD PEFT series peaked at 7,678 MiB allocated. This confirms that the short 7B training path fits with substantially more GPU memory headroom under Unsloth, but does not measure useful adaptation quality or prove a speed ranking. We archived the adapter on E: after checksum verification. The repeatable model staging and evidence are described in [the 7B capacity report](results/reports/unsloth-7b-capacity-smoke.md).
 
+A clean-provenance repeat then completed one warm-up and three SSD-only measurements: median 28.85 s total, 3.39 s for eight training steps, 5,640 MiB Torch-allocated VRAM, and 6,723 MiB sampled total VRAM. All runs passed the deterministic probe and recorded source_tree_dirty=false; the [updated capacity report](results/reports/unsloth-7b-capacity-smoke.md) has raw JSONL, traces, and limitations. The earlier warm-up/repetition with invalid provenance is preserved but excluded from summaries.
+
 Storage-path audit found that the original Unsloth launcher left its process cwd on the D: checkout and created a small 2.28 MB compiled cache there. That cache was moved to C: and the runner now enters the SSD storage root before importing Unsloth. A post-fix smoke verified no cache was recreated on D:. The earlier Unsloth timings retain that small cache-I/O caveat; no HDD performance testing was performed.
 
 ## SSD-backed llama.cpp follow-up
