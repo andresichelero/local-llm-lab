@@ -123,12 +123,12 @@ def generate(input_dir: Path, csv_path: Path, markdown_path: Path | None = None)
             "",
             "These are throughput and memory measurements, not a quality comparison. The prompts are deterministic generated text, not a semantic long-context recall test. Sampler peak/mean fields come from one-second external samples and include idle intervals around each server process.",
             "",
-            "| Context | KV K/V | Prompt tokens | Prefill tok/s median (mean ± sd) | Generation tok/s median (mean ± sd) | TTFT ms median | Wall s median | Sampler VRAM peak MiB | Sampler GPU util mean % | Power mean W | RAM peak MiB | Success |",
-            "|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+            "| Series | Context | KV K/V | Prompt tokens | Prefill tok/s median (mean ± sd) | Generation tok/s median (mean ± sd) | TTFT ms median | Wall s median | Sampler VRAM peak MiB | Sampler GPU util mean % | Power mean W | RAM peak MiB | Success |",
+            "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
         for row in summaries:
             lines.append(
-                f"| {row['context_tokens']} | {row['kv_cache_k']}/{row['kv_cache_v']} | {row['prompt_tokens_median']:.0f} | "
+                f"| `{row['experiment']}` | {row['context_tokens']} | {row['kv_cache_k']}/{row['kv_cache_v']} | {row['prompt_tokens_median']:.0f} | "
                 f"{row['prompt_tps_median']:.1f} ({row['prompt_tps_mean']:.1f} ± {row['prompt_tps_stddev']:.1f}) | "
                 f"{row['generation_tps_median']:.2f} ({row['generation_tps_mean']:.2f} ± {row['generation_tps_stddev']:.2f}) | "
                 f"{row['ttft_ms_median']:.0f} | {row['wall_time_s_median']:.2f} | "
@@ -138,7 +138,7 @@ def generate(input_dir: Path, csv_path: Path, markdown_path: Path | None = None)
         source_revisions = ", ".join(f"`{sha}`" for sha in sorted({row["git_sha"] for row in summaries}))
         lines.extend([
             "",
-            "Interpretation: compare KV formats only when context and prompt sizes match. The 64K Q4_0 row is a capacity/throughput observation; it does not establish semantic long-context recall. Any earlier HDD-backed values remain historical context; no HDD benchmark was run for this report. All active benchmark I/O for these rows was on the C:-hosted WSL ext4 SSD; E: is archival storage only. The new raw run logs are archived at `E:\\LocalLLMLabArchive\\2026-10-11\\qwen35-ssd-context-extreme-20261011\\results.tar.gz` with a SHA-256 sidecar.",
+            "Interpretation: compare KV formats only when context and prompt sizes match. The 64K rows are capacity/throughput observations; they do not establish semantic long-context recall. Any earlier HDD-backed values remain historical context; no HDD benchmark was run for this report. All active benchmark I/O for these rows was on the C:-hosted WSL ext4 SSD; E: is archival storage only. Raw runs are archived at `E:\\LocalLLMLabArchive\\2026-10-11\\qwen35-ssd-context-extreme-20261011\\results.tar.gz` and `E:\\LocalLLMLabArchive\\2026-10-11\\qwen35-ssd-context-q8-64k-20261011\\results.tar.gz`, each with a SHA-256 sidecar.",
             "",
             f"Raw JSONL and one-second sampler files are in `results/raw/`; the consolidated CSV is `results/csv/{csv_path.name}`. Source revisions represented: {source_revisions}. llama.cpp `{summaries[0]['runtime_commit']}`, model revision `{summaries[0]['model_revision']}`.",
             "",
