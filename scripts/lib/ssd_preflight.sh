@@ -10,6 +10,14 @@ require_wsl_ext4_path() {
   }
 }
 
+require_wsl_ext4_destination() {
+  local path="$1" label="${2:-output destination}"
+  while [[ ! -e "$path" ]]; do
+    path="$(dirname "$path")"
+  done
+  require_wsl_ext4_path "$path" "$label"
+}
+
 require_llama_cpp_ssd_bundle() {
   local executable="$1" library_dir="$2" resolved library
   require_wsl_ext4_path "$executable" "llama-server" || return 1

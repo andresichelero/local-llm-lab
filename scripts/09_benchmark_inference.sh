@@ -51,7 +51,6 @@ SHA="$(git -C "$ROOT" rev-parse HEAD)"
 if ! git -C "$ROOT" diff --quiet HEAD -- . ':(exclude)results/**'; then SOURCE_DIRTY=true; else SOURCE_DIRTY=false; fi
 RUNTIME_COMMIT="$(git -C "$RUNTIME_SOURCE" rev-parse HEAD 2>/dev/null || echo unknown)"
 LOG="${LOG_PATH:-$BENCH_STORAGE_ROOT/logs/llama-server-$PORT.log}"
-mkdir -p "$(dirname "$OUTPUT")" "$(dirname "$RESOURCE_OUTPUT")" "$(dirname "$LOG")"
 if [[ "$CACHE_PROMPT" == on ]]; then
   CACHE_PROMPT_ARG=--cache-prompt
 elif [[ "$CACHE_PROMPT" == off ]]; then
@@ -65,12 +64,13 @@ require_wsl_ext4_path "$BENCH_STORAGE_ROOT" "benchmark storage root"
 require_wsl_ext4_path "$MODEL" "model"
 require_llama_cpp_ssd_bundle "$SERVER" "$LLAMA_LIBRARY_DIR"
 for output_dir in "$(dirname "$OUTPUT")" "$(dirname "$RESOURCE_OUTPUT")" "$(dirname "$LOG")"; do
-  require_wsl_ext4_path "$output_dir" "benchmark output directory"
+  require_wsl_ext4_destination "$output_dir" "benchmark output directory"
 done
 if [[ "$DRY_RUN" == true ]]; then
   printf 'SSD preflight passed: model/runtime/libraries/output paths are on WSL ext4.\n'
   exit 0
 fi
+mkdir -p "$(dirname "$OUTPUT")" "$(dirname "$RESOURCE_OUTPUT")" "$(dirname "$LOG")"
 python3 "$ROOT/benchmark/resource_sampler.py" --output "$RESOURCE_OUTPUT" --interval 1 &
 SAMPLER_PID=$!
 SERVER_START_NS="$(date +%s%N)"

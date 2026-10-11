@@ -21,18 +21,18 @@ case "$REASONING" in on|off|auto) ;; *) echo "REASONING must be on, off, or auto
 [[ "$GPU_LAYERS" =~ ^[0-9]+$ ]] || { echo "GPU_LAYERS must be a non-negative integer" >&2; exit 2; }
 [[ -x "$SERVER" ]] || { echo "llama-server missing: $SERVER" >&2; exit 1; }
 [[ -f "$MODEL" ]] || { echo "Model file missing: $MODEL" >&2; exit 1; }
-mkdir -p "$(dirname "$OUTPUT")" "$(dirname "$RESOURCE_OUTPUT")" "$(dirname "$SERVER_LOG")"
 source "$ROOT/scripts/lib/ssd_preflight.sh"
 require_wsl_ext4_path "$BENCH_STORAGE_ROOT" "benchmark storage root"
 require_wsl_ext4_path "$MODEL" "model"
 require_llama_cpp_ssd_bundle "$SERVER" "$LLAMA_LIBRARY_DIR"
 for output_dir in "$(dirname "$OUTPUT")" "$(dirname "$RESOURCE_OUTPUT")" "$(dirname "$SERVER_LOG")"; do
-  require_wsl_ext4_path "$output_dir" "benchmark output directory"
+  require_wsl_ext4_destination "$output_dir" "benchmark output directory"
 done
 if [[ "${1:-}" == "--dry-run" ]]; then
   printf 'model=%s server=%s libraries=%s port=%s reasoning=%s context=%s gpu_layers=%s kv_k=%s kv_v=%s output=%s\nSSD preflight passed.\n' "$MODEL" "$SERVER" "$LLAMA_LIBRARY_DIR" "$PORT" "$REASONING" "$CTX_SIZE" "$GPU_LAYERS" "$KV_CACHE_K" "$KV_CACHE_V" "$OUTPUT"
   exit 0
 fi
+mkdir -p "$(dirname "$OUTPUT")" "$(dirname "$RESOURCE_OUTPUT")" "$(dirname "$SERVER_LOG")"
 if curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then echo "Port $PORT already has a healthy server; refusing to use an unknown process." >&2; exit 1; fi
 SHA="$(git -C "$ROOT" rev-parse HEAD)"
 if ! git -C "$ROOT" diff --quiet HEAD -- . ':(exclude)results/**'; then SOURCE_DIRTY=true; else SOURCE_DIRTY=false; fi
