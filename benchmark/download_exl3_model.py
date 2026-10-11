@@ -19,6 +19,7 @@ MODEL = {
     "weights_sha256": "19e38d592d439a19205469aba6f477355aaa17d81f1f516b222a2abc7ba76d23",
     "license": "Apache-2.0",
 }
+BENCH_STORAGE_ROOT = Path(os.environ.get("BENCH_STORAGE_ROOT", Path.home() / "local-llm-benchmark"))
 
 
 def sha256(path: Path) -> str:
@@ -49,7 +50,7 @@ def download(model_dir: Path, dry_run: bool) -> None:
     from huggingface_hub import snapshot_download
 
     target.mkdir(parents=True, exist_ok=True)
-    cache_dir = Path(os.environ.get("HF_HOME", "/mnt/e/local-llm-cache/huggingface"))
+    cache_dir = Path(os.environ.get("HF_HOME", BENCH_STORAGE_ROOT / "cache/huggingface"))
     snapshot_download(
         repo_id=MODEL["repo"],
         revision=MODEL["revision"],
@@ -68,7 +69,7 @@ def download(model_dir: Path, dry_run: bool) -> None:
         "path": str(weights),
         "verified": True,
     }
-    results = Path(__file__).resolve().parents[1] / "results" / "raw" / "model-downloads.jsonl"
+    results = Path(os.environ.get("MODEL_DOWNLOAD_LOG", BENCH_STORAGE_ROOT / "results/raw/model-downloads.jsonl"))
     results.parent.mkdir(parents=True, exist_ok=True)
     with results.open("a", encoding="utf-8") as output:
         output.write(json.dumps(record, sort_keys=True) + "\n")
@@ -77,7 +78,7 @@ def download(model_dir: Path, dry_run: bool) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", "/mnt/e/local-llm-models/exllama")))
+    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", BENCH_STORAGE_ROOT / "models/exllama")))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     args.model_dir.mkdir(parents=True, exist_ok=True)

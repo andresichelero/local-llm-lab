@@ -21,6 +21,7 @@ MODEL = {
     "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
     "license": "apache-2.0",
 }
+BENCH_STORAGE_ROOT = Path(os.environ.get("BENCH_STORAGE_ROOT", Path.home() / "local-llm-benchmark"))
 
 
 def sha256(path: Path) -> str:
@@ -96,8 +97,8 @@ def download(model_dir: Path, record_path: Path, dry_run: bool) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", "/mnt/e/local-llm-models")))
-    parser.add_argument("--record", type=Path, default=Path(__file__).resolve().parents[1] / "results/raw/model-downloads.jsonl")
+    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", BENCH_STORAGE_ROOT / "models")))
+    parser.add_argument("--record", type=Path, default=Path(os.environ.get("MODEL_DOWNLOAD_LOG", BENCH_STORAGE_ROOT / "results/raw/model-downloads.jsonl")))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     try:

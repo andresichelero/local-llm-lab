@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENV_DIR="${EXLLAMA_ENV_DIR:-/mnt/e/local-llm-envs/exllamav3}"
-CACHE_DIR="${UV_CACHE_DIR:-/mnt/e/local-llm-cache}"
+BENCH_STORAGE_ROOT="${BENCH_STORAGE_ROOT:-${HOME}/local-llm-benchmark}"
+ENV_DIR="${EXLLAMA_ENV_DIR:-$BENCH_STORAGE_ROOT/envs/exllamav3}"
+CACHE_DIR="${UV_CACHE_DIR:-$BENCH_STORAGE_ROOT/cache/uv}"
 PYTHON="${EXLLAMA_PYTHON:-python3.12}"
-WHEEL_URL="https://github.com/turboderp-org/exllamav3/releases/download/v1.6.0/exllamav3-1.6.0+cu128.torch2.10.0-cp312-cp312-linux_x86_64.whl"
-WHEEL_SHA256="201a1c1c611cf96a9ebdfa1ae0a9d165a30399026160ca963970765a03f0dfbe"
+WHEEL_URL="https://github.com/turboderp-org/exllamav3/releases/download/v1.6.1/exllamav3-1.6.1+cu128.torch2.10.0-cp312-cp312-linux_x86_64.whl"
+WHEEL_SHA256="8ff5e579afae47773cbedbf03f174d7696d4ea6f258ec6e8579bde92fc52e39e"
 
 usage() {
   echo "Usage: $0 [--dry-run]"
@@ -72,5 +73,6 @@ from importlib.metadata import version
 assert torch.__version__.startswith("2.10.0+cu128"), torch.__version__
 assert torch.cuda.is_available(), "PyTorch cannot see CUDA"
 print(f"torch={torch.__version__}; cuda={torch.version.cuda}; gpu={torch.cuda.get_device_name(0)}")
+assert version("exllamav3") == "1.6.1", version("exllamav3")
 print(f"exllamav3={version('exllamav3')}")
 PY

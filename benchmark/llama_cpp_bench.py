@@ -178,7 +178,8 @@ def main() -> int:
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--experiment", default="tier0_streaming_smoke")
-    parser.add_argument("--output", type=Path, default=Path("results/raw/tier0.jsonl"))
+    bench_storage_root = Path(os.environ.get("BENCH_STORAGE_ROOT", Path.home() / "local-llm-benchmark"))
+    parser.add_argument("--output", type=Path, default=Path(os.environ.get("LLAMA_CPP_RESULT_JSONL", bench_storage_root / "results/raw/tier0.jsonl")))
     args = parser.parse_args()
     if args.repetitions < 1 or args.warmups < 0:
         parser.error("repetitions must be >= 1 and warmups must be >= 0")

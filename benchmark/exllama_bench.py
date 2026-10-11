@@ -157,8 +157,9 @@ def run_once(model: Model, cache: Cache, tokenizer: Tokenizer, prompt: str, max_
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", "/mnt/e/local-llm-models/exllama/Qwen3.5-9B-exl3-2.5bpw")))
-    parser.add_argument("--output", type=Path, default=Path("results/raw/exllama-qwen35-9b.jsonl"))
+    bench_storage_root = Path(os.environ.get("BENCH_STORAGE_ROOT", Path.home() / "local-llm-benchmark"))
+    parser.add_argument("--model-dir", type=Path, default=Path(os.environ.get("MODEL_DIR", bench_storage_root / "models/exllama/Qwen3.5-9B-exl3-2.5bpw")))
+    parser.add_argument("--output", type=Path, default=Path(os.environ.get("EXLLAMA_RESULT_JSONL", bench_storage_root / "results/raw/exllama-qwen35-9b.jsonl")))
     parser.add_argument("--context", type=int, default=2048)
     parser.add_argument("--max-new-tokens", type=int, default=96)
     parser.add_argument("--input-tokens", type=int, default=25)

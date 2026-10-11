@@ -9,7 +9,8 @@ for arg in "$@"; do
     *) echo "Unknown option: $arg" >&2; exit 2 ;;
   esac
 done
-MODEL="${MODEL_PATH:-${MODEL_DIR:-/mnt/e/local-llm-models}/granite-4.1-3b-Q4_K_M.gguf}"
+BENCH_STORAGE_ROOT="${BENCH_STORAGE_ROOT:-${HOME}/local-llm-benchmark}"
+MODEL="${MODEL_PATH:-${MODEL_DIR:-$BENCH_STORAGE_ROOT/models}/granite-4.1-3b-Q4_K_M.gguf}"
 if [[ ! -f "$MODEL" ]]; then echo "Pinned Tier 0 model is missing: $MODEL; run scripts/07_download_models.sh --tier small explicitly." >&2; exit 1; fi
 if ((DRY_RUN)); then
   printf 'Would audit system, build llama.cpp CUDA, smoke-test %s, and run benchmark.\n' "$MODEL"

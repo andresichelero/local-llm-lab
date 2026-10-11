@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENV_DIR="${TRAINING_ENV_DIR:-/mnt/e/local-llm-envs/training}"
-CACHE_DIR="${UV_CACHE_DIR:-/mnt/e/local-llm-cache}"
+BENCH_STORAGE_ROOT="${BENCH_STORAGE_ROOT:-${HOME}/local-llm-benchmark}"
+ENV_DIR="${TRAINING_ENV_DIR:-$BENCH_STORAGE_ROOT/envs/training}"
+CACHE_DIR="${UV_CACHE_DIR:-$BENCH_STORAGE_ROOT/cache/uv}"
 PYTHON="${TRAINING_PYTHON:-python3.12}"
 DRY_RUN=0
 while (($#)); do

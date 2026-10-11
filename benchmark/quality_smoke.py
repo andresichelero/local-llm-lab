@@ -56,7 +56,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://127.0.0.1:18181")
     parser.add_argument("--model", default="local")
-    parser.add_argument("--output", type=Path, default=Path("results/raw/tier0-quality.jsonl"))
+    bench_storage_root = Path(os.environ.get("BENCH_STORAGE_ROOT", Path.home() / "local-llm-benchmark"))
+    parser.add_argument("--output", type=Path, default=Path(os.environ.get("QUALITY_RESULT_JSONL", bench_storage_root / "results/raw/tier0-quality.jsonl")))
     args = parser.parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     results: list[dict] = []
