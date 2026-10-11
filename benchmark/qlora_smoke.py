@@ -116,6 +116,7 @@ def main() -> int:
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--result-jsonl", type=Path, default=DEFAULT_RESULT)
     parser.add_argument("--method", choices=("lora", "qlora"), default="qlora")
+    parser.add_argument("--optimizer", choices=("adamw32", "adamw8bit"), default="adamw32")
     parser.add_argument("--steps", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-seq-length", type=int, default=int(os.environ.get("TRAINING_MAX_SEQ_LENGTH", "192")))
@@ -131,6 +132,7 @@ def main() -> int:
         "model": args.model_id,
         "model_parameters": args.model_parameters,
         "method": args.method,
+        "optimizer": args.optimizer,
         "dataset": str(args.dataset),
         "steps": args.steps,
         "seed": args.seed,
@@ -148,6 +150,7 @@ def main() -> int:
 
     process_started = time.perf_counter()
     imports_started = time.perf_counter()
+    import bitsandbytes
     import torch
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
@@ -241,7 +244,12 @@ def main() -> int:
     before_probe = generate_probe()
     before_probe_seconds = time.perf_counter() - probe_start
     model.config.use_cache = False
-    optimizer = torch.optim.AdamW(trainable, lr=2e-4, weight_decay=0.0)
+    if args.optimizer == "adamw8bit":
+        optimizer = bitsandbytes.optim.AdamW8bit(trainable, lr=2e-4, weight_decay=0.0)
+        optimizer_label = "bitsandbytes.optim.AdamW8bit (8-bit states; min_8bit_size=4096)"
+    else:
+        optimizer = torch.optim.AdamW(trainable, lr=2e-4, weight_decay=0.0)
+        optimizer_label = "torch.optim.AdamW (32-bit states)"
     order = list(range(len(rows)))
     random.Random(args.seed).shuffle(order)
     losses: list[float] = []
@@ -302,7 +310,7 @@ def main() -> int:
         "gradient_accumulation_steps": 1,
         "gradient_checkpointing": True,
         "gradient_checkpointing_kwargs": gradient_checkpointing_kwargs,
-        "optimizer": "torch.optim.AdamW (32-bit states)",
+        "optimizer": optimizer_label,
         "learning_rate": 2e-4,
         "lora_rank": 8,
         "lora_alpha": 16,

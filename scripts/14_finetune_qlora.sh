@@ -9,12 +9,14 @@ MODEL_ID="${TRAINING_MODEL_ID:-Qwen/Qwen2.5-Coder-0.5B-Instruct}"
 MODEL_PARAMETERS="${TRAINING_MODEL_PARAMETERS:-0.49B}"
 DATASET="${QLORA_DATASET:-$ROOT/benchmark/data/qlora-smoke.jsonl}"
 OUTPUT_ROOT="${QLORA_OUTPUT_ROOT:-$BENCH_STORAGE_ROOT/results/qlora}"
-RESULT_JSONL="${QLORA_RESULT_JSONL:-$BENCH_STORAGE_ROOT/results/raw/qlora-smoke.jsonl}"
-RESOURCE_JSONL="${QLORA_RESOURCE_JSONL:-$BENCH_STORAGE_ROOT/results/raw/qlora-smoke-resources.jsonl}"
-LOG_PATH="${QLORA_LOG_PATH:-$BENCH_STORAGE_ROOT/logs/qlora-smoke-$(date -u +%Y%m%dT%H%M%SZ).log}"
+RUN_ID="${QLORA_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
+RESULT_JSONL="${QLORA_RESULT_JSONL:-$BENCH_STORAGE_ROOT/results/raw/qlora-smoke-$RUN_ID.jsonl}"
+RESOURCE_JSONL="${QLORA_RESOURCE_JSONL:-$BENCH_STORAGE_ROOT/results/raw/qlora-smoke-resources-$RUN_ID.jsonl}"
+LOG_PATH="${QLORA_LOG_PATH:-$BENCH_STORAGE_ROOT/logs/qlora-smoke-$RUN_ID.log}"
 STEPS="${QLORA_STEPS:-8}"
 MAX_SEQ_LENGTH="${QLORA_MAX_SEQ_LENGTH:-192}"
 METHOD="${TRAINING_METHOD:-qlora}"
+OPTIMIZER="${TRAINING_OPTIMIZER:-adamw32}"
 DRY_RUN=0
 while (($#)); do
   case "$1" in
@@ -23,6 +25,7 @@ while (($#)); do
     --steps) (($# >= 2)) || { echo "--steps needs a value" >&2; exit 2; }; STEPS="$2"; shift 2 ;;
     --max-seq-length) (($# >= 2)) || { echo "--max-seq-length needs a value" >&2; exit 2; }; MAX_SEQ_LENGTH="$2"; shift 2 ;;
     --method) (($# >= 2)) || { echo "--method needs lora or qlora" >&2; exit 2; }; METHOD="$2"; shift 2 ;;
+    --optimizer) (($# >= 2)) || { echo "--optimizer needs adamw32 or adamw8bit" >&2; exit 2; }; OPTIMIZER="$2"; shift 2 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -33,7 +36,8 @@ done
 for path in "$OUTPUT_ROOT" "$RESULT_JSONL" "$RESOURCE_JSONL" "$LOG_PATH"; do
   require_wsl_ext4_destination "$path" "QLoRA benchmark output path"
 done
-ARGS=(--model-dir "$MODEL_DIR" --model-id "$MODEL_ID" --model-parameters "$MODEL_PARAMETERS" --dataset "$DATASET" --method "$METHOD" --output-root "$OUTPUT_ROOT" --result-jsonl "$RESULT_JSONL" --steps "$STEPS" --max-seq-length "$MAX_SEQ_LENGTH")
+[[ "$OPTIMIZER" == adamw32 || "$OPTIMIZER" == adamw8bit ]] || { echo "--optimizer must be adamw32 or adamw8bit" >&2; exit 2; }
+ARGS=(--model-dir "$MODEL_DIR" --model-id "$MODEL_ID" --model-parameters "$MODEL_PARAMETERS" --dataset "$DATASET" --method "$METHOD" --optimizer "$OPTIMIZER" --output-root "$OUTPUT_ROOT" --result-jsonl "$RESULT_JSONL" --steps "$STEPS" --max-seq-length "$MAX_SEQ_LENGTH")
 if ((DRY_RUN)); then
   "$PYTHON" "$ROOT/benchmark/qlora_smoke.py" "${ARGS[@]}" --dry-run
   exit 0
@@ -43,6 +47,7 @@ fi
 mkdir -p "$(dirname "$LOG_PATH")"
 export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-/tmp/local-llm-training-pycache}"
 export HF_HOME="${HF_HOME:-$BENCH_STORAGE_ROOT/cache/huggingface}"
+export QLORA_STORAGE_PROFILE="${QLORA_STORAGE_PROFILE:-ssd-wsl-ext4-c}"
 export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 python3 "$ROOT/benchmark/resource_sampler.py" --output "$RESOURCE_JSONL" --interval 1 &

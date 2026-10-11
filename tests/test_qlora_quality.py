@@ -1,14 +1,16 @@
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
-from benchmark.qlora_quality import load_tasks, run_generated_code, strip_code_fence
+from benchmark.qlora_quality import load_tasks, model_id_from_manifest, parse_args, run_generated_code, strip_code_fence
 
 
 TASK = {
     "function": "difference_of_cubes",
     "arguments": ["a", "b"],
+    "reference": "def difference_of_cubes(a, b):\n    return a ** 3 - b ** 3",
     "tests": [
         {"inputs": [3, 2], "expected": 19},
         {"inputs": [2, 3], "expected": -19},
@@ -17,6 +19,16 @@ TASK = {
 
 
 class QloraQualityTests(unittest.TestCase):
+    def test_model_id_reads_both_manifest_shapes(self):
+        self.assertEqual(model_id_from_manifest({"repo": "Qwen/Qwen2.5-Coder-7B-Instruct"}), "Qwen/Qwen2.5-Coder-7B-Instruct")
+        self.assertEqual(model_id_from_manifest({"repo_id": "Qwen/Qwen2.5-Coder-0.5B-Instruct"}), "Qwen/Qwen2.5-Coder-0.5B-Instruct")
+
+    def test_quality_cli_records_adapter_training_backend(self):
+        with patch("sys.argv", ["qlora_quality.py", "--adapter", "adapter", "--adapter-training-backend", "unsloth", "--adapter-training-optimizer", "adamw8bit"]):
+            args = parse_args()
+            self.assertEqual(args.adapter_training_backend, "unsloth")
+            self.assertEqual(args.adapter_training_optimizer, "adamw8bit")
+
     def test_valid_function_passes_multiple_held_out_cases(self):
         result = run_generated_code("def difference_of_cubes(a, b):\n    return a ** 3 - b ** 3", TASK)
         self.assertEqual(result, (True, 2, None))
@@ -67,6 +79,15 @@ class QloraQualityTests(unittest.TestCase):
             self.assertEqual(load_tasks(path)[0]["task_id"], "one")
             path.write_text("\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "empty"):
+                load_tasks(path)
+
+    def test_rejects_task_without_reference_completion(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "tasks.jsonl"
+            task = {"task_id": "one", **TASK, "prompt": "do task"}
+            task.pop("reference")
+            path.write_text(json.dumps(task) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Invalid held-out task"):
                 load_tasks(path)
 
     def test_quality_fixture_has_disjoint_task_ids_and_nonempty_cases(self):

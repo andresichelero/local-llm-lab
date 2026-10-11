@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare a local NF4 QLoRA base model and adapter on held-out code tasks."""
+"""Compare a local LoRA/QLoRA base model and adapter on held-out code tasks."""
 from __future__ import annotations
 
 import argparse
@@ -55,13 +55,17 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def model_id_from_manifest(manifest: dict) -> str:
+    return manifest.get("repo_id") or manifest.get("repo") or "Qwen/Qwen2.5-Coder-0.5B-Instruct"
+
+
 def load_tasks(path: Path) -> list[dict]:
     tasks = []
     for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip():
             continue
         task = json.loads(line)
-        required = {"task_id", "function", "arguments", "prompt", "tests"}
+        required = {"task_id", "function", "arguments", "prompt", "reference", "tests"}
         if not isinstance(task, dict) or not required <= task.keys() or not task["tests"]:
             raise ValueError(f"Invalid held-out task at line {line_number}")
         tasks.append(task)
@@ -126,6 +130,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--adapter", type=Path, required=True)
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--method", choices=("qlora", "lora"), default="qlora")
+    parser.add_argument("--adapter-training-backend", choices=("transformers-peft", "unsloth"), default="transformers-peft")
+    parser.add_argument("--adapter-training-optimizer", choices=("adamw32", "adamw8bit"), default="adamw32")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--warmup", action="store_true")
     args = parser.parse_args()
@@ -158,14 +165,45 @@ def main() -> int:
     model_manifest = json.loads((args.model_dir / "download-manifest.json").read_text(encoding="utf-8"))
     git_sha, source_dirty = git_provenance(ROOT)
     tokenizer = AutoTokenizer.from_pretrained(args.model_dir, local_files_only=True)
-    quantization = BitsAndBytesConfig(
-        load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=torch.float16,
-    )
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model_dir, quantization_config=quantization, dtype=torch.float16,
-        device_map={"": 0}, low_cpu_mem_usage=True, local_files_only=True,
-    )
+    quantization_label = "bitsandbytes NF4 with double quantization"
+    base_precision = "NF4"
+    if args.method == "qlora":
+        quant_config = BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.float16,
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_dir, quantization_config=quant_config, dtype=torch.float16,
+            device_map={"": 0}, low_cpu_mem_usage=True, local_files_only=True,
+        )
+    else:
+        quantization_label = "none (FP16 base weights)"
+        base_precision = "FP16"
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_dir, dtype=torch.float16, device_map={"": 0},
+            low_cpu_mem_usage=True, local_files_only=True,
+        )
+
+    def reference_nll(task: dict) -> tuple[float, int]:
+        messages = [
+            {"role": "system", "content": "You write correct Python code and follow output constraints exactly."},
+            {"role": "user", "content": task["prompt"]},
+        ]
+        prompt_ids = tokenizer.apply_chat_template(
+            messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
+        )["input_ids"].to("cuda")
+        full_ids = tokenizer.apply_chat_template(
+            messages + [{"role": "assistant", "content": task["reference"]}],
+            tokenize=True, add_generation_prompt=False, return_tensors="pt",
+        )["input_ids"].to("cuda")
+        if not torch.equal(full_ids[:, :prompt_ids.shape[1]], prompt_ids):
+            raise ValueError(f"Reference completion boundary mismatch for task {task['task_id']}")
+        labels = full_ids.clone()
+        labels[:, :prompt_ids.shape[1]] = -100
+        with torch.inference_mode():
+            output = model(input_ids=full_ids, labels=labels)
+        tokens = int((labels != -100).sum().item())
+        return float(output.loss.detach().cpu()), tokens
 
     def generate(prompt: str) -> tuple[str, int, int, float]:
         messages = [
@@ -189,36 +227,46 @@ def main() -> int:
     model.eval()
     if args.warmup:
         generate("Write a Python function that returns x + 1. Output code only.")
-    for phase in ("base_nf4", "qlora_adapter"):
-        if phase == "qlora_adapter":
+    base_phase = "base_nf4" if args.method == "qlora" else "base_fp16"
+    adapter_phase = "qlora_adapter" if args.method == "qlora" else "lora_adapter"
+    for phase in (base_phase, adapter_phase):
+        if phase == adapter_phase:
             model = PeftModel.from_pretrained(model, args.adapter, is_trainable=False, local_files_only=True)
             model.eval()
         for repeat in range(1, args.repeats + 1):
             for task in tasks:
+                reference_loss, reference_tokens = reference_nll(task)
                 output, prompt_tokens, completion_tokens, elapsed = generate(task["prompt"])
                 success, passed, error = run_generated_code(output, task)
                 row = {
                     "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "experiment": "qlora_heldout_quality",
+                    "experiment": "finetune_heldout_quality",
                     "phase": phase,
+                    "finetune_method": args.method,
+                    "adapter_training_backend": args.adapter_training_backend,
+                    "adapter_training_optimizer": args.adapter_training_optimizer,
+                    "base_weight_precision": base_precision,
                     "repeat": repeat,
                     "task_id": task["task_id"],
-                    "model": model_manifest.get("repo_id", "Qwen/Qwen2.5-Coder-0.5B-Instruct"),
+                    "model": model_id_from_manifest(model_manifest),
                     "model_revision": model_manifest.get("revision"),
-                    "quantization": "bitsandbytes NF4 with double quantization",
-                "runtime": "Transformers + PEFT + bitsandbytes",
-                "torch_version": torch.__version__,
-                "transformers_version": __import__("transformers").__version__,
-                "peft_version": __import__("peft").__version__,
-                "bitsandbytes_version": __import__("bitsandbytes").__version__,
-                "gpu": torch.cuda.get_device_name(0),
-                "storage_profile": "ssd-wsl-ext4-c",
-                "git_sha": git_sha,
-                "source_tree_dirty": source_dirty,
-                "context_window_tokens": int(model.config.max_position_embeddings),
-                "max_new_tokens": 128,
-                "do_sample": False,
-                    "adapter_sha256": sha256_file(adapter_file) if phase == "qlora_adapter" else None,
+                    "quantization": quantization_label,
+                    "runtime": "Transformers + PEFT + bitsandbytes",
+                    "torch_version": torch.__version__,
+                    "transformers_version": __import__("transformers").__version__,
+                    "peft_version": __import__("peft").__version__,
+                    "bitsandbytes_version": __import__("bitsandbytes").__version__,
+                    "gpu": torch.cuda.get_device_name(0),
+                    "storage_profile": "ssd-wsl-ext4-c",
+                    "git_sha": git_sha,
+                    "source_tree_dirty": source_dirty,
+                    "context_window_tokens": int(model.config.max_position_embeddings),
+                    "max_new_tokens": 128,
+                    "do_sample": False,
+                    "reference_nll_per_token": round(reference_loss, 6),
+                    "reference_perplexity": round(float(torch.exp(torch.tensor(reference_loss)).item()), 6),
+                    "reference_tokens": reference_tokens,
+                    "adapter_sha256": sha256_file(adapter_file) if phase == adapter_phase else None,
                     "dataset_sha256": sha256_file(args.dataset),
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
