@@ -136,4 +136,18 @@ tiers:
     keep_recent_tokens: 4096
     repetitions: 5
     status: completed; 0/5 passed the full continuity and exact-file-coverage contract; fifth run read 31/32 files, emitted nine compaction starts, and exceeded the context estimate; token compression ratio unavailable
+  vibe_context_compaction_stress_ssd:
+    question: Does Vibe preserve exact task state through automatic compaction and a resumed second prompt on the same 32-file workload?
+    model: Qwen3.5-9B-GGUF
+    revision: 3885219b6810b007914f3a7950a8d1b469d598a5
+    quant: Q4_K_M
+    runtime: llama.cpp d81235049384534c167caea52b85a694f6103d14
+    storage_profile: ssd-wsl-ext4-c
+    context: 16384
+    kv_cache: q4_0/q4_0
+    flash_attention: on
+    auto_compact_threshold: 15000
+    harness: Mistral Vibe 2.26.1
+    repetitions: 3
+    status: completed; final artifacts/tests passed after two automatic compactions with no archive reads after continuation, but all runs changed executable bits on 34 tracked fixture files; run 2 reopened two archives; strict scope pass 0/3
 
