@@ -53,9 +53,9 @@ def main() -> int:
     lines = [
         "# Held-out QLoRA quality probe",
         "",
-        "This report compares a pinned local NF4 base checkpoint with its adapter on the same deterministic, held-out Python tasks. Each generated function is parsed and run only after an AST allowlist rejects imports, calls, attributes, and other non-expression code. Results measure this narrow task set, not general coding ability or adapter quality across domains.",
+        "This report compares a pinned local NF4 base checkpoint with its adapter on the same deterministic, held-out Python tasks. Each generated function is parsed and run only after an AST allowlist rejects imports, unsafe calls, attributes, and other non-expression code; positional calls to `abs`, `max`, and `min` are permitted. Results measure this narrow task set, not general coding ability or adapter quality across domains.",
         "",
-        f"Raw input: `{args.input}`. Measurements: {len(rows)}. Tasks: {len(task_ids)}.",
+        f"Raw input: `{args.input.name}`. Measurements: {len(rows)}. Tasks: {len(task_ids)}.",
         "",
         "| Phase | Task | Runs | Passes | Pass rate | Cases passed | Median generation (s) |",
         "|---|---|---:|---:|---:|---:|---:|",
@@ -63,6 +63,14 @@ def main() -> int:
     for item in summaries:
         lines.append(
             f"| {item['phase']} | {item['task_id']} | {item['runs']} | {item['successes']} | {item['success_rate']:.0%} | {item['tests_passed_total']}/{item['tests_total']} | {item['median_generation_seconds']:.4f} |"
+        )
+    for phase in phases:
+        phase_rows = [row for row in rows if row["phase"] == phase]
+        successes = sum(bool(row["success"]) for row in phase_rows)
+        lines.append("")
+        lines.append(
+            f"Overall `{phase}` success: {successes}/{len(phase_rows)} task runs; "
+            f"{sum(int(row['tests_passed']) for row in phase_rows)}/{sum(int(row['tests_total']) for row in phase_rows)} individual cases passed."
         )
     lines += [
         "",

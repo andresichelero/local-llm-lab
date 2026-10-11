@@ -25,6 +25,13 @@ while (($#)); do
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
+source "$ROOT/scripts/lib/ssd_preflight.sh"
+for path in "$ROOT" "$BENCH_STORAGE_ROOT" "$TRAINING_ENV_DIR" "$PYTHON" "$MODEL_DIR" "$DATASET"; do
+  require_wsl_ext4_path "$path" "QLoRA benchmark input or runtime path"
+done
+for path in "$OUTPUT_ROOT" "$RESULT_JSONL" "$RESOURCE_JSONL" "$LOG_PATH"; do
+  require_wsl_ext4_destination "$path" "QLoRA benchmark output path"
+done
 ARGS=(--model-dir "$MODEL_DIR" --model-id "$MODEL_ID" --model-parameters "$MODEL_PARAMETERS" --method "$METHOD" --output-root "$OUTPUT_ROOT" --result-jsonl "$RESULT_JSONL" --steps "$STEPS" --max-seq-length "$MAX_SEQ_LENGTH")
 if ((DRY_RUN)); then
   "$PYTHON" "$ROOT/benchmark/qlora_smoke.py" "${ARGS[@]}" --dry-run

@@ -7,9 +7,12 @@ import ast
 import hashlib
 import json
 import os
+import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+from benchmark.provenance import git_provenance
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODEL = Path(os.environ.get("TRAINING_MODEL_DIR", Path.home() / "local-llm-benchmark/models/Qwen2.5-Coder-0.5B-Instruct"))
@@ -19,10 +22,25 @@ DEFAULT_OUTPUT = Path(os.environ.get("QLORA_QUALITY_RESULT_JSONL", Path.home() /
 ALLOWED_AST_NODES = {
     ast.Module, ast.FunctionDef, ast.arguments, ast.arg, ast.Return, ast.If, ast.Pass,
     ast.Name, ast.Load, ast.Store, ast.Constant, ast.BinOp, ast.UnaryOp, ast.Compare,
-    ast.BoolOp, ast.IfExp, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod,
+    ast.BoolOp, ast.IfExp, ast.Call, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod,
     ast.Pow, ast.UAdd, ast.USub, ast.Not, ast.And, ast.Or, ast.Lt, ast.LtE, ast.Gt,
     ast.GtE, ast.Eq, ast.NotEq,
 }
+SAFE_CALLS = {"abs", "max", "min"}
+
+
+def require_ext4(path: Path, label: str) -> None:
+    candidate = path
+    while not candidate.exists() and candidate != candidate.parent:
+        candidate = candidate.parent
+    if not candidate.exists():
+        raise FileNotFoundError(f"{label} path does not exist: {path}")
+    filesystem = subprocess.run(
+        ["findmnt", "-n", "-o", "FSTYPE", "-T", str(candidate)],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    if filesystem != "ext4":
+        raise RuntimeError(f"{label} must be on SSD-backed WSL ext4, found {filesystem}: {path}")
 
 
 def sha256_file(path: Path) -> str:
@@ -74,11 +92,15 @@ def run_generated_code(source: str, task: dict) -> tuple[bool, int, str | None]:
     for node in ast.walk(tree):
         if type(node) not in ALLOWED_AST_NODES:
             return False, 0, f"unsupported syntax: {type(node).__name__}"
-        if isinstance(node, ast.Name) and node.id not in {task["function"], *task["arguments"]}:
+        if isinstance(node, ast.Name) and node.id not in {task["function"], *task["arguments"], *SAFE_CALLS}:
             return False, 0, f"unknown identifier: {node.id}"
+        if isinstance(node, ast.Call) and (
+            not isinstance(node.func, ast.Name) or node.func.id not in SAFE_CALLS or node.keywords
+        ):
+            return False, 0, "only positional calls to abs, max, and min are allowed"
     namespace: dict[str, object] = {}
     try:
-        exec(compile(tree, "<held-out-model-output>", "exec"), {"__builtins__": {}}, namespace)
+        exec(compile(tree, "<held-out-model-output>", "exec"), {"__builtins__": {"abs": abs, "max": max, "min": min}}, namespace)
         function_impl = namespace[task["function"]]
         passed = 0
         for case in task["tests"]:
@@ -107,6 +129,11 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    require_ext4(ROOT, "source checkout")
+    require_ext4(args.model_dir, "model weights")
+    require_ext4(args.adapter, "adapter")
+    require_ext4(args.dataset, "quality dataset")
+    require_ext4(args.output.parent, "result directory")
     if not (args.model_dir / "download-manifest.json").is_file():
         raise FileNotFoundError(f"Pinned local model manifest is missing: {args.model_dir}")
     adapter_file = args.adapter / "adapter_model.safetensors"
@@ -122,6 +149,7 @@ def main() -> int:
     if not torch.cuda.is_available() or "RTX 3070" not in torch.cuda.get_device_name(0):
         raise RuntimeError("This experiment requires the visible RTX 3070 CUDA device")
     model_manifest = json.loads((args.model_dir / "download-manifest.json").read_text(encoding="utf-8"))
+    git_sha, source_dirty = git_provenance(ROOT)
     tokenizer = AutoTokenizer.from_pretrained(args.model_dir, local_files_only=True)
     quantization = BitsAndBytesConfig(
         load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True,
@@ -171,6 +199,18 @@ def main() -> int:
                     "model": model_manifest.get("repo_id", "Qwen/Qwen2.5-Coder-0.5B-Instruct"),
                     "model_revision": model_manifest.get("revision"),
                     "quantization": "bitsandbytes NF4 with double quantization",
+                "runtime": "Transformers + PEFT + bitsandbytes",
+                "torch_version": torch.__version__,
+                "transformers_version": __import__("transformers").__version__,
+                "peft_version": __import__("peft").__version__,
+                "bitsandbytes_version": __import__("bitsandbytes").__version__,
+                "gpu": torch.cuda.get_device_name(0),
+                "storage_profile": "ssd-wsl-ext4-c",
+                "git_sha": git_sha,
+                "source_tree_dirty": source_dirty,
+                "context_window_tokens": int(model.config.max_position_embeddings),
+                "max_new_tokens": 128,
+                "do_sample": False,
                     "adapter_sha256": sha256_file(adapter_file) if phase == "qlora_adapter" else None,
                     "dataset_sha256": sha256_file(args.dataset),
                     "prompt_tokens": prompt_tokens,

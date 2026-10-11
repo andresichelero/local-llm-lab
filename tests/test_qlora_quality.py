@@ -40,7 +40,15 @@ class QloraQualityTests(unittest.TestCase):
                 passed, count, error = run_generated_code(source, TASK)
                 self.assertFalse(passed)
                 self.assertEqual(count, 0)
-                self.assertTrue(error and ("unsupported syntax" in error or "output must" in error))
+                self.assertTrue(error and any(term in error for term in ("unsupported syntax", "output must", "unknown identifier")))
+
+    def test_allows_only_safe_positional_builtins(self):
+        task = {"function": "clamp", "arguments": ["value", "lower", "upper"], "tests": [{"inputs": [7, 0, 5], "expected": 5}]}
+        self.assertEqual(run_generated_code("def clamp(value, lower, upper):\n    return min(max(value, lower), upper)", task), (True, 1, None))
+        passed, count, error = run_generated_code("def clamp(value, lower, upper):\n    return open(value)", task)
+        self.assertFalse(passed)
+        self.assertEqual(count, 0)
+        self.assertIn("unknown identifier", error)
 
     def test_rejects_signature_mismatch(self):
         passed, count, error = run_generated_code("def difference_of_cubes(a):\n    return a ** 3", TASK)
