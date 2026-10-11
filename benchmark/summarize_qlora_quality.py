@@ -50,12 +50,17 @@ def main() -> int:
 
     phases = sorted({row["phase"] for row in rows})
     task_ids = sorted({row["task_id"] for row in rows})
+    sample = rows[0]
+    adapter_hashes = sorted({row["adapter_sha256"] for row in rows if row.get("adapter_sha256")})
     lines = [
         "# Held-out QLoRA quality probe",
         "",
         "This report compares a pinned local NF4 base checkpoint with its adapter on the same deterministic, held-out Python tasks. Each generated function is parsed and run only after an AST allowlist rejects imports, unsafe calls, attributes, and other non-expression code; positional calls to `abs`, `max`, and `min` are permitted. Results measure this narrow task set, not general coding ability or adapter quality across domains.",
         "",
         f"Raw input: `{args.input.name}`. Measurements: {len(rows)}. Tasks: {len(task_ids)}.",
+        f"Model: `{sample['model']}` at revision `{sample['model_revision']}`; quantization: {sample['quantization']}; runtime: {sample['runtime']} (PyTorch {sample['torch_version']}, Transformers {sample['transformers_version']}, PEFT {sample['peft_version']}, bitsandbytes {sample['bitsandbytes_version']}).",
+        f"GPU: {sample['gpu']}; storage: `{sample['storage_profile']}`; source commit: `{sample['git_sha']}` (dirty: {sample['source_tree_dirty']}); context limit: {sample['context_window_tokens']} tokens; greedy decoding, max {sample['max_new_tokens']} generated tokens.",
+        f"Dataset SHA-256: `{sample['dataset_sha256']}`; adapter SHA-256: `{adapter_hashes[0] if len(adapter_hashes) == 1 else 'inconsistent'}`.",
         "",
         "| Phase | Task | Runs | Passes | Pass rate | Cases passed | Median generation (s) |",
         "|---|---|---:|---:|---:|---:|---:|",
