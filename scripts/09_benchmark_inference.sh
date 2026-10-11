@@ -5,6 +5,7 @@ MODEL="${MODEL_PATH:-${MODEL_DIR:-/mnt/e/local-llm-models}/granite-4.1-3b-Q4_K_M
 MODEL_REVISION="${MODEL_REVISION:-}"
 STORAGE_PROFILE="${STORAGE_PROFILE:-unknown}"
 SERVER="${LLAMA_SERVER:-$ROOT/tools/llama.cpp/build/bin/llama-server}"
+RUNTIME_STORAGE_PROFILE="${RUNTIME_STORAGE_PROFILE:-unknown}"
 RUNTIME_SOURCE="${LLAMA_CPP_SOURCE:-$ROOT/tools/llama.cpp}"
 PORT="${PORT:-18180}"
 OUTPUT="${OUTPUT:-$ROOT/results/raw/tier0.jsonl}"
@@ -27,7 +28,8 @@ INPUT_TOKENS="${INPUT_TOKENS:-0}"
 if [[ "${1:-}" == "--help" ]]; then
   cat <<'EOF'
 Run one local llama.cpp inference series (one warm-up, then repeated prompts).
-Environment: MODEL_PATH, MODEL_REVISION, STORAGE_PROFILE, PORT, OUTPUT, RESOURCE_OUTPUT, EXPERIMENT, CTX_SIZE,
+Environment: MODEL_PATH, MODEL_REVISION, STORAGE_PROFILE, LLAMA_SERVER, RUNTIME_STORAGE_PROFILE,
+PORT, OUTPUT, RESOURCE_OUTPUT, EXPERIMENT, CTX_SIZE,
 GPU_LAYERS, BATCH_SIZE, UBATCH_SIZE, FLASH_ATTN=on|off, KV_TYPE_K/V,
 REASONING=auto|on|off, CACHE_PROMPT=on|off, INPUT_TOKENS, MAX_NEW_TOKENS, REPETITIONS, WARMUPS,
 LLAMA_SERVER.
@@ -36,7 +38,7 @@ EOF
   exit 0
 fi
 if [[ "${1:-}" == "--dry-run" ]]; then
-  printf 'model=%s\nmodel_revision=%s\nstorage_profile=%s\nserver=%s\nport=%s\ncontext=%s\ngpu_layers=%s\nflash_attention=%s\nkv_k=%s\nkv_v=%s\noutput=%s\n' "$MODEL" "$MODEL_REVISION" "$STORAGE_PROFILE" "$SERVER" "$PORT" "$CTX_SIZE" "$GPU_LAYERS" "$FLASH_ATTN" "$KV_TYPE_K" "$KV_TYPE_V" "$OUTPUT"
+  printf 'model=%s\nmodel_revision=%s\nstorage_profile=%s\nserver=%s\nruntime_storage_profile=%s\nport=%s\ncontext=%s\ngpu_layers=%s\nflash_attention=%s\nkv_k=%s\nkv_v=%s\noutput=%s\n' "$MODEL" "$MODEL_REVISION" "$STORAGE_PROFILE" "$SERVER" "$RUNTIME_STORAGE_PROFILE" "$PORT" "$CTX_SIZE" "$GPU_LAYERS" "$FLASH_ATTN" "$KV_TYPE_K" "$KV_TYPE_V" "$OUTPUT"
   exit 0
 fi
 if [[ ! -x "$SERVER" ]]; then echo "llama-server missing: $SERVER" >&2; exit 1; fi
@@ -70,4 +72,4 @@ done
 if ((READY == 0)); then tail -100 "$LOG" >&2; exit 1; fi
 SERVER_READY_NS="$(date +%s%N)"
 SERVER_STARTUP_MS="$(((SERVER_READY_NS - SERVER_START_NS) / 1000000))"
-LAB_GIT_SHA="$SHA" LAB_SOURCE_DIRTY="$SOURCE_DIRTY" LAB_RUNTIME_COMMIT="$RUNTIME_COMMIT" LAB_MODEL_PATH="$MODEL" LAB_MODEL_REVISION="$MODEL_REVISION" LAB_STORAGE_PROFILE="$STORAGE_PROFILE" LAB_SERVER_STARTUP_MS="$SERVER_STARTUP_MS" LAB_EXPERIMENT="$EXPERIMENT" LAB_CTX_SIZE="$CTX_SIZE" LAB_KV_TYPE_K="$KV_TYPE_K" LAB_KV_TYPE_V="$KV_TYPE_V" LAB_GPU_LAYERS="$GPU_LAYERS" LAB_BATCH_SIZE="$BATCH_SIZE" LAB_UBATCH_SIZE="$UBATCH_SIZE" LAB_FLASH_ATTN="$FLASH_ATTN" LAB_REASONING="$REASONING" LAB_CACHE_PROMPT="$CACHE_PROMPT" python3 "$ROOT/benchmark/llama_cpp_bench.py" --url "http://127.0.0.1:$PORT" --model "$MODEL_ID" --repetitions "$REPETITIONS" --warmups "$WARMUPS" --max-tokens "$MAX_NEW_TOKENS" --input-tokens "$INPUT_TOKENS" --output "$OUTPUT" --experiment "$EXPERIMENT"
+LAB_GIT_SHA="$SHA" LAB_SOURCE_DIRTY="$SOURCE_DIRTY" LAB_RUNTIME_COMMIT="$RUNTIME_COMMIT" LAB_MODEL_PATH="$MODEL" LAB_MODEL_REVISION="$MODEL_REVISION" LAB_STORAGE_PROFILE="$STORAGE_PROFILE" LAB_SERVER_STARTUP_MS="$SERVER_STARTUP_MS" LAB_RUNTIME_PATH="$SERVER" LAB_RUNTIME_STORAGE_PROFILE="$RUNTIME_STORAGE_PROFILE" LAB_EXPERIMENT="$EXPERIMENT" LAB_CTX_SIZE="$CTX_SIZE" LAB_KV_TYPE_K="$KV_TYPE_K" LAB_KV_TYPE_V="$KV_TYPE_V" LAB_GPU_LAYERS="$GPU_LAYERS" LAB_BATCH_SIZE="$BATCH_SIZE" LAB_UBATCH_SIZE="$UBATCH_SIZE" LAB_FLASH_ATTN="$FLASH_ATTN" LAB_REASONING="$REASONING" LAB_CACHE_PROMPT="$CACHE_PROMPT" python3 "$ROOT/benchmark/llama_cpp_bench.py" --url "http://127.0.0.1:$PORT" --model "$MODEL_ID" --repetitions "$REPETITIONS" --warmups "$WARMUPS" --max-tokens "$MAX_NEW_TOKENS" --input-tokens "$INPUT_TOKENS" --output "$OUTPUT" --experiment "$EXPERIMENT"
