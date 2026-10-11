@@ -9,7 +9,7 @@ Immich restart policies before suspension:
 /immich_redis always
 
 Disabled for the test window: docker.service, docker.socket, containerd.service, glances.service, cron.service, wsl-pro.service, unattended-upgrades.service.
-snapd.service and snapd.socket were active after a later WSL reactivation and were disabled before continuing.
+snapd.service and snapd.socket reactivated despite being disabled. They were stopped and temporarily masked on 2026-10-11 to prevent socket activation during the test window; both were verified inactive and masked afterward. Unmask them when restoring the WSL environment, leaving them disabled unless their prior startup policy is intentionally restored.
 apt-daily.timer and apt-daily-upgrade.timer were enabled and will be paused during the test window.
 
 To restore afterward, re-enable/start the units that were enabled before the test window and restore the four Immich restart policies to `always` before starting those containers.
