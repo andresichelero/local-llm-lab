@@ -28,3 +28,14 @@ The earlier SSD-backed PEFT QLoRA baseline on this same tiny 0.49B task had medi
 Unsloth reported that `lora_dropout=0.05` disabled its fused LoRA kernels for these layers; training still completed. The package also warned that optional `torchcodec` native audio support was unavailable; this text-only benchmark is unaffected. The base model already solved the add probe before training, so this experiment validates installation, CUDA training, adapter serialization, and memory use, not learning quality or a general maximum trainable model size. A larger task/model and quality evaluation remain pending.
 
 A first run completed training but failed before emitting a record because the copied runner looked for Git metadata on the SSD storage directory. Provenance lookup was corrected to use the repository checkout, then the full protocol passed. The successful run records point to base commit `b22ff535e393dc1aab6c2291df558eb198adf583` and `source_tree_dirty=true` because these uncommitted benchmark files were being tested; the exact script hash is printed in the corresponding log.
+
+## Follow-up: fused LoRA kernels with zero dropout
+
+To test the runtime warning above, the runner was extended with `--lora-dropout` and `UNSLOTH_LORA_DROPOUT`; the wrapper also accepts `UNSLOTH_RUN_PREFIX` so named variants keep distinct logs and resource files. A separate one-warm-up/three-measurement series used dropout `0.0` with every other setting unchanged. All four runs passed 8/8 steps and the deterministic AST probe. The logs confirm 24 QKV and 24 O layers were patched with fused LoRA kernels at dropout 0; no MLP layers were patched because of the model/bias path.
+
+| Variant | Median training (s) | Median total (s) | Median Torch allocated peak (MiB) | Peak sampled system VRAM (MiB) | Runs passed |
+|---|---:|---:|---:|---:|---:|
+| Unsloth dropout 0.05 | 2.334 | 17.262 | 507.0 | 1,483 | 3/3 |
+| Unsloth dropout 0.00 | 2.257 | 17.489 | 508.8 | 1,485 | 3/3 |
+
+Zero dropout was about 3% faster for the eight-step training segment but did not reduce total wall time or VRAM. These tiny short-run differences are weak evidence and changing dropout changes regularization; retain 0.05 when that setting is desired, and do not present this as a quality-equivalent speedup. The PEFT QLoRA training median remains 2.214 s, so this result does not make Unsloth the speed winner. Detailed rows, traces, and logs are `results/csv/unsloth-dropout0-summary.csv`, `results/raw/unsloth-dropout0-smoke.jsonl`, `results/raw/unsloth-dropout0-rep-*-resources.jsonl`, and `logs/unsloth-dropout0-*.log`. The four dropout-zero adapter outputs were copied to `E:\\local-llm-results\\unsloth-dropout0-20261011` and SHA-256 verified; their SSD working copies remain available.

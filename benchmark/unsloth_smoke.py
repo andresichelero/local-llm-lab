@@ -109,11 +109,12 @@ def main() -> int:
     parser.add_argument("--steps", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-seq-length", type=int, default=192)
+    parser.add_argument("--lora-dropout", type=float, default=0.05)
     parser.add_argument("--warmup", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    if args.steps < 1 or args.max_seq_length < 16:
-        parser.error("--steps must be positive and --max-seq-length must be at least 16")
+    if args.steps < 1 or args.max_seq_length < 16 or not 0 <= args.lora_dropout < 1:
+        parser.error("--steps must be positive, --max-seq-length at least 16, and --lora-dropout in [0, 1)")
     run_label = "warmup" if args.warmup else "measured"
     adapter_path = args.output_root / f"qwen25-coder-05b-unsloth-qlora-r8-{run_label}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-seed{args.seed}"
     preflight = {
@@ -125,6 +126,7 @@ def main() -> int:
         "seed": args.seed,
         "max_seq_length": args.max_seq_length,
         "lora_rank": 8,
+        "lora_dropout": args.lora_dropout,
         "quantization": "bitsandbytes NF4 with double quantization",
         "optimizer": "torch.optim.AdamW (32-bit states)",
         "warmup": args.warmup,
@@ -176,7 +178,7 @@ def main() -> int:
         r=8,
         target_modules=TARGET_MODULES,
         lora_alpha=16,
-        lora_dropout=0.05,
+        lora_dropout=args.lora_dropout,
         bias="none",
         use_gradient_checkpointing="unsloth",
         random_state=args.seed,
@@ -273,6 +275,7 @@ def main() -> int:
         "learning_rate": 2e-4,
         "lora_rank": 8,
         "lora_alpha": 16,
+        "lora_dropout": args.lora_dropout,
         "lora_target_modules": TARGET_MODULES,
         "trainable_parameters": trainable_parameters,
         "total_parameters": total_parameters,

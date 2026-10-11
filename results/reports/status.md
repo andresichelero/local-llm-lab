@@ -7,6 +7,8 @@
 - All measured model/data/environment/cache/output I/O used C:-backed WSL ext4. E: supplied the model archive only; D: is the repository checkout and received completed records after the runs. No HDD-backed benchmark ran in this checkpoint. Historical disk measurements elsewhere remain historical records only.
 - `lora_dropout=0.05` caused Unsloth to skip fused LoRA kernels; optional torchcodec audio support emitted a native-library warning, irrelevant to this text-only run. The first attempted run trained but hit a provenance-path error before logging; the script was fixed and the full protocol then passed.
 - Details: `results/reports/unsloth-qlora-smoke.md`; raw JSONL and one-second traces in `results/raw/unsloth-*`; adapter outputs remain outside Git under `/home/foxtrot/local-llm-benchmark/results/unsloth`. Five successful adapters were also copied to `E:\\local-llm-results\\unsloth-20261011` and hash-verified.
+- A second isolated series set LoRA dropout to 0 to enable fused QKV/O kernels: 3/3 measurements passed, with 2.257 s median training versus 2.334 s at dropout 0.05, while total wall time was slightly higher and peak allocated VRAM unchanged. This is a small 8-step implementation/performance probe with different regularization, not a quality-equivalent comparison. See `results/csv/unsloth-dropout0-summary.csv` and the appended analysis in the Unsloth report.
+- The four dropout-zero adapter outputs were copied to `E:\\local-llm-results\\unsloth-dropout0-20261011` and matched their recorded SHA-256 values; the active copies remain on SSD.
 
 ## Codex OSS local endpoint probe — 2026-10-11
 

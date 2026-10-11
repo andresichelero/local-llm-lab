@@ -44,5 +44,5 @@ runtimes:
     bitsandbytes: 0.50.2
     xformers: 0.0.34
     storage_root: ${BENCH_STORAGE_ROOT}/envs/unsloth
-    rationale: Isolated C:-SSD WSL env passed one warm-up and three RTX 3070 QLoRA training smokes. Lower allocated VRAM than PEFT baseline, but this short run was not faster; lora_dropout=0.05 disables fused LoRA kernels.
+    rationale: Isolated C:-SSD WSL env passed two one-warm-up/three-run RTX 3070 QLoRA smokes. About 43% less Torch-allocated VRAM than PEFT, but neither dropout configuration beat PEFT training time in this tiny run. Dropout 0.05 disables fused LoRA kernels; dropout 0 enables fused QKV/O kernels but yielded only a small within-Unsloth speed difference.
 
