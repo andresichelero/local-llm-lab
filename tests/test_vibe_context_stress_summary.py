@@ -42,8 +42,12 @@ def test_grades_a_compacted_two_phase_continuation(tmp_path: Path):
         events.append({
             "type": "action_intent", "record_sha256": f"tool-{i}",
             "payload": {"kind": "tool", "action_id": f"action-{i}", "request": {
-                "call": {"name": "file_system.read", "arguments": {"path": f"archive-{i:02d}.md"}},
+                "call": {"name": "file_system.read_file", "arguments": {"path": f"archive-{i:02d}.md"}},
             }},
+        })
+        events.append({
+            "type": "action_result", "record_sha256": f"result-{i}",
+            "payload": {"action_id": f"action-{i}", "result": {"type": "tool_succeeded"}},
         })
     journal = run / "output-phase-1/session/journal/0000000000000001.jsonl"
     journal.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
@@ -57,6 +61,29 @@ def test_grades_a_compacted_two_phase_continuation(tmp_path: Path):
     assert record["phase2_archive_files_read_count"] == 0
     assert record["wall_s"] == 3.0
     assert record["vram_used_mb_peak"] == 6000.0
+
+    events = [
+        event for event in events
+        if event.get("payload", {}).get("action_id") != "action-32"
+    ]
+    events.extend([
+        {
+            "type": "action_intent", "record_sha256": "failed-bulk-read-intent",
+            "payload": {"kind": "tool", "action_id": "failed-bulk-read", "request": {
+                "call": {"name": "run_typescript", "arguments": {
+                    "command": "cat " + " ".join(f"archive-{i:02d}.md" for i in range(1, 33)),
+                }},
+            }},
+        },
+        {
+            "type": "action_result", "record_sha256": "failed-bulk-read-result",
+            "payload": {"action_id": "failed-bulk-read", "result": {"type": "tool_failed"}},
+        },
+    ])
+    journal.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+    failed_read = summarize_run(run, "abc123")
+    assert failed_read["quality_pass"] is False
+    assert failed_read["archive_files_read_count"] == 31
 
     continuation_journal = run / "output-phase-2/session/journal/0000000000000001.jsonl"
     continuation_journal.write_text(json.dumps({

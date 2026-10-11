@@ -50,10 +50,12 @@ def _unique_events(run_dir: Path) -> list[dict[str, Any]]:
     return events
 
 
-def _phase_archive_reads(run_dir: Path, phase: str) -> set[int]:
+def _phase_archive_reads(run_dir: Path, phase: str, *, successful_only: bool = False) -> set[int]:
     found: set[int] = set()
     phase_dir = run_dir / f"output-{phase}"
     seen: set[str] = set()
+    intents: dict[str, tuple[str | None, set[int]]] = {}
+    results: dict[str, str | None] = {}
     for path in phase_dir.rglob("journal/*.jsonl"):
         for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
             try:
@@ -69,8 +71,24 @@ def _phase_archive_reads(run_dir: Path, phase: str) -> set[int]:
             payload = event.get("payload", {})
             request = payload.get("request", {})
             if event.get("type") == "action_intent" and payload.get("kind") == "tool":
-                arguments = json.dumps(request.get("call", {}).get("arguments", {}), ensure_ascii=False)
-                found.update(int(n) for n in re.findall(r"archive-(\d{2})\.md", arguments))
+                call = request.get("call", {})
+                arguments = call.get("arguments", {})
+                archive_ids = {
+                    int(n) for n in re.findall(r"archive-(\d{2})\.md", json.dumps(arguments, ensure_ascii=False))
+                }
+                action_id = payload.get("action_id")
+                if successful_only:
+                    if action_id:
+                        intents[str(action_id)] = (call.get("name"), archive_ids)
+                else:
+                    found.update(archive_ids)
+            elif event.get("type") == "action_result" and payload.get("action_id"):
+                result = payload.get("result", {})
+                results[str(payload["action_id"])] = result.get("type") if isinstance(result, dict) else None
+    if successful_only:
+        for action_id, (name, archive_ids) in intents.items():
+            if name in {"file_system.read", "file_system.read_file"} and results.get(action_id) == "tool_succeeded":
+                found.update(archive_ids)
     return found
 
 
@@ -123,10 +141,10 @@ def summarize_run(run_dir: Path, git_sha: str) -> dict[str, Any]:
     phase1 = _json(run_dir / "output-phase-1/export.json")
     phase2 = _json(run_dir / "output-phase-2/export.json")
     events = _unique_events(run_dir)
+    archive_ids = _phase_archive_reads(run_dir, "phase-1", successful_only=True)
     phase2_archive_ids = _phase_archive_reads(run_dir, "phase-2")
     compaction_ids: set[str] = set()
     tool_ids: set[str] = set()
-    archive_ids: set[int] = set()
     for event in events:
         payload = event.get("payload", {})
         request = payload.get("request", {})
@@ -137,8 +155,6 @@ def summarize_run(run_dir: Path, git_sha: str) -> dict[str, Any]:
             action_id = payload.get("action_id")
             if action_id:
                 tool_ids.add(str(action_id))
-            arguments = json.dumps(call.get("arguments", {}), ensure_ascii=False)
-            archive_ids.update(int(n) for n in re.findall(r"archive-(\d{2})\.md", arguments))
 
     workspace = run_dir / "workspace"
     manifest_path = workspace / "archive_manifest.txt"
@@ -272,7 +288,7 @@ def write_outputs(records: list[dict[str, Any]], raw_path: Path, csv_path: Path,
         "",
         "A full pass requires both phases to exit cleanly, at least one automatic compaction, tool-call evidence for all 32 archive files, an exact fingerprint manifest, the recovery key preserved and recovered, passing workspace tests, and only expected output files changed.",
         "",
-        "| Started (UTC) | Wall (s) | Tokens in/out | Compactions | Tools | Files read | Reopened | Manifest | Continuity | Tests | Mode flips | Result |",
+        "| Started (UTC) | Wall (s) | Tokens in/out | Compactions | Tools | Successful reads | Reopened | Manifest | Continuity | Tests | Mode flips | Result |",
         "|---|---:|---:|---:|---:|---:|---:|---|---|---|---:|---|",
     ]
     for row in records:
@@ -286,11 +302,12 @@ def write_outputs(records: list[dict[str, Any]], raw_path: Path, csv_path: Path,
             f"| {'PASS' if row.get('quality_pass') else 'FAIL'} |"
         )
     passed = sum(bool(row.get("quality_pass")) for row in records)
+    successful_reads = ", ".join(f"{row.get('archive_files_read_count')}/32" for row in records)
     lines.extend([
         "",
         f"Strict full-task passes: {passed}/{len(records)}.",
         "",
-        "All three sessions referenced 32 archives and recorded automatic compactions. The second and third runs produced the exact manifest and key, and the independent workspace tests passed. The second run nevertheless reopened archive-01 and archive-07 during its continuation; the final run made no archive references after continuation. Git marked all 34 tracked fixture files as executable-bit changes (100644 to 100755) in every run; the final diff showed no content changes to those files, but the mode changes are outside the allowed output scope. Therefore none is a strict full-task pass. The first attempt also hit its artificial token cap and could not resume without an explicit session ID; the second resumed successfully but its first phase still hit the cap. The final run had no token cap and both phases exited cleanly, yet still failed the file-scope gate.",
+        f"Correlating archive paths with successful file-read tool results gives {successful_reads} successful reads in run order. The earlier first-run 32/32 was a false positive from a failed tool intent that mentioned all archive names; these checked-in records were recomputed from the archived journals. The second and third runs produced the exact manifest and key, and the independent workspace tests passed. The second run nevertheless reopened archive-01 and archive-07 during its continuation; the final run made no archive references after continuation. Git marked all 34 tracked fixture files as executable-bit changes (100644 to 100755) in every run; the final diff showed no content changes to those files, but the mode changes are outside the allowed output scope. Therefore none is a strict full-task pass. The first attempt also hit its artificial token cap and could not resume without an explicit session ID; the second resumed successfully but its first phase still hit the cap. The final run had no token cap and both phases exited cleanly, yet still failed the file-scope gate.",
         "",
         "Usage totals are the harness-reported sum across model calls, not the peak context size. Vibe's journal records compaction IDs and requests, but this run does not expose a reliable token count for the history removed; no token compression ratio is claimed. Resource samples are one-second observations and the RTX 3070 is shared with the Windows desktop.",
         "",

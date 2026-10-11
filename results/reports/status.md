@@ -3,6 +3,7 @@
 ## SSD-only launcher guard
 
 - The standard llama.cpp inference and JSON/tool quality launchers now default to the C:-hosted WSL ext4 runtime bundle and fail before inference if the model, executable, llama.cpp libraries, benchmark root, or output directories are not ext4-backed.
+- The Vibe compaction runner stages its tracked config and resource sampler into each SSD-side run directory, so it can be launched from the D: source checkout without placing active benchmark files there. Its Vibe process gets an isolated HOME/XDG profile, no inherited ambient credentials, and telemetry/update checks disabled. HDDs are archive-only.
 - Verified both launchers pass dry-run with the SSD Qwen3.5-9B model/runtime and that a model path on `/mnt/e` is rejected. The dedicated repeated-quality runner independently enforces the same SSD constraint.
 
 ## Qwen3.5-9B structured output and tool-call repeatability — 2026-10-11

@@ -11,6 +11,7 @@ RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
 RUN_DIR="$BENCH_ROOT/results/vibe-context-stress/$RUN_ID"
 WORKSPACE="$RUN_DIR/workspace"
 HOME_DIR="$RUN_DIR/home"
+STAGE_DIR="$RUN_DIR/lab-source"
 LOG_DIR="$BENCH_ROOT/logs"
 SERVER_LOG="$LOG_DIR/vibe-context-stress-server-$RUN_ID.log"
 
@@ -18,7 +19,8 @@ usage() {
   cat <<'EOF'
 Usage: scripts/28_benchmark_vibe_context_stress.sh [--help] [--dry-run]
 Run two local Vibe prompts against a 32-file synthetic workspace and test continuation after compaction.
-All active model, workspace, logs, session state, and outputs must be on WSL ext4.
+The source checkout may be on any filesystem; active model, runtime, workspace, staged harness inputs,
+logs, session state, and outputs must be on the C:-backed WSL ext4 SSD. HDDs are archive-only.
 Environment: BENCHMARK_ROOT, MODEL_PATH, LLAMA_SERVER, VIBE_BIN, PORT.
 EOF
 }
@@ -32,8 +34,11 @@ case "${1:-}" in
   *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
 esac
 
-for path in "$ROOT" "$BENCH_ROOT" "$MODEL" "$SERVER" "$VIBE" "$LOG_DIR"; do
+for path in "$ROOT/benchmark/configs/harnesses/vibe.config.toml" "$ROOT/benchmark/resource_sampler.py" \
+  "$BENCH_ROOT" "$MODEL" "$SERVER" "$VIBE" "$LOG_DIR"; do
   [[ -e "$path" ]] || { echo "Required path does not exist: $path" >&2; exit 1; }
+done
+for path in "$BENCH_ROOT" "$MODEL" "$SERVER" "$VIBE" "$LOG_DIR"; do
   filesystem="$(findmnt -n -o FSTYPE -T "$path")"
   [[ "$filesystem" == ext4 ]] || { echo "SSD-only preflight: $path is on $filesystem, expected WSL ext4" >&2; exit 1; }
 done
@@ -42,7 +47,9 @@ if curl --silent --fail "http://127.0.0.1:$PORT/health" >/dev/null; then
   exit 1
 fi
 
-mkdir -p "$WORKSPACE" "$HOME_DIR" "$RUN_DIR/output-phase-1" "$RUN_DIR/output-phase-2" "$LOG_DIR"
+mkdir -p "$WORKSPACE" "$HOME_DIR" "$RUN_DIR/output-phase-1" "$RUN_DIR/output-phase-2" "$LOG_DIR" "$STAGE_DIR/benchmark/configs/harnesses"
+cp "$ROOT/benchmark/resource_sampler.py" "$STAGE_DIR/benchmark/resource_sampler.py"
+cp "$ROOT/benchmark/configs/harnesses/vibe.config.toml" "$STAGE_DIR/benchmark/configs/harnesses/vibe.config.toml"
 python3 - "$WORKSPACE" <<'PY'
 import hashlib
 import sys
@@ -89,17 +96,18 @@ cat >"$RUN_DIR/phase-2.md" <<'EOF'
 This is a new continuation task after archive inspection and automatic context compaction. Using only the key preserved in summary.md or the continued task state, write exactly that key to recovery.txt. Do not reopen any archive file. Run python3 test_result.py and report the recovered key and whether compaction occurred.
 EOF
 
-cp "$ROOT/benchmark/configs/harnesses/vibe.config.toml" "$HOME_DIR/config.toml"
+cp "$STAGE_DIR/benchmark/configs/harnesses/vibe.config.toml" "$HOME_DIR/config.toml"
 python3 - "$HOME_DIR/config.toml" "$PORT" <<'PY'
 import sys
 from pathlib import Path
 p = Path(sys.argv[1])
 s = p.read_text(encoding="utf-8")
 s = s.replace('api_base = "http://127.0.0.1:8080/v1"', f'api_base = "http://127.0.0.1:{sys.argv[2]}/v1"')
-p.write_text(s, encoding="utf-8")
+p.write_text('enable_telemetry = false\nenable_update_checks = false\n\n' + s, encoding="utf-8")
 PY
 
-LD_LIBRARY_PATH="$BENCH_ROOT/tools/llama-bin${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+env -i PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/wsl/lib" \
+  LD_LIBRARY_PATH="$BENCH_ROOT/tools/llama-bin" \
   "$SERVER" --model "$MODEL" --host 127.0.0.1 --port "$PORT" --ctx-size 16384 \
   --n-gpu-layers 99 --batch-size 256 --ubatch-size 128 --flash-attn on \
   --cache-type-k q4_0 --cache-type-v q4_0 --reasoning off >"$SERVER_LOG" 2>&1 &
@@ -118,22 +126,30 @@ for _ in $(seq 1 180); do
 done
 (( ready == 1 )) || { echo "llama-server failed readiness check" >&2; tail -100 "$SERVER_LOG" >&2; exit 1; }
 
-export HOME="$HOME_DIR" VIBE_HOME="$HOME_DIR" XDG_CONFIG_HOME="$HOME_DIR/.config"
-export XDG_DATA_HOME="$HOME_DIR/.local/share" XDG_CACHE_HOME="$HOME_DIR/.cache"
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/wsl/lib"
-python3 "$ROOT/benchmark/resource_sampler.py" --output "$RUN_DIR/resources.jsonl" --interval 1 >/dev/null 2>&1 &
+env -i PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/wsl/lib" \
+  HOME="$HOME_DIR" PYTHONNOUSERSITE=1 \
+  python3 "$STAGE_DIR/benchmark/resource_sampler.py" --output "$RUN_DIR/resources.jsonl" --interval 1 >/dev/null 2>&1 &
 SAMPLER_PID=$!
 set +e
-"$VIBE" --prompt-file "$RUN_DIR/phase-1.md" --workdir "$WORKSPACE" --trust --auto-approve --max-turns 40 --time-limit 240 --output json --output-dir "$RUN_DIR/output-phase-1" >"$RUN_DIR/stdout-phase-1.json" 2>"$RUN_DIR/stderr-phase-1.log"
+env -i PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/wsl/lib" \
+  HOME="$HOME_DIR" VIBE_HOME="$HOME_DIR" XDG_CONFIG_HOME="$HOME_DIR/.config" \
+  XDG_DATA_HOME="$HOME_DIR/.local/share" XDG_CACHE_HOME="$HOME_DIR/.cache" PYTHONNOUSERSITE=1 \
+  "$VIBE" --prompt-file "$RUN_DIR/phase-1.md" --workdir "$WORKSPACE" --trust --auto-approve --max-turns 40 --time-limit 240 --output json --output-dir "$RUN_DIR/output-phase-1" >"$RUN_DIR/stdout-phase-1.json" 2>"$RUN_DIR/stderr-phase-1.log"
 phase1_status=$?
 SESSION_ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("session_id", ""))' "$RUN_DIR/output-phase-1/export.json")"
 if [[ -z "$SESSION_ID" ]]; then
   echo "Vibe did not export a session ID; cannot run the continuation phase." >&2
   phase2_status=4
 else
-  "$VIBE" --resume "$SESSION_ID" --prompt-file "$RUN_DIR/phase-2.md" --workdir "$WORKSPACE" --trust --auto-approve --max-turns 20 --time-limit 240 --output json --output-dir "$RUN_DIR/output-phase-2" >"$RUN_DIR/stdout-phase-2.json" 2>"$RUN_DIR/stderr-phase-2.log"
+  env -i PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/wsl/lib" \
+    HOME="$HOME_DIR" VIBE_HOME="$HOME_DIR" XDG_CONFIG_HOME="$HOME_DIR/.config" \
+    XDG_DATA_HOME="$HOME_DIR/.local/share" XDG_CACHE_HOME="$HOME_DIR/.cache" PYTHONNOUSERSITE=1 \
+    "$VIBE" --resume "$SESSION_ID" --prompt-file "$RUN_DIR/phase-2.md" --workdir "$WORKSPACE" --trust --auto-approve --max-turns 20 --time-limit 240 --output json --output-dir "$RUN_DIR/output-phase-2" >"$RUN_DIR/stdout-phase-2.json" 2>"$RUN_DIR/stderr-phase-2.log"
   phase2_status=$?
 fi
 set -e
 printf 'run_dir=%s\nserver_log=%s\nphase1_exit=%s\nphase2_exit=%s\n' "$RUN_DIR" "$SERVER_LOG" "$phase1_status" "$phase2_status"
-exit 0
+if (( phase1_status != 0 || phase2_status != 0 )); then
+  echo "A Vibe phase failed; artifacts were preserved under $RUN_DIR" >&2
+  exit 1
+fi
