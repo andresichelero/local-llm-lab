@@ -7,6 +7,7 @@ PYTHON="${TRAINING_PYTHON_BIN:-$TRAINING_ENV_DIR/bin/python}"
 MODEL_DIR="${TRAINING_MODEL_DIR:-${MODEL_DIR:-$BENCH_STORAGE_ROOT/models}/Qwen2.5-Coder-0.5B-Instruct}"
 MODEL_ID="${TRAINING_MODEL_ID:-Qwen/Qwen2.5-Coder-0.5B-Instruct}"
 MODEL_PARAMETERS="${TRAINING_MODEL_PARAMETERS:-0.49B}"
+DATASET="${QLORA_DATASET:-$ROOT/benchmark/data/qlora-smoke.jsonl}"
 OUTPUT_ROOT="${QLORA_OUTPUT_ROOT:-$BENCH_STORAGE_ROOT/results/qlora}"
 RESULT_JSONL="${QLORA_RESULT_JSONL:-$BENCH_STORAGE_ROOT/results/raw/qlora-smoke.jsonl}"
 RESOURCE_JSONL="${QLORA_RESOURCE_JSONL:-$BENCH_STORAGE_ROOT/results/raw/qlora-smoke-resources.jsonl}"
@@ -32,7 +33,7 @@ done
 for path in "$OUTPUT_ROOT" "$RESULT_JSONL" "$RESOURCE_JSONL" "$LOG_PATH"; do
   require_wsl_ext4_destination "$path" "QLoRA benchmark output path"
 done
-ARGS=(--model-dir "$MODEL_DIR" --model-id "$MODEL_ID" --model-parameters "$MODEL_PARAMETERS" --method "$METHOD" --output-root "$OUTPUT_ROOT" --result-jsonl "$RESULT_JSONL" --steps "$STEPS" --max-seq-length "$MAX_SEQ_LENGTH")
+ARGS=(--model-dir "$MODEL_DIR" --model-id "$MODEL_ID" --model-parameters "$MODEL_PARAMETERS" --dataset "$DATASET" --method "$METHOD" --output-root "$OUTPUT_ROOT" --result-jsonl "$RESULT_JSONL" --steps "$STEPS" --max-seq-length "$MAX_SEQ_LENGTH")
 if ((DRY_RUN)); then
   "$PYTHON" "$ROOT/benchmark/qlora_smoke.py" "${ARGS[@]}" --dry-run
   exit 0
