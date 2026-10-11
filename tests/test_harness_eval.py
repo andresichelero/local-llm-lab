@@ -13,6 +13,7 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "benchmark" / "fixtures" / "harness_task"
+WHITESPACE_FIXTURE = ROOT / "benchmark" / "fixtures" / "harness_whitespace"
 
 
 class HarnessEvaluationTests(unittest.TestCase):
@@ -76,6 +77,61 @@ class HarnessEvaluationTests(unittest.TestCase):
         result = grade_workspace(workspace, FIXTURE)
 
         self.assertFalse(result["changes_scoped"])
+        self.assertFalse(result["success"])
+
+    def implement_normalize_whitespace(self, workspace: Path, canonical_names: bool = True) -> None:
+        (workspace / "src" / "text_utils.py").write_text(
+            "def word_count(text: str) -> int:\n"
+            "    return len(text.split())\n\n\n"
+            "def normalize_whitespace(text: str) -> str:\n"
+            "    return ' '.join(text.split())\n",
+            encoding="utf-8",
+        )
+        positive_name = "test_collapses_mixed_whitespace" if canonical_names else "test_collapses_spaces"
+        negative_name = "test_preserves_unicode_text" if canonical_names else "test_unicode"
+        (workspace / "tests" / "test_text_utils.py").write_text(
+            "import unittest\n\n"
+            "from src.text_utils import normalize_whitespace, word_count\n\n\n"
+            "class TextUtilsTests(unittest.TestCase):\n"
+            "    def test_word_count(self):\n"
+            "        self.assertEqual(word_count('two\\twords'), 2)\n\n"
+            "    def test_empty_input(self):\n"
+            "        self.assertEqual(normalize_whitespace('  \\t\\n'), '')\n\n"
+            f"    def {positive_name}(self):\n"
+            "        self.assertEqual(normalize_whitespace('  alpha\\tbeta\\n gamma  '), 'alpha beta gamma')\n\n"
+            f"    def {negative_name}(self):\n"
+            "        self.assertEqual(normalize_whitespace('\\u00a0café\\u2003x'), 'café x')\n",
+            encoding="utf-8",
+        )
+
+    def test_whitespace_task_checks_behavior_scope_and_preserved_helper(self) -> None:
+        self.assertTrue(callable(grade_workspace), "grade_workspace is not implemented")
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp) / "workspace"
+            shutil.copytree(WHITESPACE_FIXTURE, workspace)
+            self.implement_normalize_whitespace(workspace)
+
+            result = grade_workspace(workspace, WHITESPACE_FIXTURE, task="whitespace_normalization")
+
+        self.assertTrue(result["unit_tests_passed"])
+        self.assertTrue(result["behavioral_probe_passed"])
+        self.assertTrue(result["required_tests_present"])
+        self.assertTrue(result["unchanged_helpers"])
+        self.assertTrue(result["changes_scoped"])
+        self.assertTrue(result["success"])
+
+    def test_whitespace_task_rejects_noncanonical_test_names(self) -> None:
+        self.assertTrue(callable(grade_workspace), "grade_workspace is not implemented")
+        with tempfile.TemporaryDirectory() as temp:
+            workspace = Path(temp) / "workspace"
+            shutil.copytree(WHITESPACE_FIXTURE, workspace)
+            self.implement_normalize_whitespace(workspace, canonical_names=False)
+
+            result = grade_workspace(workspace, WHITESPACE_FIXTURE, task="whitespace_normalization")
+
+        self.assertTrue(result["unit_tests_passed"])
+        self.assertTrue(result["behavioral_probe_passed"])
+        self.assertFalse(result["required_tests_present"])
         self.assertFalse(result["success"])
 
 

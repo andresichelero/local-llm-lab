@@ -26,7 +26,7 @@ METRICS = (
     "temperature_c_peak",
     "power_w_avg",
 )
-GROUP_FIELDS = ("harness", "harness_version", "model", "runtime", "quant", "context_tokens", "kv_cache", "storage_profile")
+GROUP_FIELDS = ("task", "harness", "harness_version", "model", "runtime", "quant", "context_tokens", "kv_cache", "storage_profile")
 
 
 def read_records(path: Path) -> list[dict[str, Any]]:
@@ -99,8 +99,8 @@ def write_outputs(
         "Rows are grouped by harness, model, runtime, quantization, context, KV cache, and storage profile. Token counts come from each harness's own usage records, including cached input where exposed.",
         "Success requires clean harness exit, passing unit tests, passing behavior probe, and scoped edits.",
         "",
-        "| Model | Harness | Version | Runs | Success | Wall s median (mean ± sd) | First prompt tokens median | Prompt tokens median | Tool calls median | RAM peak MB median | VRAM peak MB median |",
-        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Task | Model | Harness | Version | Runs | Success | Wall s median (mean ± sd) | First prompt tokens median | Prompt tokens median | Tool calls median | RAM peak MB median | VRAM peak MB median |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in summaries:
         def fmt(value: Any) -> str:
@@ -109,7 +109,7 @@ def write_outputs(
         wall = f"{fmt(row['wall_s_median'])} ({fmt(row['wall_s_mean'])} ± {fmt(row['wall_s_stddev'])})"
         success = f"{row['success_count']}/{row['measurement_count']} ({row['success_rate']:.0%})"
         lines.append(
-            f"| {fmt(row['model'])} | {fmt(row['harness'])} | {fmt(row['harness_version'])} | {row['measurement_count']} | {success} | {wall} | "
+            f"| {fmt(row['task'])} | {fmt(row['model'])} | {fmt(row['harness'])} | {fmt(row['harness_version'])} | {row['measurement_count']} | {success} | {wall} | "
             f"{fmt(row['first_prompt_tokens_median'])} | {fmt(row['prompt_tokens_median'])} | {fmt(row['tool_calls_median'])} | "
             f"{fmt(row['ram_used_mb_peak_median'])} | {fmt(row['vram_used_mb_peak_median'])} |"
         )

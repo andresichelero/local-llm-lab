@@ -57,6 +57,38 @@ class HarnessSummaryTests(unittest.TestCase):
         self.assertIn("Qwen", markdown)
         self.assertIn("Ornith", markdown)
 
+    def test_separates_task_profiles_in_aggregates_and_report(self) -> None:
+        self.assertTrue(callable(summarize_records), "harness result summarizer is not implemented")
+        self.assertTrue(callable(write_outputs), "harness report writer is not implemented")
+        shared = {
+            "harness": "pi",
+            "harness_version": "1.1.0",
+            "model": "Qwen",
+            "runtime": "llama.cpp",
+            "quant": "Q4_K_M",
+            "context_tokens": 16384,
+            "kv_cache": "Q4_0",
+            "storage_profile": "ssd-wsl-ext4-c",
+            "git_sha": "a" * 40,
+            "success": True,
+        }
+        records = [
+            {**shared, "task": "calculator_division", "wall_s": 10},
+            {**shared, "task": "whitespace_normalization", "wall_s": 20},
+        ]
+
+        summaries = summarize_records(records)
+
+        self.assertEqual(len(summaries), 2)
+        self.assertEqual({row["task"] for row in summaries}, {"calculator_division", "whitespace_normalization"})
+        with tempfile.TemporaryDirectory() as temp:
+            markdown_path = Path(temp) / "summary.md"
+            write_outputs(summaries, Path(temp) / "summary.csv", markdown_path, [Path("runs.jsonl")])
+            markdown = markdown_path.read_text(encoding="utf-8")
+        self.assertIn("| Task | Model | Harness |", markdown)
+        self.assertIn("calculator_division", markdown)
+        self.assertIn("whitespace_normalization", markdown)
+
 
 if __name__ == "__main__":
     unittest.main()

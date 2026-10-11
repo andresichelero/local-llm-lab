@@ -37,8 +37,17 @@ def _functions(source: str, names: set[str]) -> dict[str, str]:
     }
 
 
-def grade_workspace(workspace: Path, baseline: Path) -> dict[str, Any]:
+def grade_workspace(
+    workspace: Path,
+    baseline: Path,
+    task: str = "calculator_division",
+) -> dict[str, Any]:
     """Run tests and behavior probes, then check task scope and preserved helpers."""
+    if task == "whitespace_normalization":
+        return _grade_whitespace_normalization(workspace, baseline)
+    if task != "calculator_division":
+        raise ValueError(f"Unsupported task: {task}")
+
     workspace = workspace.resolve()
     baseline = baseline.resolve()
     test_run = subprocess.run(
@@ -118,9 +127,95 @@ def grade_workspace(workspace: Path, baseline: Path) -> dict[str, Any]:
         "unit_tests_passed": unit_tests_passed,
         "behavioral_probe_passed": behavioral_probe_passed,
         "divide_tests_present": divide_tests_present,
+        "required_tests_present": divide_tests_present,
         "unchanged_helpers": unchanged_helpers,
         "changes_scoped": changes_scoped,
         "changed_files": changed_files,
         "test_output": test_output,
+        "behavioral_probe_stderr": probe_run.stderr,
+    }
+
+
+def _grade_whitespace_normalization(workspace: Path, baseline: Path) -> dict[str, Any]:
+    workspace = workspace.resolve()
+    baseline = baseline.resolve()
+    test_run = subprocess.run(
+        [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        timeout=45,
+    )
+    probe_code = (
+        "from src.text_utils import normalize_whitespace, word_count\n"
+        "assert normalize_whitespace('  alpha\\tbeta\\n gamma  ') == 'alpha beta gamma'\n"
+        "assert normalize_whitespace('\\u00a0café\\u2003x') == 'café x'\n"
+        "assert normalize_whitespace(' \\t\\n') == ''\n"
+        "assert word_count('two\\twords') == 2\n"
+    )
+    probe_env = os.environ.copy()
+    probe_env["PYTHONPATH"] = str(workspace)
+    probe_run = subprocess.run(
+        [sys.executable, "-c", probe_code],
+        cwd=workspace,
+        env=probe_env,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    try:
+        candidate_source = (workspace / "src/text_utils.py").read_text(encoding="utf-8")
+        original_source = (baseline / "src/text_utils.py").read_text(encoding="utf-8")
+        candidate_tests = ast.parse(
+            (workspace / "tests/test_text_utils.py").read_text(encoding="utf-8")
+        )
+        test_names = {
+            node.name
+            for node in ast.walk(candidate_tests)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        unchanged_helpers = _functions(candidate_source, {"word_count"}) == _functions(
+            original_source, {"word_count"}
+        )
+    except (OSError, SyntaxError):
+        test_names = set()
+        unchanged_helpers = False
+
+    original_files = _source_files(baseline)
+    candidate_files = _source_files(workspace)
+    changed_files = sorted(
+        path
+        for path in original_files.keys() | candidate_files.keys()
+        if original_files.get(path) != candidate_files.get(path)
+    )
+    changes_scoped = bool(changed_files) and set(changed_files) <= {
+        "src/text_utils.py",
+        "tests/test_text_utils.py",
+    }
+    required_tests_present = {
+        "test_empty_input",
+        "test_collapses_mixed_whitespace",
+        "test_preserves_unicode_text",
+    } <= test_names
+    unit_tests_passed = test_run.returncode == 0
+    behavioral_probe_passed = probe_run.returncode == 0
+    success = all(
+        (
+            unit_tests_passed,
+            behavioral_probe_passed,
+            required_tests_present,
+            unchanged_helpers,
+            changes_scoped,
+        )
+    )
+    return {
+        "success": success,
+        "unit_tests_passed": unit_tests_passed,
+        "behavioral_probe_passed": behavioral_probe_passed,
+        "required_tests_present": required_tests_present,
+        "unchanged_helpers": unchanged_helpers,
+        "changes_scoped": changes_scoped,
+        "changed_files": changed_files,
+        "test_output": f"{test_run.stdout}{test_run.stderr}",
         "behavioral_probe_stderr": probe_run.stderr,
     }

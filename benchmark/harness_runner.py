@@ -29,6 +29,24 @@ DEFAULT_MODEL_PATH = Path("models/gguf/Qwen3.5-9B-Q4_K_M.gguf")
 DEFAULT_SERVER_URL = "http://127.0.0.1:8080"
 DEFAULT_CONTEXT = 16384
 HARNESS_NAMES = ("pi", "opencode", "vibe")
+TASK_PATHS = {
+    "calculator_division": (
+        Path("benchmark/fixtures/harness_task"),
+        Path("benchmark/configs/harnesses/task_prompt.md"),
+    ),
+    "whitespace_normalization": (
+        Path("benchmark/fixtures/harness_whitespace"),
+        Path("benchmark/fixtures/harness_whitespace/TASK.md"),
+    ),
+}
+
+
+def resolve_task(task: str) -> tuple[Path, Path]:
+    try:
+        fixture_relative, prompt_relative = TASK_PATHS[task]
+    except KeyError as error:
+        raise ValueError(f"Unsupported task: {task}") from error
+    return REPO_ROOT / fixture_relative, REPO_ROOT / prompt_relative
 
 
 def build_command(
@@ -291,6 +309,7 @@ def _prepare_run(
     model: str = DEFAULT_MODEL,
     server_url: str = DEFAULT_SERVER_URL,
     context: int = DEFAULT_CONTEXT,
+    fixture: Path | None = None,
 ) -> Path:
     workspace = run_dir / "workspace"
     home = run_dir / "home"
@@ -299,7 +318,7 @@ def _prepare_run(
     home.mkdir(parents=True)
     output.mkdir(parents=True)
     shutil.copytree(
-        REPO_ROOT / "benchmark/fixtures/harness_task",
+        REPO_ROOT / "benchmark/fixtures/harness_task" if fixture is None else fixture,
         workspace,
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
@@ -364,6 +383,7 @@ def run_one(
     context: int = DEFAULT_CONTEXT,
     server_log: Path | None = None,
     results_output: Path | None = None,
+    task: str = "calculator_division",
 ) -> dict[str, Any]:
     source_revision, source_tree_dirty = git_provenance(REPO_ROOT)
     resolved_model_path = install_root / DEFAULT_MODEL_PATH if model_path is None else model_path
@@ -379,8 +399,11 @@ def run_one(
     run_dir = install_root / "results/harness-runs" / f"{timestamp}-{harness}"
     run_dir.mkdir(parents=True, exist_ok=False)
     (run_dir / "tmp").mkdir()
-    prompt = (REPO_ROOT / "benchmark/configs/harnesses/task_prompt.md").read_text(encoding="utf-8").strip()
-    prompt_file = _prepare_run(harness, run_dir, install_root, prompt, model, server_url, context)
+    fixture_path, task_prompt_path = resolve_task(task)
+    prompt = task_prompt_path.read_text(encoding="utf-8").strip()
+    prompt_file = _prepare_run(
+        harness, run_dir, install_root, prompt, model, server_url, context, fixture=fixture_path
+    )
     workspace = run_dir / "workspace"
     output_dir = run_dir / "output"
     stdout_path = run_dir / ("stdout.json" if harness == "vibe" else "events.jsonl")
@@ -431,7 +454,7 @@ def run_one(
     wall_seconds = round(time.perf_counter() - start, 3)
 
     try:
-        quality = grade_workspace(workspace, REPO_ROOT / "benchmark/fixtures/harness_task")
+        quality = grade_workspace(workspace, fixture_path, task=task)
     except Exception as error:  # Preserve benchmark outcomes if independent grading itself fails.
         quality = {"success": False, "grader_error": f"{type(error).__name__}: {error}"}
     (run_dir / "quality.json").write_text(json.dumps(quality, indent=2) + "\n", encoding="utf-8")
@@ -454,7 +477,10 @@ def run_one(
     ).stdout.splitlines()
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "experiment": "harness-coding-task-smoke",
+        "experiment": (
+            "harness-coding-task-smoke" if task == "calculator_division" else f"harness-{task}"
+        ),
+        "task": task,
         "run_kind": run_kind,
         "harness": harness,
         "harness_version": {"pi": "1.1.0", "opencode": "1.19.0", "vibe": "2.26.1"}[harness],
@@ -493,6 +519,7 @@ def run_one(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--harness", choices=(*HARNESS_NAMES, "all"), default="all")
+    parser.add_argument("--task", choices=tuple(TASK_PATHS), default="calculator_division")
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--limit-seconds", type=int, default=180)
     parser.add_argument("--max-turns", type=int, default=10)
@@ -515,7 +542,7 @@ def main() -> int:
     harnesses = HARNESS_NAMES if args.harness == "all" else (args.harness,)
     if args.dry_run:
         model_path = args.model_path or (args.benchmark_root / DEFAULT_MODEL_PATH)
-        print(json.dumps({"harnesses": harnesses, "repeat": args.repeat, "model": args.model, "model_revision": args.model_revision, "model_path": str(model_path), "server_url": args.server_url, "context_tokens": args.context, "benchmark_root": str(args.benchmark_root), "results_output": str(args.results_output)}, indent=2))
+        print(json.dumps({"harnesses": harnesses, "task": args.task, "repeat": args.repeat, "model": args.model, "model_revision": args.model_revision, "model_path": str(model_path), "server_url": args.server_url, "context_tokens": args.context, "benchmark_root": str(args.benchmark_root), "results_output": str(args.results_output)}, indent=2))
         return 0
     for harness in harnesses:
         iterations = 1 if args.warmup else args.repeat
@@ -525,7 +552,7 @@ def main() -> int:
                 harness, args.benchmark_root, args.limit_seconds, args.max_turns, args.max_tokens, run_kind,
                 model=args.model, model_revision=args.model_revision, model_path=args.model_path,
                 server_url=args.server_url, context=args.context, server_log=args.server_log,
-                results_output=args.results_output,
+                results_output=args.results_output, task=args.task,
             )
             print(json.dumps(record, ensure_ascii=False))
     return 0
