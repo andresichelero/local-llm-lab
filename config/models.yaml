@@ -212,3 +212,51 @@ models:
     status: not found in official lookup on 2026-10-10; do not download
     purpose: recheck only if an official release appears
     evidence: search; absence is not proof of nonexistence
+  - id: frog-nano-4b-2609
+    repo: microsoft/FrogNano-4B-2609
+    revision: b90468c (model-card revision observed 2026-10-11; resolve full SHA before download)
+    params: 4.66B
+    active_params: 4.66B
+    architecture: dense hybrid Gated DeltaNet/gated attention; based on Qwen3.5-4B
+    license: unresolved; HF metadata says MIT while model card says Apache-2.0
+    context_claim: approximately 131K in Leaf coding-agent evaluation
+    tool_use: structured Leaf tool calls; harness-specific behavior, not yet locally validated
+    formats: [Transformers; quantized distribution not verified]
+    candidate_quant: none verified; BF16 checkpoint is 9.34 GB and exceeds 8 GB VRAM before KV/runtime
+    estimated_weight_gib: 8.69 (BF16 repository reports 9.34 GB decimal)
+    realistic_context_tokens: unknown; don't download until license, quant, and runtime are resolved
+    status: candidate; license discrepancy blocks selection
+    purpose: small specialized coding-agent comparison if a supported quantized format becomes available
+    evidence: official model card; benchmark claims are owner-reported and Leaf-specific
+  - id: ornith-1.0-9b
+    repo: ornith-ai/Ornith-1.0-9B
+    revision: 024bce7 (model-card revision observed 2026-10-11; resolve full SHA before download)
+    params: 9B
+    active_params: 9B
+    architecture: dense hybrid Qwen3.5-style Gated DeltaNet/gated attention
+    license: MIT
+    context_claim: 262144 native; card describes extension up to 1,010,000
+    tool_use: tool-call markup requires recent parser-enabled server; local behavior untested
+    formats: [Transformers, community quantization unverified]
+    candidate_quant: none pinned; BF16 weights about 19 GB, quant required for RTX 3070
+    estimated_weight_gib: 17.7 (approximate BF16 weights)
+    realistic_context_tokens: 2048 until quantized runtime and memory are tested
+    status: high-priority coding candidate; not downloaded
+    purpose: compare agentic coding post-training against Qwen3.5-9B using matched SSD tests
+    evidence: official model card; reported agent benchmarks use large contexts and 32 CPUs/48 GB RAM or more
+  - id: mimo-v2.6-distill-qwen-9b
+    repo: XiaomiMiMo/MiMo-V2.6-Distill-Qwen-9B
+    revision: 2367e86 (model-card revision observed 2026-10-11; resolve full SHA before download)
+    params: 9B (model-card family/name; exact config to verify before selection)
+    active_params: 9B
+    architecture: multimodal Qwen3.5-family distillation; exact config support unverified
+    license: MIT (Hugging Face repository metadata)
+    context_claim: not established from reviewed card excerpt
+    tool_use: tagged agentic/tool-use; actual protocol and local quality untested
+    formats: [Transformers; community quantization unverified]
+    candidate_quant: none pinned; BF16 repository is 18.8 GB, quant required for RTX 3070
+    estimated_weight_gib: 17.5 (repository reports 18.8 GB decimal)
+    realistic_context_tokens: 2048 until quantized runtime and memory are tested
+    status: candidate; not downloaded
+    purpose: distilled 9B agentic coding/tool-use comparison
+    evidence: official model repository and model card; no local benchmark
