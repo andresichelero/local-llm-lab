@@ -8,13 +8,17 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from benchmark.provenance import git_provenance
 
-ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODEL = Path(os.environ.get("TRAINING_MODEL_DIR", Path.home() / "local-llm-benchmark/models/Qwen2.5-Coder-0.5B-Instruct"))
 DEFAULT_DATASET = ROOT / "benchmark/data/qlora-quality-heldout.jsonl"
 DEFAULT_OUTPUT = Path(os.environ.get("QLORA_QUALITY_RESULT_JSONL", Path.home() / "local-llm-benchmark/results/raw/qlora-quality.jsonl"))
