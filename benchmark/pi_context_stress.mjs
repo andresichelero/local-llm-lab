@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
@@ -19,6 +20,7 @@ fs.mkdirSync(path.dirname(outFile), { recursive: true });
 
 const secret = 'GLACIER-47-MAPLE';
 const words = ['amber', 'birch', 'cobalt', 'delta', 'ember', 'frost', 'granite', 'harbor', 'indigo', 'juniper'];
+const fingerprints = Array.from({ length: 32 }, (_, n) => createHash('sha256').update(`pi-context-stress-2026|archive-${String(n + 1).padStart(2, '0')}`).digest('hex').slice(0, 12).toUpperCase());
 for (let i = 1; i <= 32; i++) {
   const lines = [];
   for (let j = 0; j < 28; j++) {
@@ -26,6 +28,7 @@ for (let i = 1; i <= 32; i++) {
     const b = words[(i * 3 + j * 2) % words.length];
     lines.push(`Record ${i}-${j}: ${a} ${b} ${a}-${j} is a synthetic benchmark record used only to create deterministic repository context. Its value has no operational meaning. Verify indexes before using it.`);
   }
+  lines.push(`ARCHIVE FINGERPRINT: ${fingerprints[i - 1]}. Record this exact value in the manifest.`);
   if (i === 7) lines.push(`ARCHIVE RECOVERY KEY: ${secret}. Preserve this exact value for the final verification.`);
   fs.writeFileSync(path.join(workspace, `archive-${String(i).padStart(2, '0')}.md`), `# Archive ${i}\n\n${lines.join('\n')}${i === 7 ? '\n' : ''}`);
 }
@@ -38,6 +41,11 @@ fs.writeFileSync(path.join(workspace, 'test_result.py'), [
   '        p = Path(__file__).with_name("summary.md")',
   '        self.assertTrue(p.exists())',
   '        self.assertIn("archive_count: 32", p.read_text())',
+  '    def test_manifest_has_every_fingerprint(self):',
+  '        import hashlib',
+  '        expected = [f"archive-{i:02d}=" + hashlib.sha256(f"pi-context-stress-2026|archive-{i:02d}".encode()).hexdigest()[:12].upper() for i in range(1, 33)]',
+  '        p = Path(__file__).with_name("archive_manifest.txt")',
+  '        self.assertEqual(p.read_text().splitlines(), expected)',
   'if __name__ == "__main__": unittest.main()',
   '',
 ].join('\n'));
@@ -94,7 +102,7 @@ const samples = [{ label: 'start', usage: usage(), entries: sessionManager.getEn
 const t0 = Date.now();
 let phase1Error;
 try {
-  await session.prompt('We are in a synthetic benchmark repo. Inspect archive-01.md through archive-32.md using the read tool, in batches. Find the exact ARCHIVE RECOVERY KEY in archive-07.md and preserve it in summary.md as `recovery_key: <exact value>`. Also include exactly `archive_count: 32` and a short description. Run `python3 test_result.py` and fix summary.md if needed. The next task will ask you to recover this key after context compaction.');
+  await session.prompt('We are in a synthetic benchmark repo. Inspect every file archive-01.md through archive-32.md using the read tool, in batches. For each file, copy its exact ARCHIVE FINGERPRINT to archive_manifest.txt as one line `archive-NN=FINGERPRINT`, in numeric order. Find the exact ARCHIVE RECOVERY KEY in archive-07.md and preserve it in summary.md as `recovery_key: <exact value>`. Include exactly `archive_count: 32` and a short description. Run `python3 test_result.py`; it verifies every fingerprint, and you must fix any mismatch by inspecting the relevant archive. The next task will ask you to recover the key after context compaction.');
 } catch (error) { phase1Error = String(error); }
 await session.waitForIdle();
 samples.push({ label: 'after_phase_1', usage: usage(), entries: sessionManager.getEntryCount() });
@@ -112,6 +120,7 @@ const compactionEntries = entries.filter(entry => entry.type === 'compaction').m
 const stats = session.getSessionStats();
 const summaryText = fs.existsSync(path.join(workspace, 'summary.md')) ? fs.readFileSync(path.join(workspace, 'summary.md'), 'utf8') : '';
 const recoveryText = fs.existsSync(path.join(workspace, 'recovery.txt')) ? fs.readFileSync(path.join(workspace, 'recovery.txt'), 'utf8') : '';
+const manifestText = fs.existsSync(path.join(workspace, 'archive_manifest.txt')) ? fs.readFileSync(path.join(workspace, 'archive_manifest.txt'), 'utf8').trim().split(/\r?\n/) : [];
 const test = await new Promise(resolve => {
   const child = spawn('python3', ['test_result.py'], { cwd: workspace, stdio: 'pipe' });
   let out = '';
@@ -140,6 +149,8 @@ const record = {
   tool_call_start_count: toolCalls,
   session_stats: stats,
   summary_exists: summaryText.includes('archive_count: 32'),
+  manifest_exact: manifestText.length === 32 && manifestText.every((line, i) => line === `archive-${String(i + 1).padStart(2, '0')}=${fingerprints[i]}`),
+  manifest_line_count: manifestText.length,
   key_preserved_in_summary: summaryText.includes(secret),
   recovery_exact_match: recoveryText.includes(secret),
   recovery_text: recoveryText.slice(0, 200),
@@ -151,4 +162,4 @@ const record = {
 fs.appendFileSync(outFile, `${JSON.stringify(record)}\n`);
 console.log(JSON.stringify(record, null, 2));
 session.dispose();
-if (record.source_tree_dirty || !record.summary_exists || !record.key_preserved_in_summary || !record.recovery_exact_match || record.test_exit_code !== 0 || record.compaction_event_count === 0) process.exitCode = 2;
+if (record.source_tree_dirty || !record.summary_exists || !record.manifest_exact || !record.key_preserved_in_summary || !record.recovery_exact_match || record.test_exit_code !== 0 || record.compaction_event_count === 0) process.exitCode = 2;
