@@ -123,3 +123,4 @@ target.write_text("\n".join(text), encoding="utf-8")
 print(target)
 PY
 python3 "$ROOT/benchmark/summarize_qlora.py"
+python3 "$ROOT/benchmark/summarize_lora_comparison.py"

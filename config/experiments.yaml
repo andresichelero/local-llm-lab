@@ -48,7 +48,7 @@ tiers:
     steps: 8
     seed: 42
     optimizer: torch.optim.AdamW (32-bit states)
-    status: QLoRA baseline completed; controlled LoRA/QLoRA comparison pending
+    status: completed: one warm-up and three measured repeats per method; see results/reports/lora-qlora-comparison.md
   training_7b:
     question: Determine the largest model that completes bounded QLoRA on the RTX 3070 with 8 GiB WSL RAM.
     model: Qwen/Qwen2.5-Coder-7B-Instruct

@@ -32,3 +32,11 @@ Latest checkpoint: the pinned Qwen3.5-9B GGUF Q4_K_M was tested from the C:-host
 1. Continue the broader lab on the existing feature branch; publish checkpoints after each experiment. Never add model weights, adapters, environments, or other large assets to Git.
 2. Resume the broader lab with carefully selected inference comparisons, placing active models, runtimes, caches, environments, and outputs on the SSD and retaining verified originals on E:.
 3. Continue with harness, context, MoE, and training experiments only after each runtime/model is researched and its storage requirements are checked.
+
+## Latest checkpoint — paired LoRA and QLoRA
+
+- Code is committed and pushed as `462d6a6` (`bench: add paired LoRA and QLoRA smoke`). The runner now selects `--method lora|qlora`; QLoRA remains the default. Three unit tests for routing, both dry-runs, shell syntax, Python compilation, and the six real training runs passed.
+- One warm-up and three measured repeats per method ran with pinned Qwen2.5-Coder-0.5B revision `ea3f2471cf1b1f0db85067f1ef93848e38e88c25`, eight synthetic rows, seed 42, rank 8, sequence 192, batch 1, eight steps, and FP16 compute. All six final runs passed; the static `add(a,b)` probe passed both before and after training.
+- Median LoRA / QLoRA values: model load 1.142 / 1.137 s; training 1.637 / 2.214 s; total 9.159 / 10.147 s; Torch allocated VRAM peak 1,109.8 / 886.0 MiB; one-second sampled total VRAM peak 2,951 / 2,500 MiB. This is a capacity/runtime comparison only because the base model already passed the probe and the task data is synthetic.
+- Raw results, individual hardware traces, CSV and report: `results/raw/lora-qlora-*.jsonl`, `results/csv/lora-qlora-summary.csv`, and `results/reports/lora-qlora-comparison.md`. Adapter artifacts are archived at `E:\local-llm-results\lora-qlora-20261011`; base model remains at `E:\local-llm-models\Qwen2.5-Coder-0.5B-Instruct`. The temporary SSD model and adapter copies were removed only after checksum/content verification. The training environment remains staged on the SSD for subsequent work.
+- Next work returns to the broader benchmark: prioritize current official-source research, harness comparisons, context/compaction instrumentation, and then MoE/hybrid candidates. Continue checking SSD capacity before staging large files.
