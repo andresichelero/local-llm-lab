@@ -57,15 +57,14 @@ def _shell_read_invocations(command: str) -> list[tuple[str, list[str]]]:
     if re.search(r"\b(?:if|elif|else|fi|while|until|case|esac)\b", command):
         return invocations
     if re.search(r"&&|\|\|", command):
+        normalized = " ".join(command.split())
         supported_seq_loop = (
-            re.search(r"\bfor i in \$\(seq(?: -w)? 1 32\); do", command)
-            and 'cat "archive-0${i}.md"' in command
-            and ('|| cat "archive-${i}.md"' in command or '&& cat "archive-0${i}.md"' in command)
+            'for i in $(seq -w 1 32); do echo "=== archive-0${i}.md ===" && '
+            'cat "archive-0${i}.md"; done' in normalized
         )
         supported_brace_loop = (
-            "for i in {10..32}; do" in command
-            and 'archive-${i:0:2}=$(grep ' in command
-            and "grep 'ARCHIVE FINGERPRINT:' archive-${i:0:2}.md" in command
+            'for i in {10..32}; do echo "archive-${i:0:2}=$(grep \'ARCHIVE FINGERPRINT:\' '
+            'archive-${i:0:2}.md | sed \'s/.*ARCHIVE FINGERPRINT:[[:space:]]*//\')"; done' in normalized
         )
         supported_cd_grep = bool(re.search(r"^cd\s+\S+\s+&&\s+grep\b", command)) and "||" not in command
         if not (supported_seq_loop or supported_brace_loop or supported_cd_grep):

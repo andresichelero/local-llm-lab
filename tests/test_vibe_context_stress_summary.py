@@ -59,6 +59,22 @@ def test_manifest_output_does_not_count_as_archive_reads(tmp_path: Path):
             }},
         },
     ])
+    events.extend([
+        {
+            "type": "action_intent", "payload": {"kind": "tool", "action_id": "short-circuited-loop", "request": {
+                "call": {"name": "file_system.bash", "arguments": {
+                    "command": "for i in $(seq -w 1 32); do false && cat \"archive-0${i}.md\"; done; printf done",
+                }},
+            }},
+        },
+        {
+            "type": "action_result", "payload": {"action_id": "short-circuited-loop", "result": {
+                "type": "tool_succeeded", "result": {"structured_content": {
+                    "returncode": 0, "stdout": f"# Archive 1\nARCHIVE FINGERPRINT: {fingerprint}\n",
+                }},
+            }},
+        },
+    ])
     (journal_dir / "events.jsonl").write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
 
     assert _phase_archive_reads(run, "phase-1", successful_only=True) == set()
