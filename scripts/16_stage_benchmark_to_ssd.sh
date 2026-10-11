@@ -58,6 +58,6 @@ if [[ "$DRY_RUN" == false ]]; then
     'import pathlib,sys; expected=pathlib.Path(sys.argv[1]).resolve(); actual=pathlib.Path(sys.prefix).resolve(); print(f"Python prefix: {actual}"); assert actual == expected, f"Copied venv is not relocatable: expected {expected}"' \
     "$TRAINING_ENV_DIR"
   printf '\nSSD staging complete. Use:\n'
-  printf '  TRAINING_ENV_DIR=%q TRAINING_MODEL_DIR=%q QLORA_OUTPUT_ROOT=%q bash scripts/14_finetune_qlora.sh --model qwen25-coder-7b\n' \
-    "$TRAINING_ENV_DIR" "$TRAINING_MODEL_DIR" "${BENCH_STORAGE_ROOT}/results/qlora"
+  printf '  TRAINING_ENV_DIR=%q TRAINING_MODEL_DIR=%q TRAINING_MODEL_ID=%q TRAINING_MODEL_PARAMETERS=%q QLORA_OUTPUT_ROOT=%q bash scripts/14_finetune_qlora.sh\n' \
+    "$TRAINING_ENV_DIR" "$TRAINING_MODEL_DIR" "Qwen/Qwen2.5-Coder-7B-Instruct" "7.62B" "${BENCH_STORAGE_ROOT}/results/qlora"
 fi
