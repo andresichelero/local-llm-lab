@@ -36,6 +36,12 @@ class HarnessRunnerTests(unittest.TestCase):
         self.assertEqual(fixture, Path(__file__).resolve().parents[1] / "benchmark/fixtures/harness_whitespace")
         self.assertEqual(prompt, fixture / "TASK.md")
 
+    def test_task_registry_resolves_environment_parser_fixture(self) -> None:
+        self.assertTrue(callable(resolve_task), "harness task registry is not implemented")
+        fixture, prompt = resolve_task("dotenv_line_parser")
+        self.assertEqual(fixture, Path(__file__).resolve().parents[1] / "benchmark/fixtures/harness_env_parser")
+        self.assertEqual(prompt, fixture / "TASK.md")
+
     def test_task_registry_rejects_unknown_task(self) -> None:
         self.assertTrue(callable(resolve_task), "harness task registry is not implemented")
         with self.assertRaisesRegex(ValueError, "Unsupported task"):
