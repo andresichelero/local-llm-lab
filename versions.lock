@@ -24,7 +24,7 @@ runtime.exllamav3: v1.6.1; official CPython 3.12 CUDA 12.8 / Torch 2.10 wheel sh
 runtime.exllamav3.python: 3.12.3
 runtime.exllamav3.torch: 2.10.0+cu128
 runtime.exllamav3.distribution_version: 1.6.1+cu128.torch2.10.0
-runtime.exllamav3.install_status: installed on C: SSD; Torch CUDA smoke saw RTX 3070; exact package-version assertion was corrected to include wheel local-version suffix
+runtime.exllamav3.install_status: installed on C: SSD; RTX 3070 inference passed at 2K, 8K and 16K; results/raw/exllama-qwen35-9b.jsonl records ExLlama 1.6.1+cu128.torch2.10.0 and clean source commit
 runtime.torch: not installed
 model.granite_4_1_3b_gguf: ibm-granite/granite-4.1-3b-GGUF@ab4701481089b58a082ef63cc1cee738887293ff
 model.granite_4_1_3b_gguf.file: granite-4.1-3b-Q4_K_M.gguf; size=2099501664; sha256=662b0626cd58f443baea23559b469df6576a81d349649c59413b36a9fb32eb29

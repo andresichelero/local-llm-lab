@@ -12,6 +12,9 @@ results/raw/*
 !results/raw/*.json
 !results/raw/*.jsonl
 !results/raw/*.csv
+!results/raw/archive/
+!results/raw/archive/*.jsonl
+!results/raw/archive/*.md
 __pycache__/
 *.py[cod]
 .pytest_cache/

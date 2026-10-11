@@ -43,7 +43,7 @@ for source in sorted(source_dir.glob("*.jsonl")) if source_dir.exists() else []:
                 all_rows.append(item)
         except json.JSONDecodeError:
             continue
-rows = [row for row in all_rows if row.get("source_tree_dirty") is False]
+rows = [row for row in all_rows if row.get("source_tree_dirty") is False and row.get("warmup") is not True]
 if not rows:
     target.write_text("# Tier 0 summary\n\nNo completed benchmark records yet.\n", encoding="utf-8")
     print(target)
@@ -56,15 +56,16 @@ for row in all_rows:
 csv_path = root / "results/csv/summary.csv"
 csv_path.parent.mkdir(parents=True, exist_ok=True)
 metric_names = ("ttft_ms", "prompt_tps", "generation_tps", "wall_time_s")
-fieldnames = list(group_keys) + [f"{metric}_{stat}" for metric in metric_names for stat in ("mean", "median", "stddev", "min", "max", "p95")] + ["gpu_vram_max_sampled_mb", "power_avg_sampled_w", "gpu_vram_peak_process_mb", "runs"]
+fieldnames = list(group_keys) + [f"{metric}_{stat}" for metric in metric_names for stat in ("mean", "median", "stddev", "min", "max", "p95")] + ["gpu_vram_max_sampled_mb", "power_avg_sampled_w", "gpu_vram_peak_process_mb", "runs", "warmups"]
 clean_groups = {}
 with csv_path.open("w", newline="", encoding="utf-8") as output:
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
     for key, values in sorted(groups.items(), key=lambda item: str(item[0])):
         row = dict(zip(group_keys, key))
+        measurements = [item for item in values if item.get("warmup") is not True]
         for metric in metric_names:
-            numbers = [] if metric == "prompt_tps" and any(item.get("prompt_cache") == "on" for item in values) else [float(item[metric]) for item in values if isinstance(item.get(metric), (int, float))]
+            numbers = [] if metric == "prompt_tps" and any(item.get("prompt_cache") == "on" for item in measurements) else [float(item[metric]) for item in measurements if isinstance(item.get(metric), (int, float))]
             calculated = {
                 "mean": statistics.mean(numbers) if numbers else "",
                 "median": statistics.median(numbers) if numbers else "",
@@ -74,14 +75,15 @@ with csv_path.open("w", newline="", encoding="utf-8") as output:
                 "p95": sorted(numbers)[min(len(numbers)-1, int(0.95 * (len(numbers)-1)))] if numbers else "",
             }
             for name, value in calculated.items(): row[f"{metric}_{name}"] = value
-        samples = [sample for item in values for sample in item.get("_monitor_rows", [])]
+        samples = [sample for item in measurements for sample in item.get("_monitor_rows", [])]
         vram = [int(sample["gpu"]["vram_used_mb"]) for sample in samples if str(sample.get("gpu", {}).get("vram_used_mb", "")).isdigit()]
         power = [float(sample["gpu"]["power_w"]) for sample in samples if str(sample.get("gpu", {}).get("power_w", "")).replace(".", "", 1).isdigit()]
-        process_vram = [int(item["vram_peak_process_mb"]) for item in values if isinstance(item.get("vram_peak_process_mb"), (int, float))]
+        process_vram = [int(item["vram_peak_process_mb"]) for item in measurements if isinstance(item.get("vram_peak_process_mb"), (int, float))]
         row["gpu_vram_max_sampled_mb"] = max(vram) if vram else ""
         row["power_avg_sampled_w"] = statistics.mean(power) if power else ""
         row["gpu_vram_peak_process_mb"] = max(process_vram) if process_vram else ""
-        row["runs"] = len(values)
+        row["runs"] = len(measurements)
+        row["warmups"] = len(values) - len(measurements)
         writer.writerow(row)
         if values[0].get("source_tree_dirty") is False:
             clean_groups[key] = values
@@ -89,12 +91,13 @@ lines = [
     "# Tier 0 summary",
     "",
     f"Clean-source measured runs: {len(rows)} across {len(clean_groups)} configurations.",
-    f"Preliminary or dirty-source runs excluded from the table: {len(all_rows) - len(rows)} (all records remain separated by experiment and commit in the CSV).",
+    "Warm-ups and preliminary or dirty-source records remain in raw JSONL but are excluded from measured-run statistics.",
     "",
     "| Experiment | Context | Prompt | Max output | KV K/V | Prompt cache | Reasoning | Runs | TTFT median (ms) | Prompt median (tok/s) | Generation median (tok/s) | Max sampled VRAM (MiB) |",
     "|---|---:|---:|---:|---|---|---|---:|---:|---:|---:|---:|",
 ]
 for key, values in sorted(clean_groups.items(), key=lambda item: str(item[0])):
+    measurements = [item for item in values if item.get("warmup") is not True]
     experiment = values[0].get("experiment", "")
     context = values[0].get("context_tokens", "")
     prompt = values[0].get("prompt_tokens", "")
@@ -105,11 +108,11 @@ for key, values in sorted(clean_groups.items(), key=lambda item: str(item[0])):
     def median(metric):
         if metric == "prompt_tps" and cache == "on":
             return "—"
-        numbers = [float(item[metric]) for item in values if isinstance(item.get(metric), (int, float))]
+        numbers = [float(item[metric]) for item in measurements if isinstance(item.get(metric), (int, float))]
         return f"{statistics.median(numbers):.2f}" if numbers else "—"
-    samples = [sample for item in values for sample in item.get("_monitor_rows", [])]
+    samples = [sample for item in measurements for sample in item.get("_monitor_rows", [])]
     vram = [int(sample["gpu"]["vram_used_mb"]) for sample in samples if str(sample.get("gpu", {}).get("vram_used_mb", "")).isdigit()]
-    lines.append(f"| {experiment} | {context} | {prompt} | {max_new} | {kv} | {cache} | {reasoning} | {len(values)} | {median('ttft_ms')} | {median('prompt_tps')} | {median('generation_tps')} | {max(vram) if vram else '—'} |")
+    lines.append(f"| {experiment} | {context} | {prompt} | {max_new} | {kv} | {cache} | {reasoning} | {len(measurements)} | {median('ttft_ms')} | {median('prompt_tps')} | {median('generation_tps')} | {max(vram) if vram else '—'} |")
 text = [
     *lines,
     "",

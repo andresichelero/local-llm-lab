@@ -1,5 +1,13 @@
 # Execution status — updated 2026-10-11
 
+## SSD-only EXL3 validation — 2026-10-11
+
+- Downloaded `turboderp/Qwen3.5-9B-exl3` revision `d35e580c801b276c4d5ff97f27bd0fa79a0ef3b3` to WSL ext4 on the C: SSD after a free-space preflight (30 GiB available). The 5,889,564,052-byte weight passed its pinned SHA-256 check (`19e38d...76d23`). No HDD was used in these runs.
+- Installed ExLlamaV3 `1.6.1+cu128.torch2.10.0` in the isolated C:-hosted environment; PyTorch 2.10.0+cu128 detected the RTX 3070. A prior sampling run found that the isolated PATH hid WSL's `nvidia-smi`; the sampler now falls back to `/usr/lib/wsl/lib/nvidia-smi` and records GPU data.
+- On the RTX 3070, one warm-up plus three measured runs passed for each configuration. With 148 prompt tokens / 2K context / fp16 K/V / 32 generated tokens: 56.78 tok/s median (55.68–58.76), 168.2 ms median TTFT. At 7,171 prompt tokens / 8K / fp16 K/V / 64 generated: 55.22 tok/s (53.36–56.52), 2.79 s median TTFT. At 14,340 prompt tokens / 16K / 4-bit K/V / 32 generated: 53.72 tok/s (51.36–54.21), 5.84 s median TTFT. Output was identical within each deterministic series.
+- Peak process-reserved VRAM was 3,220 MiB; paired one-second system samples showed up to 5,713 MiB total VRAM, 46 C, about 221 W, 3,680 MiB WSL RAM, and zero swap. System VRAM includes the Windows desktop and must not be interpreted as model-only allocation. Runs establish inference compatibility and throughput, not semantic long-context quality or quantization quality retention.
+- Raw model download and benchmark evidence: `results/raw/model-downloads-exl3.jsonl`, `results/raw/exllama-qwen35-9b.jsonl`, and `results/raw/exllama-qwen35-9b-resources.jsonl`; grouped CSV is `results/csv/summary.csv` and the focused analysis is `results/reports/exllama-ssd.md`.
+
 ## Latest checkpoint — Qwen GGUF inference on the SSD
 
 - Qwen3.5-9B GGUF Q4_K_M revision `3885219b6810b007914f3a7950a8d1b469d598a5` (SHA-256 `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8`) was copied from its E: archive to WSL ext4 on the C: Samsung SSD. The original E: file remains untouched.
