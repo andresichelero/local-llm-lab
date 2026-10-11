@@ -1,6 +1,6 @@
 # Tier 0 summary
 
-Clean-source measured runs: 94 across 31 configurations.
+Clean-source measured runs: 97 across 32 configurations.
 Warm-ups and preliminary or dirty-source records remain in raw JSONL but are excluded from measured-run statistics.
 
 | Experiment | Context | Prompt | Max output | KV K/V | Prompt cache | Reasoning | Runs | TTFT median (ms) | Prompt median (tok/s) | Generation median (tok/s) | Max sampled VRAM (MiB) |
@@ -8,6 +8,7 @@ Warm-ups and preliminary or dirty-source records remain in raw JSONL but are exc
 | exllamav3-qwen35-9b-exl3-2.5bpw-kv-4-prompt-14340 | 16384 | 14340 | 32 | 4/4 | n/a | n/a | 3 | 5837.91 | 2465.50 | 53.72 | 5713 |
 | exllamav3-qwen35-9b-exl3-2.5bpw-kv-8-prompt-14340 | 16384 | 14340 | 32 | 8/8 | n/a | n/a | 3 | 6385.98 | 2252.22 | 52.59 | 6115 |
 | exllamav3-qwen35-9b-exl3-2.5bpw-kv-fp16-prompt-148 | 2048 | 148 | 32 | fp16/fp16 | n/a | n/a | 3 | 168.16 | 980.09 | 56.78 | 4100 |
+| exllamav3-qwen35-9b-exl3-2.5bpw-kv-fp16-prompt-25 | 2048 | 25 | 32 | fp16/fp16 | n/a | n/a | 3 | 55.71 | 655.48 | 54.10 | 4259 |
 | exllamav3-qwen35-9b-exl3-2.5bpw-kv-fp16-prompt-7171 | 8192 | 7171 | 64 | fp16/fp16 | n/a | n/a | 3 | 2793.06 | 2584.35 | 55.22 | 5098 |
 | llama-cpp-qwen35-9b-gguf-q4km-2k | 2048 | 29 | 64 | f16/f16 | on | off | 3 | 62.93 | — | 67.11 | 5794 |
 | llama-cpp-qwen35-9b-gguf-q4km-2k-nocache | 2048 | 29 | 64 | f16/f16 | off | off | 3 | 64.32 | 462.78 | 64.13 | 5801 |
