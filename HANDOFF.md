@@ -1,5 +1,12 @@
 # Resume point — 2026-10-11
 
+## Latest follow-up — Codex OSS against local Qwen3.5 endpoint
+
+- The installed Codex CLI `0.162.0-alpha.17.2` was exercised with `--oss` and `CODEX_OSS_BASE_URL` against the SSD-resident Qwen3.5-9B llama.cpp server. Scratch repo and model/runtime were on C:; no API credentials or user config were read, and no paid endpoint was used.
+- The CLI required `--local-provider lmstudio`; a short model alias triggered its local model-download path. Using the exact llama.cpp `/v1/models` id reached the local Responses endpoint, but the model catalog response did not match Codex expectations and the Qwen3.5 template rejected system-message ordering. llama.cpp also skipped unsupported Responses tool types (`namespace`, `web_search`). Overriding `wire_api="chat"` was refused by this installed CLI; it requires Responses.
+- The probe did not edit the scratch project, did not run its tests, and has no coding-quality score. It is recorded as an interoperability failure, not a model failure. See `results/reports/codex-local-oss.md` and `results/raw/codex-local-oss.jsonl`.
+- The local llama-server process was stopped after the probe. The main lab branch remains clean at `5d87163` before this follow-up is committed.
+
 ## Latest checkpoint — Qwen2.5-Coder-14B hybrid SSD run
 
 - User's current storage rule: run benchmarks only from the C: SSD-backed WSL ext4 filesystem. E: is for archiving tested models and general storage; do not run HDD performance tests. Historical HDD results remain documented as history.

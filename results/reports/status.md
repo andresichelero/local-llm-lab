@@ -1,5 +1,12 @@
 # Execution status — updated 2026-10-11
 
+## Codex OSS local endpoint probe — 2026-10-11
+
+- Tested installed Codex CLI 0.162.0-alpha.17.2 with Qwen3.5-9B Q4_K_M served by llama.cpp from the C: SSD-backed WSL ext4 filesystem. The scratch coding task lived on C:; no changes were made to the main lab repo or personal Codex configuration.
+- Endpoint health and `/v1/models` responded. The CLI's local OSS setup rejected a short alias and attempted a model-catalog lookup; with the server's full model ID, it reached the Responses endpoint but could not complete the task. llama.cpp logged unsupported Responses tool types (`namespace`, `web_search`), followed by the Qwen3.5 template error “System message must be at the beginning.” A chat-wire override is rejected by this installed CLI version, which requires Responses for its configured provider.
+- No task success, tool-call success, coding change, or quality score is claimed. This is a runtime/API/template interoperability failure. The source CLI README documents `--oss` and `CODEX_OSS_BASE_URL`; details, exact environment and retained sanitized events are in `results/reports/codex-local-oss.md` and `results/raw/codex-local-oss.jsonl`.
+- No paid API was configured or called. The active local server was stopped after the probe; no model was copied to or benchmarked from E:.
+
 ## Qwen2.5-Coder-14B hybrid SSD checkpoint — 2026-10-11
 
 - Completed 3 runs each at 24/32/36 GPU layers, using only the C:-hosted SSD for active model/runtime/result I/O. Clean-source 32-layer median was 11.73 tok/s generation and 350 ms TTFT at 6,731 MiB sampled VRAM; clean-source 36-layer median was 13.92 tok/s and 289 ms at 7,366 MiB. Use 32 layers as the default desktop-safe setting; 36 is the fastest tested setting with less headroom.
