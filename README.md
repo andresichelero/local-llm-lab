@@ -151,3 +151,9 @@ All ranks passed 54/54 held-out cases, matching the already-strong base. Median 
 
 Reproduce with `bash scripts/35_benchmark_qlora_rank.sh --dry-run`, then omit `--dry-run`. The runner enforces WSL ext4 for the checkout, pinned local model, isolated runtime, logs, and results. It performs ranks sequentially and uses no network or model downloads.
 
+## 7B QLoRA rank capacity (SSD only)
+
+The pinned Qwen2.5-Coder-7B-Instruct was trained with NF4/double quantization, AdamW32, seed 42, eight steps, sequence length 192, and one warm-up plus three measured runs at each rank. Ranks 8, 16, and 32 all completed on the RTX 3070 and passed 54/54 held-out cases, matching the base. Median training time was 7.160 s (rank 8), 10.522 s (rank 16), and 13.831 s (rank 32); Torch allocated peaks were 7,678.4, 7,748.9, and 7,901.5 MiB. Rank 32 fit in this run but left only about 290 MiB below the card's 8,192 MiB capacity, so it leaves very little margin for Windows desktop contention.
+
+Median held-out reference NLL was 0.519531 for the base and 0.236144, 0.223301, and 0.203885 for ranks 8/16/32. The synthetic five-task set was already solved perfectly by the base, so the NLL shift does not establish broader coding improvement. Rank 8 was fastest/smallest; rank 16 and 32 lower the measured NLL while increasing time, adapter size, and VRAM, without improving the pass rate in this probe. See the [7B rank report](results/reports/qlora-7b-rank-sweep-20261011T195840Z/qlora-7b-rank-sweep.md), [CSV](results/reports/qlora-7b-rank-sweep-20261011T195840Z/qlora-7b-rank-sweep.csv), and [raw SSD JSONL](results/raw/qlora-7b-rank-sweep-20261011T195840Z/). The runner [scripts/36_benchmark_qlora_7b_rank.sh](scripts/36_benchmark_qlora_7b_rank.sh) records failed ranks and continues the requested sweep.
+
