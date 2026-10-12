@@ -24,6 +24,14 @@ from benchmark.model_quality_paired import (
     strict_quality_pass,
     summarize_denominators,
     swap_growth_breach,
+    PILOT_EXPERIMENT,
+    PILOT_TASKS,
+    V2_EXPERIMENT,
+    V2_TASKS,
+    build_pilot_schedule,
+    build_v2_schedule,
+    frozen_pilot_protocol,
+    frozen_v2_protocol,
 )
 import benchmark.model_quality_paired as paired
 
@@ -40,6 +48,37 @@ class ModelQualityPairedTests(unittest.TestCase):
                 self.assertTrue(all(row["stage"] == "measurement" for row in selected))
         self.assertNotEqual(rows[0]["model"], rows[3]["model"])
         self.assertEqual(rows[6]["model"], rows[3]["model"])
+
+    def test_pilot_schedule_and_protocol(self) -> None:
+        pilot_rows = build_pilot_schedule()
+        self.assertEqual(len(pilot_rows), 4)
+        self.assertEqual([r["task"] for r in pilot_rows], list(PILOT_TASKS) + list(PILOT_TASKS))
+        self.assertEqual([r["model"] for r in pilot_rows], ["qwen3.5-4b", "qwen3.5-4b", "qwen3.5-9b", "qwen3.5-9b"])
+        self.assertTrue(all(r["repeat"] == 1 for r in pilot_rows))
+        proto = frozen_pilot_protocol()
+        self.assertEqual(proto["experiment"], PILOT_EXPERIMENT)
+        self.assertEqual(proto["tasks"], list(PILOT_TASKS))
+        self.assertEqual(proto["measured_repeats_per_model_task"], 1)
+        self.assertEqual(proto["round_limit_seconds"], 25 * 60)
+
+    def test_v2_schedule_and_protocol(self) -> None:
+        v2_rows = build_v2_schedule()
+        self.assertEqual(len(v2_rows), 24)
+        # 4 blocks of 6 tasks
+        self.assertEqual(len([r for r in v2_rows if r["model"] == "qwen3.5-4b" and r["repeat"] == 1]), 6)
+        self.assertEqual(len([r for r in v2_rows if r["model"] == "qwen3.5-9b" and r["repeat"] == 1]), 6)
+        self.assertEqual(len([r for r in v2_rows if r["model"] == "qwen3.5-9b" and r["repeat"] == 2]), 6)
+        self.assertEqual(len([r for r in v2_rows if r["model"] == "qwen3.5-4b" and r["repeat"] == 2]), 6)
+        # AB / BA block sequence
+        self.assertEqual(v2_rows[0]["model"], "qwen3.5-4b")
+        self.assertEqual(v2_rows[6]["model"], "qwen3.5-9b")
+        self.assertEqual(v2_rows[12]["model"], "qwen3.5-9b")
+        self.assertEqual(v2_rows[18]["model"], "qwen3.5-4b")
+        proto = frozen_v2_protocol()
+        self.assertEqual(proto["experiment"], V2_EXPERIMENT)
+        self.assertEqual(proto["tasks"], list(V2_TASKS))
+        self.assertEqual(proto["measured_repeats_per_model_task"], 2)
+        self.assertEqual(proto["round_limit_seconds"], 120 * 60)
 
     def test_round0_failure_is_persisted_as_an_execution_gate(self) -> None:
         protocol = frozen_protocol()

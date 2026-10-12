@@ -85,6 +85,67 @@ def measured_schedule() -> list[dict[str, Any]]:
     return result
 
 
+PILOT_EXPERIMENT = "model-quality-pilot-20261012"
+PILOT_TASKS = ("config_precedence", "retry_policy")
+PILOT_ROUND_LIMIT_SECONDS = 25 * 60
+
+V2_EXPERIMENT = "model-quality-v2-20261012"
+V2_TASKS = (
+    "calculator_division",
+    "whitespace_normalization",
+    "dotenv_line_parser",
+    "config_precedence",
+    "retry_policy",
+    "package_refactor",
+)
+V2_ROUND_LIMIT_SECONDS = 120 * 60
+V2_REPEATS = 2
+
+
+def build_pilot_schedule() -> list[dict[str, Any]]:
+    """Return 4 rows: 2 new tasks x 2 models x 1 repeat."""
+    rows = []
+    for model in ("qwen3.5-4b", "qwen3.5-9b"):
+        for task in PILOT_TASKS:
+            rows.append({"model": model, "task": task, "repeat": 1, "stage": "measurement"})
+    return rows
+
+
+def build_v2_schedule() -> list[dict[str, Any]]:
+    """Return 24 rows in 4 model blocks (AB/BA) across 6 tasks with 2 repeats."""
+    blocks = [
+        ("qwen3.5-4b", 1),
+        ("qwen3.5-9b", 1),
+        ("qwen3.5-9b", 2),
+        ("qwen3.5-4b", 2),
+    ]
+    rows = []
+    for model, repeat in blocks:
+        for task in V2_TASKS:
+            rows.append({"model": model, "task": task, "repeat": repeat, "stage": "measurement"})
+    return rows
+
+
+def frozen_pilot_protocol() -> dict[str, Any]:
+    proto = frozen_protocol()
+    proto["experiment"] = PILOT_EXPERIMENT
+    proto["tasks"] = list(PILOT_TASKS)
+    proto["measured_repeats_per_model_task"] = 1
+    proto["schedule"] = build_pilot_schedule()
+    proto["round_limit_seconds"] = PILOT_ROUND_LIMIT_SECONDS
+    return proto
+
+
+def frozen_v2_protocol() -> dict[str, Any]:
+    proto = frozen_protocol()
+    proto["experiment"] = V2_EXPERIMENT
+    proto["tasks"] = list(V2_TASKS)
+    proto["measured_repeats_per_model_task"] = V2_REPEATS
+    proto["schedule"] = build_v2_schedule()
+    proto["round_limit_seconds"] = V2_ROUND_LIMIT_SECONDS
+    return proto
+
+
 def frozen_protocol() -> dict[str, Any]:
     """Stable configuration payload written before any observations are collected."""
     return {
@@ -345,6 +406,9 @@ def _protected_files_preserved(workspace: Path, baseline: Path, task: str) -> di
         "calculator_division": {"src/calculator.py", "tests/test_calculator.py"},
         "whitespace_normalization": {"src/text_utils.py", "tests/test_text_utils.py"},
         "dotenv_line_parser": {"src/config_parser.py", "tests/test_config_parser.py"},
+        "config_precedence": {"src/config.py", "tests/test_config.py"},
+        "retry_policy": {"src/retry.py", "tests/test_retry.py"},
+        "package_refactor": {"src/service.py", "src/metrics.py", "tests/test_service.py"},
     }[task]
     # Caller must first pass pregrade_workspace_gate, which uses lstat and does not
     # follow links. Recheck before reading in case the workspace changed meanwhile.
@@ -793,7 +857,7 @@ def _tool_round_trip(binary: Path, install_root: Path, model: str, server_log: P
 
 def _run_task(binary: Path, install_root: Path, model: str, task: str, stage: str,
               repeat: int | None, output_root: Path, server_log: Path, round_deadline: float,
-              swap_baseline_bytes: int) -> dict[str, Any]:
+              swap_baseline_bytes: int, experiment_name: str = EXPERIMENT) -> dict[str, Any]:
     info = MODELS[model]
     label = stage if repeat is None else f"{stage}-{repeat}"
     run_dir = output_root / "runs" / model / task / label
@@ -818,7 +882,7 @@ def _run_task(binary: Path, install_root: Path, model: str, task: str, stage: st
         (run_dir / "resources.jsonl").write_text("", encoding="utf-8")
         server_segment = server_log.read_bytes()[original_server_log:].decode("utf-8", errors="replace") if server_log.exists() else ""
         return {
-            "experiment": EXPERIMENT, "stage": stage, "model": model, "model_alias": info["alias"],
+            "experiment": experiment_name, "stage": stage, "model": model, "model_alias": info["alias"],
             "model_revision": info["revision"], "model_sha256": info["sha256"], "task": task, "repeat": repeat,
             "attempted": True, "return_code": None, "timed_out": False,
             "stop_reason": "effective_profile_failed", "task_wall_seconds": 0.0,
@@ -924,7 +988,7 @@ def _run_task(binary: Path, install_root: Path, model: str, task: str, stage: st
     server_segment = server_log.read_bytes()[original_server_log:].decode("utf-8", errors="replace") if server_log.exists() else ""
     usage = summarize_usage("opencode", events)
     return {
-        "experiment": EXPERIMENT, "stage": stage, "model": model, "model_alias": info["alias"],
+        "experiment": experiment_name, "stage": stage, "model": model, "model_alias": info["alias"],
         "model_revision": info["revision"], "model_sha256": info["sha256"], "task": task, "repeat": repeat,
         "harness": HARNESS, "harness_version": HARNESS_VERSION, "runtime_revision": RUNTIME_REVISION,
         "context_tokens": CONTEXT, "kv_cache_kv": [KV_CACHE, KV_CACHE], "flash_attention": True,
@@ -1061,8 +1125,9 @@ def _stop_server(proc: subprocess.Popen[Any]) -> None:
     _terminate_process_group(proc, grace_seconds=10)
 
 
-def run_series(install_root: Path, output_root: Path, *, single_agent_released: bool = False) -> list[dict[str, Any]]:
-    """Execute gated calibration, warmups, then the frozen 18-row measured schedule."""
+def run_series(install_root: Path, output_root: Path, *, single_agent_released: bool = False,
+               mode: str = "r1d") -> list[dict[str, Any]]:
+    """Execute gated calibration, warmups, then the frozen schedule."""
     if not single_agent_released:
         raise RuntimeError("Single-agent prerequisite requires the explicit parent release flag before measurement")
     install_root, output_root = install_root.resolve(), output_root.resolve()
@@ -1096,7 +1161,21 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
         raise RuntimeError("Pinned llama.cpp version command failed")
     version_text = require_runtime_revision(runtime_version.stdout, runtime_version.stderr, RUNTIME_REVISION[:9])
     output_root.mkdir(parents=True, exist_ok=False)
-    protocol = frozen_protocol()
+    if mode == "pilot":
+        protocol = frozen_pilot_protocol()
+        deadline = time.monotonic() + PILOT_ROUND_LIMIT_SECONDS
+        schedule = build_pilot_schedule()
+        experiment_name = PILOT_EXPERIMENT
+    elif mode == "v2":
+        protocol = frozen_v2_protocol()
+        deadline = time.monotonic() + V2_ROUND_LIMIT_SECONDS
+        schedule = build_v2_schedule()
+        experiment_name = V2_EXPERIMENT
+    else:
+        protocol = frozen_protocol()
+        deadline = time.monotonic() + ROUND_LIMIT_SECONDS
+        schedule = measured_schedule()
+        experiment_name = EXPERIMENT
     protocol["source_git_sha"], protocol["source_tree_dirty"] = git_provenance(REPO_ROOT)
     protocol["llama_cpp_version"] = version_text
     protocol["source_file_sha256"] = {
@@ -1107,14 +1186,13 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
     protocol["started_at_utc"] = datetime.now(timezone.utc).isoformat()
     (output_root / "protocol.json").write_text(json.dumps(protocol, indent=2) + "\n", encoding="utf-8")
     records: list[dict[str, Any]] = []
-    deadline = time.monotonic() + ROUND_LIMIT_SECONDS
     swap_baseline_bytes = _memory_baseline_bytes()
     for model in MODELS:
         server_log = output_root / f"llama-server-{model}.log"
         try:
             server_process, startup_seconds = _run_server(server, install_root, model, server_log, deadline)
         except Exception as error:
-            record = {"experiment": EXPERIMENT, "stage": "compatibility", "model": model,
+            record = {"experiment": experiment_name, "stage": "compatibility", "model": model,
                       "passed": False, "stop_reason": "model_load_failure",
                       "error": f"{type(error).__name__}: {error}",
                       "server_log_path": str(server_log), "runtime_version": version_text}
@@ -1138,9 +1216,10 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
                 return records
             try:
                 calibration = _run_task(binary, install_root, model, "calculator_division", "calibration", None,
-                                        output_root, server_log, deadline, swap_baseline_bytes)
+                                        output_root, server_log, deadline, swap_baseline_bytes,
+                                        experiment_name=experiment_name)
             except Exception as error:
-                calibration = {"experiment": EXPERIMENT, "stage": "calibration", "model": model,
+                calibration = {"experiment": experiment_name, "stage": "calibration", "model": model,
                                "task": "calculator_division", "attempted": True, "strict_pass": False,
                                "stop_reason": f"runner_error:{type(error).__name__}", "error": str(error),
                                "task_wall_seconds": None}
@@ -1150,9 +1229,10 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
                 return records
             try:
                 warmup = _run_task(binary, install_root, model, "calculator_division", "warmup", None,
-                                   output_root, server_log, deadline, swap_baseline_bytes)
+                                   output_root, server_log, deadline, swap_baseline_bytes,
+                                   experiment_name=experiment_name)
             except Exception as error:
-                warmup = {"experiment": EXPERIMENT, "stage": "warmup", "model": model,
+                warmup = {"experiment": experiment_name, "stage": "warmup", "model": model,
                           "task": "calculator_division", "attempted": True, "strict_pass": False,
                           "stop_reason": f"runner_error:{type(error).__name__}", "error": str(error),
                           "task_wall_seconds": None}
@@ -1162,7 +1242,7 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
         finally:
             _stop_server(server_process)
         if _scratch_size(output_root) > MAX_SCRATCH_BYTES:
-            record = {"experiment": EXPERIMENT, "stage": "series_guard", "model": model,
+            record = {"experiment": experiment_name, "stage": "series_guard", "model": model,
                       "attempted": False, "strict_pass": False,
                       "stop_reason": "scratch_limit_after_calibration_warmup"}
             records.append(record)
@@ -1172,7 +1252,7 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
             return records
     try:
         measured_block = 0
-        for item in measured_schedule():
+        for item in schedule:
             if time.monotonic() >= deadline:
                 record = {**item, "attempted": False, "strict_pass": False, "stop_reason": "round_deadline", "task_wall_seconds": None}
                 records.append(record)
@@ -1202,7 +1282,8 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
                 run_series._active_model, run_series._active_server = model, process
             try:
                 row = _run_task(binary, install_root, model, item["task"], "measurement", item["repeat"],
-                                output_root, server_log, deadline, swap_baseline_bytes)
+                                output_root, server_log, deadline, swap_baseline_bytes,
+                                experiment_name=experiment_name)
             except Exception as error:
                 row = {**item, "attempted": True, "strict_pass": False,
                        "stop_reason": f"runner_error:{type(error).__name__}",
@@ -1214,7 +1295,7 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
             if fatal_diagnostic_stop(row):
                 break
             if _scratch_size(output_root) > MAX_SCRATCH_BYTES:
-                record = {"experiment": EXPERIMENT, "stage": "series_guard", "model": model,
+                record = {"experiment": experiment_name, "stage": "series_guard", "model": model,
                           "task": item["task"], "repeat": item["repeat"], "attempted": False,
                           "strict_pass": False, "stop_reason": "scratch_limit"}
                 records.append(record)
@@ -1240,20 +1321,41 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--benchmark-root", type=Path, default=Path(os.getenv("BENCHMARK_ROOT", "/home/foxtrot/local-llm-benchmark")))
     parser.add_argument("--output-root", type=Path, default=None)
+    parser.add_argument("--mode", choices=["r1d", "pilot", "v2"], default="r1d",
+                        help="series mode: r1d (historical), pilot (4 calls), v2 (24 trials)")
+    parser.add_argument("--pilot", action="store_true", help="shorthand for --mode pilot")
+    parser.add_argument("--v2", "--matrix", action="store_true", dest="v2", help="shorthand for --mode v2")
     parser.add_argument("--dry-run", action="store_true", default=True,
                         help="write the frozen protocol only (the default; inference never starts)")
     parser.add_argument("--execute", action="store_true", help="explicitly run the gated GPU series")
     parser.add_argument("--single-agent-release", action="store_true",
                         help="record the parent's prospective release for this independently gated single-agent series")
     args = parser.parse_args(argv)
-    output = args.output_root or args.benchmark_root / "results/raw" / "model-quality-paired-20261012-r1d"
+    if args.pilot:
+        mode = "pilot"
+    elif args.v2:
+        mode = "v2"
+    else:
+        mode = args.mode
+
+    if mode == "pilot":
+        default_dir = f"model-quality-pilot-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+        protocol = frozen_pilot_protocol()
+    elif mode == "v2":
+        default_dir = f"model-quality-v2-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+        protocol = frozen_v2_protocol()
+    else:
+        default_dir = "model-quality-paired-20261012-r1d"
+        protocol = frozen_protocol()
+
+    output = args.output_root or args.benchmark_root / "results/raw" / default_dir
     if not args.execute:
-        print(json.dumps({"protocol": frozen_protocol(), "benchmark_root": str(args.benchmark_root),
-                          "output_root": str(output), "inference_started": False}, indent=2))
+        print(json.dumps({"protocol": protocol, "benchmark_root": str(args.benchmark_root),
+                          "output_root": str(output), "mode": mode, "inference_started": False}, indent=2))
         return 0
     if not args.single_agent_release:
         parser.error("--execute requires the independent single-agent release; Round 0 remains recorded as failed")
-    run_series(args.benchmark_root, output, single_agent_released=args.single_agent_release)
+    run_series(args.benchmark_root, output, single_agent_released=args.single_agent_release, mode=mode)
     return 0
 
 
