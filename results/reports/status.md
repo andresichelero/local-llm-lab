@@ -6,7 +6,7 @@ The hardened delegation smoke failed its workflow gate: correct names in 13.716 
 
 The existing 4B MTP head activated in one corrected request, with 204 draft tokens and 187 accepted. The first attempt sent no generation because of an executor HTTP-contract error and remains setup-invalid. The corrected output did not satisfy its sequence instruction; no quality or speed advantage is established. Target KV was Q4_0 and MTP KV was F16. See [MTP activation](mtp-activation-20261012.md). No weights, dependencies or drivers changed.
 
-The bounded 18-row model-quality executor and offline local-only routing filter are being implemented and reviewed. Routing uses caller-supplied capabilities, rejects unsupported/expired/unhealthy destinations and never invokes cloud; no live routing result or measured destination table is claimed. Earlier research and historical results below remain separate.
+The bounded 18-row model-quality executor and offline local-only routing filter are implemented and reviewed. Following the pre-model `r1b` error, `r1c` loaded 4B and ran tools but hit an undefined fixture variable in its post-edit check. There are still zero measured rows: these are executor errors, not model capability results. The reviewed `r1d` correction includes a full compatibility-path regression; 112 tests and 17 subtests passed, including 23 focused tests, and full Ruff passed on the paired executor/tests. Routing uses caller-supplied capabilities, rejects unsupported/expired/unhealthy destinations and never invokes cloud; no live routing result or measured destination table is claimed. Earlier research and historical results below remain separate.
 
 ## Research revision — no new benchmark
 

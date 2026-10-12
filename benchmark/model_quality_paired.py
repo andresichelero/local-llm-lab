@@ -9,7 +9,6 @@ import argparse
 import hashlib
 import json
 import os
-import shutil
 import signal
 import stat
 import socket
@@ -26,8 +25,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from benchmark.opencode_controlled_probe import _assert_free_resources, _assert_server_bundle, require_runtime_revision
-from benchmark.harness_runner import (
+from benchmark.opencode_controlled_probe import _assert_free_resources, _assert_server_bundle, require_runtime_revision  # noqa: E402  # Project-root bootstrap above enables direct module execution.
+from benchmark.harness_runner import (  # noqa: E402  # Project-root bootstrap above enables direct module execution.
     DEFAULT_CONTEXT,
     DEFAULT_SERVER_URL,
     _isolated_environment,
@@ -37,9 +36,9 @@ from benchmark.harness_runner import (
     summarize_resources,
     summarize_usage,
 )
-from benchmark.provenance import git_provenance
+from benchmark.provenance import git_provenance  # noqa: E402  # Project-root bootstrap above enables direct module execution.
 
-EXPERIMENT = "model-quality-paired-20261012-r1c"
+EXPERIMENT = "model-quality-paired-20261012-r1d"
 HARNESS = "opencode"
 HARNESS_VERSION = "1.19.0"
 RUNTIME_REVISION = "d81235049384534c167caea52b85a694f6103d14"
@@ -564,8 +563,9 @@ def _tool_round_trip(binary: Path, install_root: Path, model: str, server_log: P
     prompt = ("Use bash to run python -c 'print(6 * 7)'. Then use the edit tool to replace all of "
               "TASK.md with exactly this content: edit probe ok. Do not use bash to change TASK.md. "
               "Return only the bash output.")
-    prompt_file = _prepare_run("opencode", run_dir, install_root, prompt, MODELS[model]["alias"], SERVER_URL, CONTEXT,
-                               fixture=REPO_ROOT / "benchmark/fixtures/harness_task")
+    fixture = REPO_ROOT / "benchmark/fixtures/harness_task"
+    _prepare_run("opencode", run_dir, install_root, prompt, MODELS[model]["alias"], SERVER_URL, CONTEXT,
+                 fixture=fixture)
     profile = build_profile(model)
     profile_path = run_dir / "home/.config/opencode/opencode.json"
     profile_path.write_text(json.dumps(profile, indent=2) + "\n", encoding="utf-8")
@@ -1034,7 +1034,8 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
                       "passed": False, "stop_reason": "model_load_failure",
                       "error": f"{type(error).__name__}: {error}",
                       "server_log_path": str(server_log), "runtime_version": version_text}
-            records.append(record); _append_record(output_root, record)
+            records.append(record)
+            _append_record(output_root, record)
             (output_root / "records.json").write_text(json.dumps(records, indent=2) + "\n", encoding="utf-8")
             return records
         try:
@@ -1047,7 +1048,8 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
             (output_root / "compatibility" / model / "record.json").write_text(json.dumps(compatibility, indent=2) + "\n", encoding="utf-8")
             if not compatibility["passed"]:
                 record = {"stage": "compatibility", "model": model, "passed": False, "compatibility": compatibility}
-                records.append(record); _append_record(output_root, record)
+                records.append(record)
+                _append_record(output_root, record)
                 (output_root / "records.json").write_text(json.dumps(records, indent=2) + "\n", encoding="utf-8")
                 return records
             try:
@@ -1079,7 +1081,8 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
             record = {"experiment": EXPERIMENT, "stage": "series_guard", "model": model,
                       "attempted": False, "strict_pass": False,
                       "stop_reason": "scratch_limit_after_calibration_warmup"}
-            records.append(record); _append_record(output_root, record)
+            records.append(record)
+            _append_record(output_root, record)
             (output_root / "records.json").write_text(json.dumps(records, indent=2) + "\n", encoding="utf-8")
             (output_root / "summary.json").write_text(json.dumps(summarize_denominators(records), indent=2) + "\n", encoding="utf-8")
             return records
@@ -1088,7 +1091,8 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
         for item in measured_schedule():
             if time.monotonic() >= deadline:
                 record = {**item, "attempted": False, "strict_pass": False, "stop_reason": "round_deadline", "task_wall_seconds": None}
-                records.append(record); _append_record(output_root, record)
+                records.append(record)
+                _append_record(output_root, record)
                 continue
             model = item["model"]
             active_model = getattr(run_series, "_active_model", None)
@@ -1107,7 +1111,8 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
                               "stop_reason": "measured_model_load_failure",
                               "error": f"{type(error).__name__}: {error}",
                               "server_log_path": str(server_log), "task_wall_seconds": None}
-                    records.append(record); _append_record(output_root, record)
+                    records.append(record)
+                    _append_record(output_root, record)
                     _persist_records(output_root, records)
                     break
                 run_series._active_model, run_series._active_server = model, process
@@ -1119,7 +1124,8 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
                        "stop_reason": f"runner_error:{type(error).__name__}",
                        "error": str(error), "task_wall_seconds": None}
             row["model_load_seconds"] = startup_seconds
-            records.append(row); _append_record(output_root, row)
+            records.append(row)
+            _append_record(output_root, row)
             _persist_records(output_root, records)
             if fatal_diagnostic_stop(row):
                 break
@@ -1127,7 +1133,8 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
                 record = {"experiment": EXPERIMENT, "stage": "series_guard", "model": model,
                           "task": item["task"], "repeat": item["repeat"], "attempted": False,
                           "strict_pass": False, "stop_reason": "scratch_limit"}
-                records.append(record); _append_record(output_root, record)
+                records.append(record)
+                _append_record(output_root, record)
                 _persist_records(output_root, records)
                 break
     finally:
@@ -1155,7 +1162,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--single-agent-release", action="store_true",
                         help="record the parent's prospective release for this independently gated single-agent series")
     args = parser.parse_args(argv)
-    output = args.output_root or args.benchmark_root / "results/raw" / "model-quality-paired-r1c"
+    output = args.output_root or args.benchmark_root / "results/raw" / "model-quality-paired-20261012-r1d"
     if not args.execute:
         print(json.dumps({"protocol": frozen_protocol(), "benchmark_root": str(args.benchmark_root),
                           "output_root": str(output), "inference_started": False}, indent=2))

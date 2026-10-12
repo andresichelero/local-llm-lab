@@ -35,3 +35,16 @@ Real literal version regression passed. Focus 22 passed; full 111 passed,
 2ce4b1393f8bab4ea99375f4c7d0b39729771999bc3c626b936ac5507e66eb79 tests/test_model_quality_paired.py
 Pinned llama.cpp source independently confirms /v1/models data[].meta.n_ctx
 is the runtime slot context; n_ctx_train is separate. No guessed API field.
+
+r1d executor correction, independently reviewed before measurements:
+Bind fixture once for preparation and the post-edit check. r1c loaded 4B and
+ran tools, but its undefined fixture variable aborted before calibration.
+Preserve that raw attempt as executor-invalid, not a model failure.
+Full compatibility-path regression uses actual fixture/filesystem and mocked
+runtime/child events. Focus 23 passed; full 112 passed and 17 subtests.
+Python compile, source/overlay equality, full Ruff and diff checks passed.
+Existing Ruff executable: /home/foxtrot/.local/bin/ruff (no installation).
+8bc4134cb8d089398f4a35e4c6fa7576b22a700243a06f703cc6afb2442eb547 benchmark/model_quality_paired.py
+daa6f64b71fba05aaa99ae5c14ea732c2969770ea9fb8795123b64fd57b33574 tests/test_model_quality_paired.py
+Only binding, identity/output and semantics-preserving lint cleanup changed;
+all model-study caps, profiles, prompts and graders remain frozen.

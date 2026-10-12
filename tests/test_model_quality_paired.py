@@ -43,7 +43,7 @@ class ModelQualityPairedTests(unittest.TestCase):
     def test_round0_failure_is_persisted_as_an_execution_gate(self) -> None:
         protocol = frozen_protocol()
         self.assertEqual(protocol["experiment"], EXPERIMENT)
-        self.assertTrue(EXPERIMENT.endswith("r1c"))
+        self.assertTrue(EXPERIMENT.endswith("r1d"))
         self.assertEqual(protocol["round0_prerequisite"]["status"], "failed")
         self.assertFalse(protocol["round0_prerequisite"]["measurement_eligible"])
         self.assertTrue(protocol["round0_prerequisite"]["not_a_single_agent_prerequisite"])
@@ -346,6 +346,77 @@ class ModelQualityPairedTests(unittest.TestCase):
         self.assertFalse(record["passed"])
         self.assertEqual(record["stop_reason"], "effective_profile_failed")
         child.assert_not_called()
+
+    def test_tool_round_trip_happy_path_records_real_bash_and_edit_evidence(self) -> None:
+        class FakeProcess:
+            pid = 123456
+
+            def __init__(self, command, *, stdout=None, cwd=None, **_kwargs):
+                self.command = command
+                self.returncode = 0
+                if "resource_sampler.py" not in " ".join(map(str, command)):
+                    workspace = Path(cwd)
+                    (workspace / "TASK.md").write_text("edit probe ok", encoding="utf-8")
+                    events = [
+                        {"type": "tool_use", "part": {"tool": "bash", "state": {
+                            "status": "completed", "input": {"command": "python -c 'print(6 * 7)'"},
+                            "metadata": {"exit": 0}, "output": "42"}}},
+                        {"type": "tool_use", "part": {"tool": "edit", "state": {
+                            "status": "completed", "input": {"filePath": str(workspace / "TASK.md")},
+                            "metadata": {"exit": 0}}}},
+                    ]
+                    for event in events:
+                        stdout.write(json.dumps(event) + "\n")
+
+            def poll(self):
+                return self.returncode
+
+            def wait(self):
+                return self.returncode
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output_root = root / "output"
+            server_log = root / "server.log"
+            server_log.write_text("server ready\n", encoding="utf-8")
+
+            def fake_popen(command, **kwargs):
+                if isinstance(command, (list, tuple)) and command and command[0] == "git":
+                    return real_popen(command, **kwargs)
+                return FakeProcess(command, **kwargs)
+
+            real_popen = paired.subprocess.Popen
+            with (
+                mock.patch.object(paired, "_isolated_environment", return_value={}),
+                mock.patch.object(paired, "_profile_checks", return_value={"passed": True}),
+                mock.patch.object(paired, "_model_loaded", return_value=True),
+                mock.patch.object(paired, "_server_ready", return_value=True),
+                mock.patch.object(paired.subprocess, "Popen", side_effect=fake_popen) as popen,
+                mock.patch.object(paired, "_terminate_process_group"),
+            ):
+                record = paired._tool_round_trip(Path("opencode"), root, "qwen3.5-4b", server_log,
+                                                  output_root, time.monotonic() + 30, 0)
+
+            run_dir = output_root / "compatibility/qwen3.5-4b"
+            workspace = run_dir / "workspace"
+            launched = [call.args[0] for call in popen.call_args_list
+                        if not (isinstance(call.args[0], (list, tuple)) and call.args[0]
+                                and call.args[0][0] == "git")]
+            self.assertEqual(len(launched), 2)
+            self.assertTrue((run_dir / "TASK_PROMPT.md").is_file())
+            self.assertEqual((workspace / "TASK.md").read_bytes(), b"edit probe ok")
+            events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+            self.assertEqual([event["part"]["tool"] for event in events], ["bash", "edit"])
+            self.assertTrue(record["passed"])
+            self.assertIsNone(record["stop_reason"])
+            self.assertTrue(record["expected_output_seen"])
+            self.assertEqual(record["completed_bash_tool_calls"], 1)
+            self.assertEqual(record["edit_task_md_tool_calls"], 1)
+            self.assertTrue(record["edit_file_verified"])
+            self.assertTrue(record["edit_workspace_gate"]["passed"])
+            self.assertEqual(record["events_sha256"], paired._sha256(run_dir / "events.jsonl"))
+            self.assertEqual(record["events_path"], str(run_dir / "events.jsonl"))
+            self.assertEqual(record["model_sha256"], MODELS["qwen3.5-4b"]["sha256"])
 
 
 if __name__ == "__main__":
