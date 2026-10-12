@@ -59,7 +59,25 @@ The [fresh audit and comparison](results/reports/audit-continuation-20261011.md)
 
 A gated calibration on the existing calculator task used equal 20-step/180-second limits: the single-agent control passed in 44.075 s. The delegated treatment passed the independent coding grader, but timed out at 180.378 s with only the explorer completed and no independent reviewer. Workflow success therefore failed; no warmups or measured pairs were started. This is a failed coordination calibration, not a repeated quality/speed comparison. See the [controlled probe](results/reports/opencode-controlled-20261011.md) and [round plan](docs/superpowers/plans/2026-10-11-opencode-controlled.md). The lab remains incomplete; bounded local routing/failure escalation and broader unsaturated quality tasks take priority over raising delegation limits until one run passes.
 
-The [October 12 research review](results/reports/state-of-art-20261012.md) and [revised round plan](docs/superpowers/plans/2026-10-12-evidence-first-local-lab.md) now prioritize matched 4B/9B quality, no-download MTP/cache probes and one-at-a-time model admission before live routing. OmniCoder-9B, Gemma 4 E4B and Bonsai 2 are researched candidates, not new local results. Bonsai 2 requires its publisher's runtime fork; small weight files alone do not establish memory fit or correctness. No new inference or installation was performed in that research revision.
+### Revised Methodology Roadmap Findings — 2026-10-12 (Milestones M0 to M6)
+
+Following the formal methodology review (`methodology-review-20261012.md` and `2026-10-12-methodology-revised-roadmap.md`), the lab executed and verified all planned milestones M0 through M6 under strictly serialized GPU inference on the RTX 3070 with ext4 SSD reserves maintained $\ge 8\text{ GiB}$:
+
+- **M0 (Historical Evidence Audit):** Criptographic SHA-256 validation of all publication artifacts (64/64 OK) and external drive E: archive synchronization.
+- **M1 (Adversarial Validators & Failure Taxonomy):** Implemented pure validators (`validate_add_arguments`, `validate_add_final`), MiB telemetry in `resource_sampler.py`, and structured operational failure classes in `benchmark/model_quality_paired.py`.
+- **M2 (Discriminant Task Suite & Pilot):** Created 3 new discriminant fixtures (`config_precedence`, `retry_policy`, `package_refactor`) with adversarial mutation tests and verified via a 100% successful controlled pilot (`model-quality-pilot-20261012-192315`) in 8m53s.
+- **M3 (Paired 4B vs 9B 24-Trial Matrix):** Executed 24 measured trials across 6 tasks $\times$ 2 models $\times$ 2 repeats in balanced AB/BA blocks (`model-quality-v2-20261012-195743`):
+  - **Pass Rate Parity:** Both `qwen3.5-4b` and `qwen3.5-9b` achieved 66.7% (8/12) strict functional success. Both solved division, whitespace, dotenv parser, and retry policy; both failed config precedence and package refactor.
+  - **Latency / Algorithmic Trade-off:** 4B was ~25-32% faster on simple tasks (median 21-25s), but **9B was 2.38× faster on `retry_policy`** (46.9s vs 111.6s) by solving the exception contract in 1 turn without entering repair loops. See [M3 report](results/reports/model-quality-paired-v2-20261012.md).
+- **M4 (Inference Efficiency & Optimization):**
+  - **Tarefa 6A (Prompt Caching):** `--cache-prompt` reduced prompt prefill token recomputation from ~8,500 to incremental tokens (22-500) per turn, delivering **1.57× to 1.70× wall-clock speedup** (21-22s vs 36s) with 100% pass parity (12/12 passed). Promoted to standard. See [6A report](results/reports/prefix-cache-paired-20261012.md).
+  - **Tarefa 6B (MTP in Agentic Harness):** Built-in `--spec-type draft-mtp --spec-draft-n-max 3` achieved an aggregate **91.16% draft token acceptance rate**, doubling generation speed from 77 t/s to **146.6 t/s** and yielding an additional **1.24× to 1.79× wall-clock speedup** (down to 17.0s on division and 22.4s on retry policy) with 100% strict pass (12/12 passed) and only ~360 MiB VRAM overhead. Promoted to standard for Qwen3.5-4B. See [6B report](results/reports/mtp-agentic-evaluation-20261012.md).
+- **M5 (Candidate Model Admission):** Evaluated `Gemma-4-E4B-it-qat UD-Q4_K_XL` (3.93 GiB, SHA `df0fd4ee...`). Model fits in 16K VRAM (4,118 MiB), but achieved **0/6 (0%) strict passes** in OpenCode agent runs due to unscoped function deletions (`unchanged_helpers: false`) and conversational artifact code leaks (`SyntaxError`). Formally **REJECTED** from the production routing pool. See [M5 report](results/reports/model-admission-20261012.md).
+- **M6 (Model Switch Latency & Deterministic Routing Matrix):**
+  - **Switch Latency Benchmark:** 5 alternating switch cycles measured unload in 0.20-0.45s, 4B load in 3.0-3.1s, and 9B load in 3.9-4.4s, establishing total model swap cost of **3.4s to 4.9s**.
+  - **Routing Architecture:** Formalized deterministic 3-tier routing: Tier 0 (CPU / linters / pytest), Tier 1 (Qwen3.5-4B with cache+MTP, ~17s-22s, $\le 4.87\text{ GiB}$ VRAM), Tier 2 (Qwen3.5-9B with cache, ~40s-47s, $\le 7.33\text{ GiB}$ VRAM), with automated cascade escalation after 2 failed repair cycles. Backlog for QLoRA and long-context governed per roadmap criteria. See [M6 report](results/reports/routing-governance-20261012.md).
+
+
 
 ## Reproducibility rules
 

@@ -231,21 +231,32 @@ def run_single_trial(
 
 
 def _kill_process_group(proc: subprocess.Popen[Any], *, grace_seconds: int = 4) -> None:
+    if proc.poll() is not None:
+        return
     try:
         os.killpg(proc.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
+    except Exception:
+        try:
+            proc.terminate()
+        except Exception:
+            pass
     deadline = time.monotonic() + grace_seconds
     while proc.poll() is None:
         if time.monotonic() >= deadline:
             try:
                 os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
             break
         time.sleep(0.05)
     if proc.poll() is None:
-        proc.wait()
+        try:
+            proc.wait(timeout=2)
+        except Exception:
+            pass
 
 
 def summarize_prefix_cache_results(records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -338,12 +349,15 @@ def run_series(
         }
 
         # Start server
+        print(f"[prefix-cache] Starting trial {trial_id}/{len(schedule)}: task={task}, pair={pair_num}, cache_prompt={cache_mode}")
         log_f = server_log.open("w", encoding="utf-8")
-        server_proc = subprocess.Popen(cmd, env=server_env, stdout=log_f, stderr=subprocess.STDOUT)
+        server_proc = subprocess.Popen(cmd, env=server_env, stdout=log_f, stderr=subprocess.STDOUT, start_new_session=True)
         
         try:
             # Wait for ready
-            for _ in range(30):
+            for _ in range(60):
+                if server_proc.poll() is not None:
+                    raise RuntimeError(f"Server crashed during load: exit code {server_proc.returncode}")
                 try:
                     with urllib.request.urlopen(f"{SERVER_URL}/v1/models", timeout=1) as res:
                         if res.status == 200:
@@ -351,7 +365,7 @@ def run_series(
                 except Exception:
                     time.sleep(0.5)
             else:
-                raise RuntimeError("Server failed to start")
+                raise RuntimeError("Server failed to start within 30s timeout")
 
             # Execute trial
             record = run_single_trial(
@@ -360,6 +374,7 @@ def run_series(
             )
             record["trial"] = trial_id
             records.append(record)
+            print(f"[prefix-cache] Trial {trial_id} completed: pass={record.get('strict_pass')}, wall={record.get('task_wall_seconds')}s, prefill_tokens={record.get('server_prefill_tokens')}")
 
             with (output_root / "records.jsonl").open("a", encoding="utf-8") as out:
                 out.write(json.dumps(record) + "\n")

@@ -110,3 +110,14 @@ harness.opencode.controlled_probe: corrected effective local profile verified; r
 archive.opencode.controlled_probe: E:\LocalLLMLabArchive\2026-10-11\opencode-controlled-probe-20261011.tar.gz; 37 selected entries; sha256=6f14213c9d2bad0112aaae082579d3f6ceafe0317c174e9614fdefff9fb04ba4; recursive Windows copy manifests verified; no weights/environments/package caches
 
 validation.permission_hardening_20261012: 80 tests and 3 subtests; 7 focused tests; 14 effective runtime gates per profile without inference; --auto removed; source hashes in results/system-audit/lab-validation-20261012.txt
+
+# Milestone M4 - M6 additions recorded 2026-10-12
+benchmark.prefix_cache_paired_6a: results/reports/prefix-cache-paired-20261012.md; 12/12 trials passed; 1.57x-1.70x speedup; cache-prompt promoted to standard
+benchmark.mtp_agentic_paired_6b: results/reports/mtp-agentic-evaluation-20261012.md; 12/12 trials passed; 91.16% draft acceptance; 1.24x-1.79x speedup; draft-mtp promoted to standard for Qwen3.5-4B
+model.gemma_4_e4b_qat_gguf.repo: unsloth/gemma-4-E4B-it-qat-GGUF
+model.gemma_4_e4b_qat_gguf.revision: 8c5a9e4fd5482e2be20fe0bf013b4c262a8f4265
+model.gemma_4_e4b_qat_gguf.file: gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf; size=4215695776; sha256=df0fd4ee07072c607c29a0a1cb4f98918426cca12f45a2776bdd6ee6d09a4de3; license=Apache-2.0
+model.gemma_4_e4b_qat_gguf.admission_status: rejected; 0/6 strict passes on agentic suite; scope violations and conversational syntax leaks; see results/reports/model-admission-20261012.md
+benchmark.model_switch_bench: results/reports/routing-governance-20261012.md; 5 cycles measured; unload=0.20-0.45s, 4B-load=3.0-3.1s, 9B-load=3.9-4.4s, total-switch=3.4-4.9s
+routing.matrix: Tier 0 CPU deterministic; Tier 1 Qwen3.5-4B cache+MTP (~17s-22s, <=4.87 GiB); Tier 2 Qwen3.5-9B cache (~40s-47s, <=7.33 GiB); cascade switch 4.5s
+governance.backlog: QLoRA deferred until persistent non-harness failure classes and 120 verified episodes; Vibe harness deferred; models >16K archived on E: drive
