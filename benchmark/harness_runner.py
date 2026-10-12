@@ -19,8 +19,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from benchmark.provenance import git_provenance
-from benchmark.harness_eval import grade_workspace
+from benchmark.provenance import git_provenance  # noqa: E402
+from benchmark.harness_eval import grade_workspace  # noqa: E402
 
 DEFAULT_ROOT = Path.home() / "local-llm-benchmark"
 DEFAULT_MODEL = "Qwen3.5-9B-Q4_K_M"
@@ -77,7 +77,6 @@ def build_command(
     time_limit: int = 180,
 ) -> list[str]:
     prompt = prompt_file.read_text(encoding="utf-8").strip()
-    node_bin = install_root / "runtimes/node-v22.23.3-linux-x64/bin"
     if harness == "pi":
         executable = install_root / "envs/node-harnesses/pi/node_modules/.bin/pi"
         return [

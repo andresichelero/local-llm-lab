@@ -7,12 +7,10 @@ without degrading strict task pass quality or contract compliance.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import shutil
 import signal
-import socket
 import statistics
 import subprocess
 import sys
@@ -26,10 +24,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from benchmark.harness_eval import grade_workspace
-from benchmark.harness_runner import (
-    DEFAULT_CONTEXT,
-    DEFAULT_SERVER_URL,
+from benchmark.harness_eval import grade_workspace  # noqa: E402
+from benchmark.harness_runner import (  # noqa: E402
     _isolated_environment,
     _prepare_run,
     _read_jsonl,
@@ -37,7 +33,7 @@ from benchmark.harness_runner import (
     summarize_resources,
     summarize_usage,
 )
-from benchmark.provenance import git_provenance
+from benchmark.provenance import git_provenance  # noqa: E402
 
 EXPERIMENT = "prefix-cache-paired-20261012-6a"
 HARNESS = "opencode"
@@ -143,7 +139,7 @@ def run_single_trial(
     
     fixture_rel, prompt_rel = __import__("benchmark.harness_runner", fromlist=["resolve_task"]).resolve_task(task)
     prompt = prompt_rel.read_text(encoding="utf-8").strip()
-    prompt_file = _prepare_run("opencode", run_dir, install_root, prompt, info["alias"], SERVER_URL, CONTEXT, fixture=fixture_rel)
+    _prepare_run("opencode", run_dir, install_root, prompt, info["alias"], SERVER_URL, CONTEXT, fixture=fixture_rel)
     
     profile = build_profile(model)
     profile_path = run_dir / "home/.config/opencode/opencode.json"

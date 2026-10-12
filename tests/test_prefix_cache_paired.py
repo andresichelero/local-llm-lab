@@ -1,10 +1,8 @@
 import unittest
 from pathlib import Path
-from unittest import mock
 
 from benchmark.prefix_cache_paired import (
     MODEL_KEY,
-    MODELS,
     TASKS,
     build_profile,
     build_schedule,

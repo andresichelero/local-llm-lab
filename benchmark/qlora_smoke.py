@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from benchmark.provenance import git_provenance
+from benchmark.provenance import git_provenance  # noqa: E402
 
 BENCH_STORAGE_ROOT = Path(os.environ.get("BENCH_STORAGE_ROOT", Path.home() / "local-llm-benchmark"))
 DEFAULT_MODEL = Path(os.environ.get("TRAINING_MODEL_DIR", BENCH_STORAGE_ROOT / "models/Qwen2.5-Coder-0.5B-Instruct"))

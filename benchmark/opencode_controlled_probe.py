@@ -21,13 +21,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from benchmark.harness_eval import grade_workspace
-from benchmark.provenance import git_provenance
-from benchmark.harness_runner import (
+from benchmark.harness_eval import grade_workspace  # noqa: E402
+from benchmark.provenance import git_provenance  # noqa: E402
+from benchmark.harness_runner import (  # noqa: E402
     DEFAULT_CONTEXT,
     DEFAULT_MODEL,
     DEFAULT_MODEL_PATH,
-    DEFAULT_MODEL_REVISION,
     _isolated_environment,
     _preflight,
     _read_jsonl,

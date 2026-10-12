@@ -385,7 +385,6 @@ def summarize_run(run_dir: Path, git_sha: str) -> dict[str, Any]:
         if request.get("purpose") == "compaction" and request.get("compaction_id"):
             compaction_ids.add(str(request["compaction_id"]))
         if event.get("type") == "action_intent" and payload.get("kind") == "tool":
-            call = request.get("call", {})
             action_id = payload.get("action_id")
             if action_id:
                 tool_ids.add(str(action_id))

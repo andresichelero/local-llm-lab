@@ -24,10 +24,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from benchmark.harness_eval import grade_workspace
-from benchmark.harness_runner import (
-    DEFAULT_CONTEXT,
-    DEFAULT_SERVER_URL,
+from benchmark.harness_eval import grade_workspace  # noqa: E402
+from benchmark.harness_runner import (  # noqa: E402
     _isolated_environment,
     _prepare_run,
     _read_jsonl,
@@ -35,7 +33,7 @@ from benchmark.harness_runner import (
     summarize_resources,
     summarize_usage,
 )
-from benchmark.provenance import git_provenance
+from benchmark.provenance import git_provenance  # noqa: E402
 
 EXPERIMENT = "candidate-admission-paired-20261012-m5"
 HARNESS = "opencode"

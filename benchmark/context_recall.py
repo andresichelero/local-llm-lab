@@ -15,7 +15,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
-from benchmark.provenance import git_provenance
+from benchmark.provenance import git_provenance  # noqa: E402
 
 
 TARGET_STATION = "Relay Nacre-17"

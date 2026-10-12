@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import pytest
 
 from benchmark.mtp_agentic_paired import (
     build_schedule,
