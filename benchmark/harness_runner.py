@@ -360,6 +360,18 @@ def _prepare_run(
             model: {"name": model, "limit": {"context": context, "output": 1024}, "options": {"temperature": 0}}
         }
         (config_dir / "opencode.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+        for candidate_root in (
+            install_root / "cache/opencode-node-modules",
+            REPO_ROOT.parent / "cache/opencode-node-modules",
+            Path("/home/foxtrot/local-llm-benchmark/cache/opencode-node-modules"),
+        ):
+            if candidate_root.is_dir() and not (config_dir / "node_modules").exists():
+                shutil.copytree(candidate_root, config_dir / "node_modules")
+                for pkg_file in ("package.json", "package-lock.json"):
+                    src_pkg = candidate_root.parent / pkg_file
+                    if src_pkg.is_file() and not (config_dir / pkg_file).exists():
+                        shutil.copy(src_pkg, config_dir / pkg_file)
+                break
     elif harness == "vibe":
         text = (REPO_ROOT / "benchmark/configs/harnesses/vibe.config.toml").read_text(encoding="utf-8")
         replacements = {

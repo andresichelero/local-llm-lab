@@ -773,9 +773,10 @@ def _tool_round_trip(binary: Path, install_root: Path, model: str, server_log: P
                                        cwd=run_dir / "workspace", env=env,
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                        start_new_session=True)
-            proc = subprocess.Popen(command, cwd=run_dir / "workspace", env=env, stdout=target,
+            proc = subprocess.Popen(command, cwd=run_dir / "workspace", env=env,
+                                    stdin=subprocess.DEVNULL, stdout=target,
                                     stderr=errors, start_new_session=True)
-            task_deadline = min(round_deadline, started + 45)
+            task_deadline = min(round_deadline, started + 90)
             while proc.poll() is None:
                 if time.monotonic() >= round_deadline:
                     stop_reason = "round_deadline"
@@ -911,7 +912,8 @@ def _run_task(binary: Path, install_root: Path, model: str, task: str, stage: st
     server_log_offset = server_log.stat().st_size if server_log.exists() else 0
     try:
         with event_path.open("w", encoding="utf-8") as events_out, stderr_path.open("w", encoding="utf-8") as errors_out:
-            process = subprocess.Popen(command, cwd=workspace, env=env, stdout=events_out,
+            process = subprocess.Popen(command, cwd=workspace, env=env,
+                                       stdin=subprocess.DEVNULL, stdout=events_out,
                                        stderr=errors_out, start_new_session=True)
         sampler = subprocess.Popen([sys.executable, str(REPO_ROOT / "benchmark/resource_sampler.py"), "--output",
                                     str(run_dir / "resources.jsonl"), "--interval", "1"], cwd=workspace, env=env,
