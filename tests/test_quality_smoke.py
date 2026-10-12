@@ -20,3 +20,30 @@ def test_quality_smoke_records_runtime_configuration_from_environment(monkeypatc
 def test_missing_tool_call_error_preserves_model_response():
     with pytest.raises(RuntimeError, match='finish_reason.*stop'):
         quality_smoke.get_required_tool_call({"content": "I cannot call tools", "tool_calls": [], "finish_reason": "stop"})
+
+
+def test_strict_json_validator_accepts_exact_bool_and_int_values():
+    assert quality_smoke.is_valid_strict_json_response({"ok": True, "count": 3})
+
+
+@pytest.mark.parametrize("parsed", [
+    {"ok": 1, "count": 3},
+    {"ok": True, "count": 3.0},
+    {"ok": "true", "count": 3},
+    {"ok": None, "count": 3},
+    {"ok": True, "count": "3"},
+    {"ok": True, "count": None},
+    {"ok": True, "count": 3, "extra": False},
+])
+def test_strict_json_validator_rejects_wrong_types_and_keys(parsed):
+    assert not quality_smoke.is_valid_strict_json_response(parsed)
+
+
+def test_multiple_tool_calls_are_rejected_as_not_one_round_trip():
+    add_call = {"id": "call_1", "function": {"name": "add"}}
+    second_call = {"id": "call_2", "function": {"name": "add"}}
+    assert quality_smoke.get_required_tool_call({"tool_calls": [add_call]}) is add_call
+    with pytest.raises(RuntimeError, match="exactly one"):
+        quality_smoke.get_required_tool_call({"content": None,
+                                               "tool_calls": [add_call, second_call],
+                                               "finish_reason": "tool_calls"})

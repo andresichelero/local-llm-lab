@@ -30,15 +30,28 @@ def request(url: str, model: str, messages: list[dict], **extra) -> tuple[dict, 
     return data, time.perf_counter() - started
 
 
+def is_valid_strict_json_response(parsed: object) -> bool:
+    return (
+        type(parsed) is dict
+        and set(parsed) == {"ok", "count"}
+        and type(parsed["ok"]) is bool
+        and parsed["ok"] is True
+        and type(parsed["count"]) is int
+        and parsed["count"] == 3
+    )
+
+
 def get_required_tool_call(message: dict) -> dict:
-    calls = message.get("tool_calls") or []
-    if not calls or calls[0].get("function", {}).get("name") != "add":
+    calls = message.get("tool_calls")
+    if (not isinstance(calls, list) or len(calls) != 1
+            or not isinstance(calls[0], dict)
+            or calls[0].get("function", {}).get("name") != "add"):
         details = {
             "finish_reason": message.get("finish_reason"),
             "content": message.get("content"),
             "tool_calls": calls,
         }
-        raise RuntimeError(f"model did not return the required add tool call: {json.dumps(details, ensure_ascii=False)}")
+        raise RuntimeError(f"model did not return exactly one required add tool call: {json.dumps(details, ensure_ascii=False)}")
     return calls[0]
 
 
@@ -85,7 +98,7 @@ def main() -> int:
         message = response["choices"][0]["message"]
         content = message.get("content") or ""
         parsed = json.loads(content)
-        valid = parsed == {"ok": True, "count": 3}
+        valid = is_valid_strict_json_response(parsed)
         usage = response.get("usage", {})
         results.append(record(
             "structured_json", args.model, elapsed, valid,

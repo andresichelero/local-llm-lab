@@ -48,3 +48,16 @@ Existing Ruff executable: /home/foxtrot/.local/bin/ruff (no installation).
 daa6f64b71fba05aaa99ae5c14ea732c2969770ea9fb8795123b64fd57b33574 tests/test_model_quality_paired.py
 Only binding, identity/output and semantics-preserving lint cleanup changed;
 all model-study caps, profiles, prompts and graders remain frozen.
+
+MTP paired controller and strict quality gates, reviewed before inference:
+SSD source da99669 plus four exact shared files: 140 tests, 19 subtests passed.
+Focused quality + MTP: 30 tests, 2 subtests passed. Ruff four files passed.
+No GPU or provider calls during implementation validation.
+68a05d503d8158ddd9d1c5eb8e0f0f9936960cb22a3e72e1d10457263ebb4d06 benchmark/mtp_paired_probe.py
+f3c62fb0ce4421e06d1fc04897ec81f22af8efe22b38b0fa0bdee3d54c88892f tests/test_mtp_paired_probe.py
+3580e733c9c3b99e9607ffa679106e0ab56ccbab864761f75bdcff997f09e556 benchmark/quality_smoke.py
+c279a25f1eb216c9cee4894e8b572ca64056a526941f86a2c8bdc76c02b1d8f3 tests/test_quality_smoke.py
+Strict JSON rejects numeric booleans and float counts; exactly one add call.
+Read-only historical audit: 23 positive structured_json rows in 22 top-level
+raw files all had exact bool true/int 3 parsed values. No raw data changed.
+No configured typechecker; Python syntax/tests and existing Ruff used.
