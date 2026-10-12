@@ -1,0 +1,26 @@
+PREFLIGHT_UTC 2026-10-12T06:14:26Z
+SOURCE_COMMIT 6efc7a3dae050f7303a01d4bee9584df577da4a6
+PYTHON Python 3.12.3
+MODEL_SHA 13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983  /home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf
+SERVER_SHA 83005935917f6e3ec98319e277bd4c4c7e3da3e4dc1876bcc451c32d8d4d37d1  /home/foxtrot/local-llm-benchmark/tools/llama-bin/llama-server
+RUNTIME_SOURCE d81235049384534c167caea52b85a694f6103d14
+VERSION version: 0.6.0-dev (build 1, commit d81235049)
+built with GNU 13.3.0 for Linux x86_64
+FILESYSTEMS
+Filesystem     Type 1K-blocks     Used Available Use% Mounted on
+/dev/sdd       ext4 112423584 90559164  16080884  85% /
+/dev/sdd       ext4 112423584 90559164  16080884  85% /
+/dev/sdd       ext4 112423584 90559164  16080884  85% /
+/dev/sdd       ext4 112423584 90559164  16080884  85% /
+/dev/sdd       ext4 112423584 90559164  16080884  85% /
+FREE_KIB /dev/sdd         112423584 90559164  16080884      85% /
+MEMINFO
+MemTotal:        8135040 kB
+MemAvailable:    7607928 kB
+SwapTotal:       4194304 kB
+SwapFree:        4194304 kB
+AVAILABLE_MEM_KIB MemAvailable:    7608320 kB
+SWAP_FREE_KIB SwapFree:        4194304 kB
+PORT_18763
+LLAMA_SERVER_PROCESSES
+    PID    PGID STAT COMMAND

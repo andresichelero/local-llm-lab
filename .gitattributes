@@ -13,4 +13,5 @@ results/raw/opencode-controlled-20261011-*/** text eol=lf
 # Preserve exact probe bytes, including runtime whitespace and checksum sidecars.
 results/raw/round0-opencode-smoke-20261012/** -text -whitespace
 results/raw/mtp-activation*/** -text -whitespace
+results/publication/model-quality-paired-20261012/** -text -whitespace
 .gitignore text eol=lf

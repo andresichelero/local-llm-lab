@@ -1,5 +1,7 @@
 # Evidence-first local LLM round plan
 
+**Prospective revision after methodology audit:** future work follows [the reviewed roadmap](2026-10-12-methodology-revised-roadmap.md) and [its evidence review](../../../results/reports/methodology-review-20261012.md). This document remains the historical protocol record; no completed attempt is rescored or rerun by this revision.
+
 > **For agentic workers:** Use Luna High for execution, probing and logs under the parent orchestrator. Preserve concurrent work. Execute gated rounds individually, not the entire list automatically.
 
 **Goal:** Select useful model–harness configurations for the RTX 3070 and measure low-cost optimizations before implementing live routing.
@@ -44,6 +46,8 @@ Question: does the revised no-auto-approval policy actually execute a local requ
 - [x] Save the new source/profile hashes, raw events and sampled resources. This prerequisite is not a multiagent benefit trial.
 
 ## Round 1 — Matched model quality, then harder capability tasks
+
+**Execution status:** r1d stopped at the first 4B compatibility gate. Load/context/profile passed; the model recovered Bash with `python3`, but its Edit used an absent search string and failed before a later Write produced the correct bytes. No runner-level retry, calibration, warmup, 9B gate or measured row followed (0/18). Preserve the failure; no harder-task or candidate comparison is released by this result. See the paired report and its checksum-verified publication subset.
 
 **Prospective protocol revision:** `model-quality-paired-20261012-r1d`, frozen before measured arms. Round 0 is still failed and is never reclassified. This single-agent study denies `task` and requires its own compatibility probes for both models: correct load/context, exact effective permissions, completed real bash and edit calls. Either compatibility failure stops the matrix. Explicit `--single-agent-release` follows code review and a clean committed SSD snapshot; it is not a delegation release. The preceding `r1b` call failed before loading any model because the executor expected ten commit characters from a runtime that prints nine. The corrected `r1c` loaded 4B and ran tools, then hit an undefined fixture variable in the executor's post-edit check; no calibration or measurement followed. Preserve both executor-invalid attempts. `r1d` binds that fixture once, tests the full compatibility path and cleans lint, with unchanged caps, profiles, prompts and graders.
 
@@ -92,6 +96,8 @@ Question B: does prefix reuse improve an actual multi-turn harness workload?
 - [ ] Qwen2B is conditional on a concrete cheaper-tier need. Ordinary Qwen27B/35B MoE, vLLM/SGLang, new training and restored EXL3 weights are deferred unless these rounds reveal a specific gap.
 
 ## Round 4 — Evidence-based routing and continuity
+
+**Implementation status:** the offline filter and regressions are implemented and reviewed. Capability data is supplied explicitly; cloud is disabled. There is no measured destination table or live policy comparison, so the live stage remains gated.
 
 **Files:** `router/rules.py`, `router/README.md`, `tests/test_router.py`; a small live runner only after destination evidence exists.
 
