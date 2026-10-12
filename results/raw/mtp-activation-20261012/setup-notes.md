@@ -1,0 +1,7 @@
+# MTP probe setup note
+
+The one server start used the pinned `llama-server` binary and the requested local 4B GGUF. The process loaded the embedded Qwen3.5 NextN head and initialized its `draft-mtp` context. Before sending any generation request, the runner attempted `GET /openapi.json`; this server returned HTTP 404. The runner then stopped and released its owned process group. No prompt was submitted, and no draft/acceptance counters were collected.
+
+This was a probe-setup error: the runner assumed an OpenAPI endpoint without checking the pinned server docs first. Offline review of the matching llama.cpp source commit (`d81235049384534c167caea52b85a694f6103d14`) confirms the documented `POST /completion` route, request fields, and speculative metrics. That later source review does not retroactively create generation evidence. This series is incomplete and does not establish MTP decoding activity, incompatibility, quality, or speed. A separately named corrected series is recorded in `results/raw/mtp-activation-corrected-20261012/`.
+
+The launch lasted 3.585 seconds. Ext4 had 16 GiB available; WSL reported 7.42 GiB available RAM and 4 GiB free swap before launch. Cleanup reaped the owned server process group. The follow-up process check found no `llama-server` or `llama-cli`; `nvidia-smi` listed no compute application. No weights were downloaded and no installation or driver changes were made.

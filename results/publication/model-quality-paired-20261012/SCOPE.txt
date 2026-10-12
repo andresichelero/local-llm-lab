@@ -1,0 +1,4 @@
+Publication scope: selected task prompts, events, records, resource samples, task workspace source/fixture files, preflight data, original export manifests, final report, and execution audit for attempts r1b/r1c/r1d.
+The original complete compressed exports are preserved separately under ../raw-archives and retain runtime-created files omitted from this publication subset.
+Excluded from publication subset: OpenCode home/config/session/database/WAL/SHM/lock state, OpenCode snapshot cache, temporary shared-object files, and workspace .git metadata. These are retained only in the complete originals and are not needed to interpret the recorded gates. No environment files, credentials, or model weights are included.
+The source export manifests copied here still describe their complete original exports, including files excluded from this subset. PUBLICATION.sha256 is the complete checksum list for this subset, excluding only itself.

@@ -1,0 +1,63 @@
+{
+  "model": "local/Qwen3.5-9B-Q4_K_M",
+  "base_url": "http://127.0.0.1:8080/v1",
+  "autoupdate": false,
+  "agents": {
+    "build": {
+      "name": "build",
+      "mode": "primary",
+      "steps": 20,
+      "permissions": [
+        {
+          "permission": "task",
+          "pattern": "*",
+          "action": "deny"
+        }
+      ]
+    },
+    "repo-explorer": {
+      "name": "repo-explorer",
+      "mode": "subagent",
+      "steps": null,
+      "permissions": [
+        {
+          "permission": "edit",
+          "pattern": "*",
+          "action": "deny"
+        },
+        {
+          "permission": "bash",
+          "pattern": "*",
+          "action": "deny"
+        }
+      ]
+    },
+    "independent-reviewer": {
+      "name": "independent-reviewer",
+      "mode": "subagent",
+      "steps": null,
+      "permissions": [
+        {
+          "permission": "edit",
+          "pattern": "*",
+          "action": "deny"
+        },
+        {
+          "permission": "bash",
+          "pattern": "*",
+          "action": "deny"
+        }
+      ]
+    }
+  },
+  "checks": {
+    "local_endpoint": true,
+    "autoupdate_disabled": true,
+    "configured_model": true,
+    "build_primary": true,
+    "build_steps": true,
+    "task_permissions_exact": true,
+    "repo-explorer_readonly": true,
+    "independent-reviewer_readonly": true
+  }
+}

@@ -26,7 +26,7 @@ tiers:
     context: 2048
     warmups: 1
     repetitions: 3
-    status: ExLlamaV3 CUDA installation passed; model download pending
+    status: completed SSD inference series at 2K/8K/16K; see results/reports/exllama-ssd.md; runtime installed but model currently archived on E and not staged for inference
   hybrid:
     question: Measure CPU/GPU layer offload with a 14B Q4_K_M coding model under the 8 GiB WSL limit.
     model: Qwen/Qwen2.5-Coder-14B-Instruct-GGUF
@@ -84,7 +84,7 @@ tiers:
     repetitions: 3
     prompt_target_percent: 87.5
     max_new_tokens: 64
-    status: in progress; results recorded by scripts/20_benchmark_context_kv.sh
+    status: completed SSD capacity/throughput series through 64K and matched KV observations; see results/reports/ssd-context-kv.md; this does not establish semantic quality
   coding_agentic_ssd:
     question: Can the official Ornith 9B Q4_K_M GGUF load on the RTX 3070 and reliably produce strict JSON and a real structured tool round trip in llama.cpp?
     model: ornith-ai/Ornith-1.0-9B-GGUF
@@ -148,6 +148,6 @@ tiers:
     flash_attention: on
     auto_compact_threshold: 15000
     harness: Mistral Vibe 2.26.1
-    repetitions: 3
-    status: completed; final artifacts/tests passed after two automatic compactions with no archive reads after continuation, but all runs changed executable bits on 34 tracked fixture files; run 2 reopened two archives; strict scope pass 0/3
+    repetitions: 4
+    status: completed; three original observations plus one follow-up; strict full-task pass 1/4; first three changed executable bits on 34 fixtures each, fourth had zero mode changes; see results/reports/vibe-context-stress.md
 

@@ -19,19 +19,41 @@ def stop(_signum: int, _frame: object) -> None:
     running = False
 
 
-def memory_kib() -> dict[str, int | None]:
+def parse_meminfo_kib(content: str) -> dict[str, int | str | None]:
     values: dict[str, int] = {}
-    with open("/proc/meminfo", encoding="ascii") as source:
-        for line in source:
-            key, raw = line.split(":", 1)
-            if key in {"MemTotal", "MemAvailable", "SwapTotal", "SwapFree"}:
-                values[key] = int(raw.strip().split()[0])
+    for line in content.splitlines():
+        if not line or ":" not in line:
+            continue
+        key, raw = line.split(":", 1)
+        if key in {"MemTotal", "MemAvailable", "SwapTotal", "SwapFree"}:
+            parts = raw.strip().split()
+            if parts:
+                values[key] = int(parts[0])
+    total_ram_mib = values.get("MemTotal", 0) // 1024
+    used_ram_mib = (values.get("MemTotal", 0) - values.get("MemAvailable", 0)) // 1024
+    total_swap_mib = values.get("SwapTotal", 0) // 1024
+    used_swap_mib = (values.get("SwapTotal", 0) - values.get("SwapFree", 0)) // 1024
     return {
-        "ram_total_mb": values.get("MemTotal", 0) // 1024,
-        "ram_used_mb": (values.get("MemTotal", 0) - values.get("MemAvailable", 0)) // 1024,
-        "swap_total_mb": values.get("SwapTotal", 0) // 1024,
-        "swap_used_mb": (values.get("SwapTotal", 0) - values.get("SwapFree", 0)) // 1024,
+        "memory_unit": "MiB",
+        # Historical compatibility keys
+        "ram_total_mb": total_ram_mib,
+        "ram_used_mb": used_ram_mib,
+        "swap_total_mb": total_swap_mib,
+        "swap_used_mb": used_swap_mib,
+        # Explicit modern aliases
+        "wsl_ram_total_mib": total_ram_mib,
+        "wsl_ram_used_mib": used_ram_mib,
+        "wsl_swap_total_mib": total_swap_mib,
+        "wsl_swap_used_mib": used_swap_mib,
     }
+
+
+def memory_kib() -> dict[str, int | str | None]:
+    try:
+        with open("/proc/meminfo", encoding="ascii") as source:
+            return parse_meminfo_kib(source.read())
+    except OSError:
+        return parse_meminfo_kib("")
 
 
 def cpu_ticks() -> tuple[int, int]:
@@ -39,6 +61,15 @@ def cpu_ticks() -> tuple[int, int]:
     numbers = [int(value) for value in fields]
     idle = numbers[3] + (numbers[4] if len(numbers) > 4 else 0)
     return sum(numbers), idle
+
+
+def parse_nvidia_smi(output: str) -> dict[str, str | None]:
+    parts = [part.strip() for part in output.strip().split(",")]
+    if len(parts) >= 5:
+        data = dict(zip(["vram_used_mb", "gpu_util_pct", "temperature_c", "gpu_clock_mhz", "power_w"], parts[:5]))
+        data["system_vram_used_mib"] = data["vram_used_mb"]
+        return data
+    return {key: None for key in ["vram_used_mb", "gpu_util_pct", "temperature_c", "gpu_clock_mhz", "power_w", "system_vram_used_mib"]}
 
 
 def gpu() -> dict[str, str | None]:
@@ -49,10 +80,9 @@ def gpu() -> dict[str, str | None]:
             [executable, f"--query-gpu={query}", "--format=csv,noheader,nounits"],
             capture_output=True, text=True, check=True, timeout=5,
         )
-        fields = [part.strip() for part in result.stdout.strip().split(",")]
-        return dict(zip(["vram_used_mb", "gpu_util_pct", "temperature_c", "gpu_clock_mhz", "power_w"], fields))
+        return parse_nvidia_smi(result.stdout)
     except (OSError, subprocess.SubprocessError):
-        return {key: None for key in ["vram_used_mb", "gpu_util_pct", "temperature_c", "gpu_clock_mhz", "power_w"]}
+        return {key: None for key in ["vram_used_mb", "gpu_util_pct", "temperature_c", "gpu_clock_mhz", "power_w", "system_vram_used_mib"]}
 
 
 def main() -> int:

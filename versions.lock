@@ -99,3 +99,25 @@ harness.qwen35_4b.whitespace_normalization: fixture and grader commit 3cd0483a9e
 harness.qwen35_4b.dotenv_line_parser: fixture and grader commit 9a6c1cfe32250de37193f78f45d46ff630ec1151; Qwen3.5-4B-Q4_K_M revision 4168f45a16a1290d65a4ec0fa312ae917a4c15d6; llama.cpp d81235049384534c167caea52b85a694f6103d14; 16K context; Q4_0 KV; one warm-up plus five measurements each on C-backed WSL ext4 SSD; Pi 3/5, OpenCode 5/5, Vibe 4/5 strict success; see results/reports/harness-qwen35-4b-env-parser.md and results/reports/harness-qwen35-4b-multitask.md
 archive.qwen35_4b.env_parser: E:\LocalLLMLabArchive\2026-10-11\qwen35-4b-env-parser-harness-20261011\qwen35-4b-env-parser-harness-20261011.tar.gz; sha256=b198a42d0f8f8c3de88e61a2770e2999e9da6353a89f7aecbf833564264088a8; contains run workspaces, session artifacts, server log, and raw JSONL; no model weights
 archive.model.qwen35_4b: E:\LocalLLMLabArchive\models\bartowski-Qwen_Qwen3.5-4B-GGUF\4168f45a16a1290d65a4ec0fa312ae917a4c15d6\Qwen_Qwen3.5-4B-Q4_K_M.gguf; 3013027808 bytes; sha256=13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983; copied from C-backed SSD after all measurements and checksum verified
+
+audit.continuation_20261011: results/reports/audit-continuation-20261011.md; machine/model/runtime rechecked; snapshots are not continuous monitoring
+audit.llama_cpp_ssd_bundle: /home/foxtrot/local-llm-benchmark/tools/llama-bin; requires explicit LD_LIBRARY_PATH to this directory; SSD library preflight passed; build 1 d81235049
+audit.opencode_effective_profile: OpenCode 1.19.0 confirmed by isolated absolute executable; exact profile SHA256=1c9a852168ea3df6ff2afef26dacee19bc160efe56989b4120157b5fa5abdef3; effective local endpoint/task allowlist and child edit/bash denies inspected
+validation.python: 3.12.3; isolated WSL ext4 envs/lab-validation; pytest=9.1.1; pluggy=1.6.0; iniconfig=2.3.0; packaging=24.2; Pygments=2.20.0
+validation.baseline: clean source db190b0620c1688c2bf8a3ebf2f6aaba6ee7b0f7 on SSD ext4; 73 tests and 3 subtests passed; no project lint/typecheck configuration
+validation.controlled_probe: source 80a50c5041bf0deef219fcf495aff6c6a5e2c40c; 79 tests and 3 subtests passed; 57 Python AST and 40 Bash syntax checks passed
+harness.opencode.controlled_probe: corrected effective local profile verified; readonly smoke passed; calculator control passed; 20-step/180-second delegated workflow timed out before reviewer despite passing final coding grader; no warmups/measured pairs; see results/reports/opencode-controlled-20261011.md
+archive.opencode.controlled_probe: E:\LocalLLMLabArchive\2026-10-11\opencode-controlled-probe-20261011.tar.gz; 37 selected entries; sha256=6f14213c9d2bad0112aaae082579d3f6ceafe0317c174e9614fdefff9fb04ba4; recursive Windows copy manifests verified; no weights/environments/package caches
+
+validation.permission_hardening_20261012: 80 tests and 3 subtests; 7 focused tests; 14 effective runtime gates per profile without inference; --auto removed; source hashes in results/system-audit/lab-validation-20261012.txt
+
+# Milestone M4 - M6 additions recorded 2026-10-12
+benchmark.prefix_cache_paired_6a: results/reports/prefix-cache-paired-20261012.md; 12/12 trials passed; 1.57x-1.70x speedup; cache-prompt promoted to standard
+benchmark.mtp_agentic_paired_6b: results/reports/mtp-agentic-evaluation-20261012.md; 12/12 trials passed; 91.16% draft acceptance; 1.24x-1.79x speedup; draft-mtp promoted to standard for Qwen3.5-4B
+model.gemma_4_e4b_qat_gguf.repo: unsloth/gemma-4-E4B-it-qat-GGUF
+model.gemma_4_e4b_qat_gguf.revision: 8c5a9e4fd5482e2be20fe0bf013b4c262a8f4265
+model.gemma_4_e4b_qat_gguf.file: gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf; size=4215695776; sha256=df0fd4ee07072c607c29a0a1cb4f98918426cca12f45a2776bdd6ee6d09a4de3; license=Apache-2.0
+model.gemma_4_e4b_qat_gguf.admission_status: rejected; 0/6 strict passes on agentic suite; scope violations and conversational syntax leaks; see results/reports/model-admission-20261012.md
+benchmark.model_switch_bench: results/reports/routing-governance-20261012.md; 5 cycles measured; unload=0.20-0.45s, 4B-load=3.0-3.1s, 9B-load=3.9-4.4s, total-switch=3.4-4.9s
+routing.matrix: Tier 0 CPU deterministic; Tier 1 Qwen3.5-4B cache+MTP (~17s-22s, <=4.87 GiB); Tier 2 Qwen3.5-9B cache (~40s-47s, <=7.33 GiB); cascade switch 4.5s
+governance.backlog: QLoRA deferred until persistent non-harness failure classes and 120 verified episodes; Vibe harness deferred; models >16K archived on E: drive

@@ -12,12 +12,13 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from benchmark.provenance import git_provenance
+from benchmark.provenance import git_provenance  # noqa: E402
 
 DEFAULT_MODEL = Path(os.environ.get("TRAINING_MODEL_DIR", Path.home() / "local-llm-benchmark/models/Qwen2.5-Coder-0.5B-Instruct"))
 DEFAULT_DATASET = ROOT / "benchmark/data/qlora-quality-heldout.jsonl"
@@ -186,7 +187,7 @@ def main() -> int:
             low_cpu_mem_usage=True, local_files_only=True,
         )
 
-    def reference_nll(task: dict) -> tuple[float, int]:
+    def reference_nll(task: dict, current_model: Any) -> tuple[float, int]:
         messages = [
             {"role": "system", "content": "You write correct Python code and follow output constraints exactly."},
             {"role": "user", "content": task["prompt"]},
@@ -203,11 +204,11 @@ def main() -> int:
         labels = full_ids.clone()
         labels[:, :prompt_ids.shape[1]] = -100
         with torch.inference_mode():
-            output = model(input_ids=full_ids, labels=labels)
+            output = current_model(input_ids=full_ids, labels=labels)
         tokens = int((labels != -100).sum().item())
         return float(output.loss.detach().cpu()), tokens
 
-    def generate(prompt: str) -> tuple[str, int, int, float]:
+    def generate(prompt: str, current_model: Any) -> tuple[str, int, int, float]:
         messages = [
             {"role": "system", "content": "You write correct Python code and follow output constraints exactly."},
             {"role": "user", "content": prompt},
@@ -217,7 +218,7 @@ def main() -> int:
         )["input_ids"].to("cuda")
         started = time.perf_counter()
         with torch.inference_mode():
-            generated = model.generate(
+            generated = current_model.generate(
                 encoded, max_new_tokens=128, do_sample=False,
                 pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
             )
@@ -228,7 +229,7 @@ def main() -> int:
     rows: list[dict] = []
     model.eval()
     if args.warmup:
-        generate("Write a Python function that returns x + 1. Output code only.")
+        generate("Write a Python function that returns x + 1. Output code only.", model)
     base_phase = "base_nf4" if args.method == "qlora" else "base_fp16"
     adapter_phase = "qlora_adapter" if args.method == "qlora" else "lora_adapter"
     for phase in (base_phase, adapter_phase):
@@ -237,8 +238,8 @@ def main() -> int:
             model.eval()
         for repeat in range(1, args.repeats + 1):
             for task in tasks:
-                reference_loss, reference_tokens = reference_nll(task)
-                output, prompt_tokens, completion_tokens, elapsed = generate(task["prompt"])
+                reference_loss, reference_tokens = reference_nll(task, model)
+                output, prompt_tokens, completion_tokens, elapsed = generate(task["prompt"], model)
                 success, passed, error = run_generated_code(output, task)
                 row = {
                     "timestamp": datetime.now(timezone.utc).isoformat(),

@@ -1,0 +1,7 @@
+7d42ebedd94b7d6638bc2578c408d6077d54760381adb8400c9bd795c88418f4  /home/foxtrot/local-llm-benchmark/snapshots/model-quality-paired-20261012-r1c-d2873e5/source/benchmark/model_quality_paired.py
+a6b2c43c8a8440854addffe37b91be22d1e98feff8b201d8bc8d5815c3c27ffa  /home/foxtrot/local-llm-benchmark/snapshots/model-quality-paired-20261012-r1c-d2873e5/source/benchmark/harness_runner.py
+0b81b48b60720a94930fa9b94f8b4fe8279bb40cb3fea258d819bfee50aa80fd  /home/foxtrot/local-llm-benchmark/snapshots/model-quality-paired-20261012-r1c-d2873e5/source/benchmark/harness_eval.py
+bbef19a6b5427cdd75745989ec5f2673bc977cd7dc917aa1763eae82eab59d1c  /home/foxtrot/local-llm-benchmark/snapshots/model-quality-paired-20261012-r1c-d2873e5/source/benchmark/opencode_controlled_probe.py
+2ce4b1393f8bab4ea99375f4c7d0b39729771999bc3c626b936ac5507e66eb79  /home/foxtrot/local-llm-benchmark/snapshots/model-quality-paired-20261012-r1c-d2873e5/source/tests/test_model_quality_paired.py
+e438cd5215993dc96d00f9af04f847aa1c329cfb81c75834c34d3393826cd890  /home/foxtrot/local-llm-benchmark/snapshots/model-quality-paired-20261012-r1c-d2873e5/pre-run-dry-run.json
+103bacdf5905e09f9fa457c2519065e22fb23f3ffdc40261d942c3ceb1f0c51d  /home/foxtrot/local-llm-benchmark/snapshots/model-quality-paired-20261012-r1c-d2873e5/pre-run-model-hashes.sha256

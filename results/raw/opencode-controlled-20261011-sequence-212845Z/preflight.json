@@ -1,0 +1,8 @@
+{
+  "timestamp_utc": "2026-10-11T21:28:49.634317+00:00",
+  "source_git_sha": "80a50c5041bf0deef219fcf495aff6c6a5e2c40c",
+  "opencode_version": "1.19.0",
+  "llama_cpp_version": "version: 0.6.0-dev (build 1, commit d81235049)\nbuilt with GNU 13.3.0 for Linux x86_64",
+  "model_sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+  "server_bundle_ldd_preflight": "passed"
+}

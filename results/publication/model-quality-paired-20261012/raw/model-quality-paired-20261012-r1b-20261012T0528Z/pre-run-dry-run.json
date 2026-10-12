@@ -1,0 +1,203 @@
+{
+  "protocol": {
+    "experiment": "model-quality-paired-20261012-r1b",
+    "round0_prerequisite": {
+      "status": "failed",
+      "measurement_eligible": false,
+      "reason": "previous controlled read-only smoke completed with zero child calls",
+      "not_a_single_agent_prerequisite": true,
+      "relationship": "historical failed multiagent gate; preserved and not relaxed by this independent single-agent series"
+    },
+    "single_agent_prerequisite": {
+      "status": "pending",
+      "measurement_eligible": false,
+      "release_required": "parent must explicitly authorize with --single-agent-release after review",
+      "requirements": [
+        "model loaded at configured context",
+        "exact effective single-agent profile",
+        "real successful bash call",
+        "real successful edit call"
+      ]
+    },
+    "harness": "opencode",
+    "harness_version": "1.19.0",
+    "models": {
+      "qwen3.5-4b": {
+        "alias": "Qwen3.5-4B-Q4_K_M",
+        "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+        "path": "models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
+        "sha256": "13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983"
+      },
+      "qwen3.5-9b": {
+        "alias": "Qwen3.5-9B-Q4_K_M",
+        "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+        "path": "models/gguf/Qwen3.5-9B-Q4_K_M.gguf",
+        "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+      }
+    },
+    "tasks": [
+      "calculator_division",
+      "whitespace_normalization",
+      "dotenv_line_parser"
+    ],
+    "task_limits_seconds": 180,
+    "max_primary_steps": 20,
+    "measured_repeats_per_model_task": 3,
+    "schedule": [
+      {
+        "model": "qwen3.5-4b",
+        "task": "calculator_division",
+        "repeat": 1,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-4b",
+        "task": "calculator_division",
+        "repeat": 2,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-4b",
+        "task": "calculator_division",
+        "repeat": 3,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-9b",
+        "task": "calculator_division",
+        "repeat": 1,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-9b",
+        "task": "calculator_division",
+        "repeat": 2,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-9b",
+        "task": "calculator_division",
+        "repeat": 3,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-9b",
+        "task": "whitespace_normalization",
+        "repeat": 1,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-9b",
+        "task": "whitespace_normalization",
+        "repeat": 2,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-9b",
+        "task": "whitespace_normalization",
+        "repeat": 3,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-4b",
+        "task": "whitespace_normalization",
+        "repeat": 1,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-4b",
+        "task": "whitespace_normalization",
+        "repeat": 2,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-4b",
+        "task": "whitespace_normalization",
+        "repeat": 3,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-4b",
+        "task": "dotenv_line_parser",
+        "repeat": 1,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-4b",
+        "task": "dotenv_line_parser",
+        "repeat": 2,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-4b",
+        "task": "dotenv_line_parser",
+        "repeat": 3,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-9b",
+        "task": "dotenv_line_parser",
+        "repeat": 1,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-9b",
+        "task": "dotenv_line_parser",
+        "repeat": 2,
+        "stage": "measurement"
+      },
+      {
+        "model": "qwen3.5-9b",
+        "task": "dotenv_line_parser",
+        "repeat": 3,
+        "stage": "measurement"
+      }
+    ],
+    "calibration": "one calculator_division task per model; diagnostic only",
+    "warmup": "one calculator_division task per model; excluded",
+    "context_tokens": 16384,
+    "kv_cache_kv": [
+      "q4_0",
+      "q4_0"
+    ],
+    "flash_attention": "on",
+    "gpu_layers": 99,
+    "temperature": 0,
+    "seed": 1234,
+    "reasoning": "off",
+    "prompt_cache": "off",
+    "parallel_slots": 1,
+    "endpoint": "http://127.0.0.1:8080",
+    "autoupdate": false,
+    "agent_mode": "single primary agent; task denied; bash/edit explicitly allowed",
+    "external_directory": "deny",
+    "task_limit_seconds": 180,
+    "round_limit_seconds": 4500,
+    "scratch_limit_bytes": 1073741824,
+    "minimum_free_ext4_bytes": 8589934592,
+    "swap_growth_stop": {
+      "bytes_over_baseline": 536870912,
+      "consecutive_one_second_samples": 10
+    },
+    "runtime_revision": "d81235049384534c167caea52b85a694f6103d14",
+    "server_flags": [
+      "--ctx-size 16384",
+      "--n-gpu-layers 99",
+      "--flash-attn on",
+      "--cache-type-k q4_0",
+      "--cache-type-v q4_0",
+      "--reasoning off",
+      "--no-cache-prompt",
+      "--parallel 1"
+    ],
+    "profile_sha256_by_model": {
+      "qwen3.5-4b": "26ff6bd1267f5fd9c999ba3019fb463f3b8924caa68db0b03b5daa33df0790e2",
+      "qwen3.5-9b": "6ae4611bc194cc4c1a24f7a03ca8b2b0be90ca12a06929b655772e69c35b5383"
+    },
+    "quant": "Q4_K_M",
+    "storage_profile": "ssd-wsl-ext4-c"
+  },
+  "benchmark_root": "/home/foxtrot/local-llm-benchmark",
+  "output_root": "/home/foxtrot/local-llm-benchmark/results/raw/model-quality-paired-20261012-r1b-20261012T0528Z",
+  "inference_started": false
+}

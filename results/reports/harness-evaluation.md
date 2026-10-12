@@ -1,6 +1,7 @@
 # Harness evaluation summary
 
 Source: `/mnt/d/Usuario/Downloads/LLM/local-llm-lab/results/raw/harness-run-summary.jsonl`. Warm-up runs, invalid runs, and legacy rows without a Git revision are excluded; raw entries remain preserved.
+The table selects one-based JSONL lines 21–29, three per harness, at `git_sha=ddeef10e4f4ee697baf76514114e65e26d98dac3`, with `source_tree_dirty=false`, `run_kind=measurement`, and `success=true`. This historical successful triplet is not a denominator for broader reliability; new comparisons must retain valid failed measurements too. Re-audited on 2026-10-11.
 All measured runs used the same deterministic coding fixture, Qwen3.5-9B Q4_K_M, llama.cpp, a local endpoint, 16K context, and Q4_0 KV cache. Token counts come from each harness's own usage records, including cached input where exposed.
 Success requires clean harness exit, passing unit tests, passing behavior probe, and scoped edits.
 

@@ -1,0 +1,655 @@
+{
+  "experiment": "mtp-paired-probe-r2-20261012",
+  "status": "complete_diagnostic_with_wrapper_exit_status_unverified",
+  "controller_run": {
+    "launched_utc": "2026-10-12T06:16:00Z",
+    "finished_utc": "2026-10-12T06:16:39Z",
+    "output_root_ssd": "/home/foxtrot/local-llm-benchmark/results/raw/mtp-paired-probe-r2-20261012-031553-14d31c9a",
+    "output_root_ntfs": "D:/Usuario/Downloads/LLM/local-llm-lab/results/raw/mtp-paired-probe-r2-20261012-031553-14d31c9a",
+    "wrapper_recorded_exit_code": null,
+    "wrapper_note": "Controller artifacts show all planned rows complete and cleanup succeeded, but outer shell wrapper emitted an empty RUN_EXIT_CODE then numeric-argument error; no rerun was made."
+  },
+  "source": {
+    "commit": "6efc7a3dae050f7303a01d4bee9584df577da4a6",
+    "clone_path_ext4": "/home/foxtrot/local-llm-benchmark/ssd-checkouts/mtp-exec-20261012-031028-b0ff5c3a",
+    "source_files_sha256": {
+      "benchmark/mtp_paired_probe.py": "68a05d503d8158ddd9d1c5eb8e0f0f9936960cb22a3e72e1d10457263ebb4d06",
+      "benchmark/quality_smoke.py": "3580e733c9c3b99e9607ffa679106e0ab56ccbab864761f75bdcff997f09e556",
+      "benchmark/llama_cpp_bench.py": "04fec1dcc531181a01018d6702ffd808ff2803a4451d27da1933977fb186515e",
+      "benchmark/resource_sampler.py": "8f85a91d47dc91021b340230563d746e4c3f0c3dfc9b4456ba7bde363b67a77f",
+      "benchmark/opencode_controlled_probe.py": "bbef19a6b5427cdd75745989ec5f2673bc977cd7dc917aa1763eae82eab59d1c"
+    },
+    "git_status": [
+      "M results/system-audit/host-audit.txt"
+    ],
+    "status_note": "Only tracked generated results/system-audit/host-audit.txt reports modified due CRLF/eol normalization; committed and checkout file raw SHA-256 are identical (3de918ed9fcf843ae2e555b7a32be506da6838626a0c0b09efbe999578455ebe); no code/config source files changed. quality_smoke child tags are conservative by design."
+  },
+  "model": {
+    "path": "models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
+    "sha256": "13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983"
+  },
+  "runtime": {
+    "path": "tools/llama-bin/llama-server",
+    "sha256": "83005935917f6e3ec98319e277bd4c4c7e3da3e4dc1876bcc451c32d8d4d37d1",
+    "source_commit": "d81235049384534c167caea52b85a694f6103d14",
+    "reported_version": "0.6.0-dev (build 1, commit d81235049)",
+    "runtime_files_sha256": {
+      "libggml-base.so": "51faa2a4f3ab2cca652bd00b1af30f439e89236bd7b94eea99eb643c88c9aef6",
+      "libggml-base.so.0": "51faa2a4f3ab2cca652bd00b1af30f439e89236bd7b94eea99eb643c88c9aef6",
+      "libggml-base.so.0.26.0": "51faa2a4f3ab2cca652bd00b1af30f439e89236bd7b94eea99eb643c88c9aef6",
+      "libggml-cpu.so": "0d393a5e8d0cf49cf242a28a996ae323ecb8b5b0230cac7e9a8d842b8fb7c734",
+      "libggml-cpu.so.0": "0d393a5e8d0cf49cf242a28a996ae323ecb8b5b0230cac7e9a8d842b8fb7c734",
+      "libggml-cpu.so.0.26.0": "0d393a5e8d0cf49cf242a28a996ae323ecb8b5b0230cac7e9a8d842b8fb7c734",
+      "libggml-cuda.so": "7e08da3349ea79f9f6d51550b5caed4edf9d70fead1f85d812718725cc25e170",
+      "libggml-cuda.so.0": "7e08da3349ea79f9f6d51550b5caed4edf9d70fead1f85d812718725cc25e170",
+      "libggml-cuda.so.0.26.0": "7e08da3349ea79f9f6d51550b5caed4edf9d70fead1f85d812718725cc25e170",
+      "libggml.so": "12701e3ef09195b093ff17497897b5b58731584c343ba2f095fc715bf735fee7",
+      "libggml.so.0": "12701e3ef09195b093ff17497897b5b58731584c343ba2f095fc715bf735fee7",
+      "libggml.so.0.26.0": "12701e3ef09195b093ff17497897b5b58731584c343ba2f095fc715bf735fee7",
+      "libllama-cli-impl.so": "25544ec058d25ed840cd888f5ec399f39132ba29bea3031717bdbcf9e3a04772",
+      "libllama-common.so": "83b13fd20328e9857db4ba03dad95fd502ffe490f42498ca37dec461ff6d5817",
+      "libllama-common.so.0": "83b13fd20328e9857db4ba03dad95fd502ffe490f42498ca37dec461ff6d5817",
+      "libllama-common.so.0.6.0": "83b13fd20328e9857db4ba03dad95fd502ffe490f42498ca37dec461ff6d5817",
+      "libllama-server-impl.so": "df5bd8c0cd3fdb0d6d52f2d2d0e64c2bbf925570569f853747693280d4ba7670",
+      "libllama.so": "c6726906c6f44a1db194bc7966f2973acce30c606d231652956e1e5d88de3ca0",
+      "libllama.so.0": "c6726906c6f44a1db194bc7966f2973acce30c606d231652956e1e5d88de3ca0",
+      "libllama.so.0.6.0": "c6726906c6f44a1db194bc7966f2973acce30c606d231652956e1e5d88de3ca0",
+      "libmtmd.so": "8b760a611ef195cc70e94a5b0d1a36178d34deab9ed225313f9604c9d0ad6bba",
+      "libmtmd.so.0": "8b760a611ef195cc70e94a5b0d1a36178d34deab9ed225313f9604c9d0ad6bba",
+      "libmtmd.so.0.6.0": "8b760a611ef195cc70e94a5b0d1a36178d34deab9ed225313f9604c9d0ad6bba",
+      "llama-server": "83005935917f6e3ec98319e277bd4c4c7e3da3e4dc1876bcc451c32d8d4d37d1"
+    },
+    "child_environment_ld_library_path": "/home/foxtrot/local-llm-benchmark/tools/llama-bin"
+  },
+  "protocol": {
+    "experiment": "mtp-paired-probe-r2-20261012",
+    "created_at_utc": "2026-10-12T06:16:02.412232+00:00",
+    "context_tokens": 16384,
+    "temperature": 0,
+    "seed": 1234,
+    "target_kv_cache": {
+      "k": "q4_0",
+      "v": "q4_0"
+    },
+    "prompt_cache": "off",
+    "prompts": {
+      "division_repair": {
+        "text": "Repair the Python function so it divides a by b and raises ValueError with the exact message 'division by zero' when b is zero. Return only the corrected function.\n\n```python\ndef divide(a, b):\n    return a + b\n```",
+        "utf8_bytes": 213,
+        "sha256": "752290b3cf8dbe25b5afb944b5f2838743191c6f2f2a6ad4ee2fea8a6d499e79"
+      },
+      "text_summary": {
+        "text": "Summarize the passage below in three concise sentences. Each sentence must add a distinct point; do not repeat an idea.\n\nPassage: A neighborhood library extended its evening hours after a survey showed that many residents could not visit before work ended. During the first month, evening visits increased, and the library hosted two volunteer-led reading groups. Staff also noted that the later schedule required a second closing shift, so the library will review attendance and staffing costs before making the change permanent.",
+        "utf8_bytes": 530,
+        "sha256": "576f67b3795bea4c1873c04e8d5f495095c7bc46963073ba5c06bf92060f9a15"
+      }
+    },
+    "arms": {
+      "off": {
+        "spec_type": "none",
+        "mtp_draft_context": "not loaded"
+      },
+      "on": {
+        "spec_type": "draft-mtp",
+        "draft_max_tokens": 3,
+        "mtp_draft_context_kv": {
+          "k": "f16",
+          "v": "f16"
+        }
+      }
+    },
+    "schedule": [
+      {
+        "stage": "warmup",
+        "prompt_id": "division_repair",
+        "arm": "off",
+        "pair": 1,
+        "repeat": null,
+        "session_id": "pair-1-off"
+      },
+      {
+        "stage": "measurement",
+        "prompt_id": "division_repair",
+        "arm": "off",
+        "pair": 1,
+        "repeat": 1,
+        "session_id": "pair-1-off"
+      },
+      {
+        "stage": "warmup",
+        "prompt_id": "text_summary",
+        "arm": "off",
+        "pair": 1,
+        "repeat": null,
+        "session_id": "pair-1-off"
+      },
+      {
+        "stage": "measurement",
+        "prompt_id": "text_summary",
+        "arm": "off",
+        "pair": 1,
+        "repeat": 1,
+        "session_id": "pair-1-off"
+      },
+      {
+        "stage": "warmup",
+        "prompt_id": "division_repair",
+        "arm": "on",
+        "pair": 1,
+        "repeat": null,
+        "session_id": "pair-1-on"
+      },
+      {
+        "stage": "measurement",
+        "prompt_id": "division_repair",
+        "arm": "on",
+        "pair": 1,
+        "repeat": 1,
+        "session_id": "pair-1-on"
+      },
+      {
+        "stage": "warmup",
+        "prompt_id": "text_summary",
+        "arm": "on",
+        "pair": 1,
+        "repeat": null,
+        "session_id": "pair-1-on"
+      },
+      {
+        "stage": "measurement",
+        "prompt_id": "text_summary",
+        "arm": "on",
+        "pair": 1,
+        "repeat": 1,
+        "session_id": "pair-1-on"
+      },
+      {
+        "stage": "measurement",
+        "prompt_id": "division_repair",
+        "arm": "on",
+        "pair": 2,
+        "repeat": 2,
+        "session_id": "pair-2-on"
+      },
+      {
+        "stage": "measurement",
+        "prompt_id": "text_summary",
+        "arm": "on",
+        "pair": 2,
+        "repeat": 2,
+        "session_id": "pair-2-on"
+      },
+      {
+        "stage": "measurement",
+        "prompt_id": "division_repair",
+        "arm": "off",
+        "pair": 2,
+        "repeat": 2,
+        "session_id": "pair-2-off"
+      },
+      {
+        "stage": "measurement",
+        "prompt_id": "text_summary",
+        "arm": "off",
+        "pair": 2,
+        "repeat": 2,
+        "session_id": "pair-2-off"
+      },
+      {
+        "stage": "measurement",
+        "prompt_id": "division_repair",
+        "arm": "off",
+        "pair": 3,
+        "repeat": 3,
+        "session_id": "pair-3-off"
+      },
+      {
+        "stage": "measurement",
+        "prompt_id": "text_summary",
+        "arm": "off",
+        "pair": 3,
+        "repeat": 3,
+        "session_id": "pair-3-off"
+      },
+      {
+        "stage": "measurement",
+        "prompt_id": "division_repair",
+        "arm": "on",
+        "pair": 3,
+        "repeat": 3,
+        "session_id": "pair-3-on"
+      },
+      {
+        "stage": "measurement",
+        "prompt_id": "text_summary",
+        "arm": "on",
+        "pair": 3,
+        "repeat": 3,
+        "session_id": "pair-3-on"
+      }
+    ],
+    "warmups_excluded": 4,
+    "source_files_sha256": {
+      "benchmark/mtp_paired_probe.py": "68a05d503d8158ddd9d1c5eb8e0f0f9936960cb22a3e72e1d10457263ebb4d06",
+      "benchmark/quality_smoke.py": "3580e733c9c3b99e9607ffa679106e0ab56ccbab864761f75bdcff997f09e556",
+      "benchmark/llama_cpp_bench.py": "04fec1dcc531181a01018d6702ffd808ff2803a4451d27da1933977fb186515e",
+      "benchmark/resource_sampler.py": "8f85a91d47dc91021b340230563d746e4c3f0c3dfc9b4456ba7bde363b67a77f",
+      "benchmark/opencode_controlled_probe.py": "bbef19a6b5427cdd75745989ec5f2673bc977cd7dc917aa1763eae82eab59d1c"
+    },
+    "runtime_files_sha256": {
+      "libggml-base.so": "51faa2a4f3ab2cca652bd00b1af30f439e89236bd7b94eea99eb643c88c9aef6",
+      "libggml-base.so.0": "51faa2a4f3ab2cca652bd00b1af30f439e89236bd7b94eea99eb643c88c9aef6",
+      "libggml-base.so.0.26.0": "51faa2a4f3ab2cca652bd00b1af30f439e89236bd7b94eea99eb643c88c9aef6",
+      "libggml-cpu.so": "0d393a5e8d0cf49cf242a28a996ae323ecb8b5b0230cac7e9a8d842b8fb7c734",
+      "libggml-cpu.so.0": "0d393a5e8d0cf49cf242a28a996ae323ecb8b5b0230cac7e9a8d842b8fb7c734",
+      "libggml-cpu.so.0.26.0": "0d393a5e8d0cf49cf242a28a996ae323ecb8b5b0230cac7e9a8d842b8fb7c734",
+      "libggml-cuda.so": "7e08da3349ea79f9f6d51550b5caed4edf9d70fead1f85d812718725cc25e170",
+      "libggml-cuda.so.0": "7e08da3349ea79f9f6d51550b5caed4edf9d70fead1f85d812718725cc25e170",
+      "libggml-cuda.so.0.26.0": "7e08da3349ea79f9f6d51550b5caed4edf9d70fead1f85d812718725cc25e170",
+      "libggml.so": "12701e3ef09195b093ff17497897b5b58731584c343ba2f095fc715bf735fee7",
+      "libggml.so.0": "12701e3ef09195b093ff17497897b5b58731584c343ba2f095fc715bf735fee7",
+      "libggml.so.0.26.0": "12701e3ef09195b093ff17497897b5b58731584c343ba2f095fc715bf735fee7",
+      "libllama-cli-impl.so": "25544ec058d25ed840cd888f5ec399f39132ba29bea3031717bdbcf9e3a04772",
+      "libllama-common.so": "83b13fd20328e9857db4ba03dad95fd502ffe490f42498ca37dec461ff6d5817",
+      "libllama-common.so.0": "83b13fd20328e9857db4ba03dad95fd502ffe490f42498ca37dec461ff6d5817",
+      "libllama-common.so.0.6.0": "83b13fd20328e9857db4ba03dad95fd502ffe490f42498ca37dec461ff6d5817",
+      "libllama-server-impl.so": "df5bd8c0cd3fdb0d6d52f2d2d0e64c2bbf925570569f853747693280d4ba7670",
+      "libllama.so": "c6726906c6f44a1db194bc7966f2973acce30c606d231652956e1e5d88de3ca0",
+      "libllama.so.0": "c6726906c6f44a1db194bc7966f2973acce30c606d231652956e1e5d88de3ca0",
+      "libllama.so.0.6.0": "c6726906c6f44a1db194bc7966f2973acce30c606d231652956e1e5d88de3ca0",
+      "libmtmd.so": "8b760a611ef195cc70e94a5b0d1a36178d34deab9ed225313f9604c9d0ad6bba",
+      "libmtmd.so.0": "8b760a611ef195cc70e94a5b0d1a36178d34deab9ed225313f9604c9d0ad6bba",
+      "libmtmd.so.0.6.0": "8b760a611ef195cc70e94a5b0d1a36178d34deab9ed225313f9604c9d0ad6bba",
+      "llama-server": "83005935917f6e3ec98319e277bd4c4c7e3da3e4dc1876bcc451c32d8d4d37d1"
+    },
+    "server_argv_by_arm": {
+      "off": [
+        "/home/foxtrot/local-llm-benchmark/tools/llama-bin/llama-server",
+        "--offline",
+        "--model",
+        "/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18763",
+        "--ctx-size",
+        "16384",
+        "--n-predict",
+        "512",
+        "--gpu-layers",
+        "99",
+        "--flash-attn",
+        "on",
+        "--cache-type-k",
+        "q4_0",
+        "--cache-type-v",
+        "q4_0",
+        "--no-cache-prompt",
+        "--parallel",
+        "1",
+        "--spec-type",
+        "none",
+        "--spec-draft-n-max",
+        "3",
+        "--spec-draft-type-k",
+        "f16",
+        "--spec-draft-type-v",
+        "f16",
+        "--reasoning",
+        "off",
+        "--temp",
+        "0",
+        "--metrics",
+        "--slots",
+        "--log-timestamps",
+        "--verbosity",
+        "4"
+      ],
+      "on": [
+        "/home/foxtrot/local-llm-benchmark/tools/llama-bin/llama-server",
+        "--offline",
+        "--model",
+        "/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18763",
+        "--ctx-size",
+        "16384",
+        "--n-predict",
+        "512",
+        "--gpu-layers",
+        "99",
+        "--flash-attn",
+        "on",
+        "--cache-type-k",
+        "q4_0",
+        "--cache-type-v",
+        "q4_0",
+        "--no-cache-prompt",
+        "--parallel",
+        "1",
+        "--spec-type",
+        "draft-mtp",
+        "--spec-draft-n-max",
+        "3",
+        "--spec-draft-type-k",
+        "f16",
+        "--spec-draft-type-v",
+        "f16",
+        "--reasoning",
+        "off",
+        "--temp",
+        "0",
+        "--metrics",
+        "--slots",
+        "--log-timestamps",
+        "--verbosity",
+        "4"
+      ]
+    },
+    "quality_gates": {
+      "strict_json": "benchmark/quality_smoke.py; required for each arm before warmups",
+      "tool_round_trip": "benchmark/quality_smoke.py; required for each arm before warmups",
+      "coding_behavior": "pending separate promotion gate",
+      "promotion_allowed_by_this_probe": false
+    },
+    "quality_claim": "no useful-gain claim from this probe"
+  },
+  "denominators": {
+    "planned_measurements": 12,
+    "attempted_measurements": 12,
+    "completed_measurements": 12,
+    "measurement_records": 12,
+    "warmup_records": 4,
+    "warmups_completed": 4,
+    "total_records": 16,
+    "failed_or_stopped_rows": [],
+    "finish_reason_counts": {
+      "stop": 12
+    },
+    "cap_condition_counts": {
+      "stop": 12
+    }
+  },
+  "quality_gates": {
+    "assessment_count": 2,
+    "by_arm": {
+      "off": {
+        "passed": true,
+        "checks": {
+          "structured_json": true,
+          "tool_round_trip": true
+        },
+        "child_exit_code": 0
+      },
+      "on": {
+        "passed": true,
+        "checks": {
+          "structured_json": true,
+          "tool_round_trip": true
+        },
+        "child_exit_code": 0
+      }
+    },
+    "claim_scope": "strict JSON and one tool round-trip only; separate coding-behavior/promotion gate remains pending"
+  },
+  "measurements_by_prompt_and_arm": {
+    "division_repair": {
+      "off": {
+        "n": 3,
+        "completion_tokens": [
+          35,
+          35,
+          35
+        ],
+        "finish_reason_counts": {
+          "stop": 3
+        },
+        "cap_condition_counts": {
+          "stop": 3
+        },
+        "wall_median_s": 0.741,
+        "wall_range_s": [
+          0.4609,
+          0.757
+        ],
+        "output_tps_median": 80.595
+      },
+      "on": {
+        "n": 3,
+        "completion_tokens": [
+          35,
+          35,
+          35
+        ],
+        "finish_reason_counts": {
+          "stop": 3
+        },
+        "cap_condition_counts": {
+          "stop": 3
+        },
+        "wall_median_s": 0.477,
+        "wall_range_s": [
+          0.3429,
+          0.6547
+        ],
+        "output_tps_median": 136.623
+      }
+    },
+    "text_summary": {
+      "off": {
+        "n": 3,
+        "completion_tokens": [
+          54,
+          54,
+          54
+        ],
+        "finish_reason_counts": {
+          "stop": 3
+        },
+        "cap_condition_counts": {
+          "stop": 3
+        },
+        "wall_median_s": 0.8367,
+        "wall_range_s": [
+          0.7026,
+          0.8438
+        ],
+        "output_tps_median": 86.123
+      },
+      "on": {
+        "n": 3,
+        "completion_tokens": [
+          55,
+          55,
+          55
+        ],
+        "finish_reason_counts": {
+          "stop": 3
+        },
+        "cap_condition_counts": {
+          "stop": 3
+        },
+        "wall_median_s": 0.6608,
+        "wall_range_s": [
+          0.5944,
+          0.755
+        ],
+        "output_tps_median": 118.97
+      }
+    }
+  },
+  "paired_wall_observations": {
+    "division_repair": [
+      {
+        "pair": 1,
+        "matched_tokens_eos_cap": true,
+        "off_tokens": 35,
+        "on_tokens": 35,
+        "off_finish_reason": "stop",
+        "on_finish_reason": "stop",
+        "off_cap_condition": "stop",
+        "on_cap_condition": "stop",
+        "off_wall_s": 0.4609,
+        "on_wall_s": 0.3429,
+        "on_minus_off_wall_s": -0.118
+      },
+      {
+        "pair": 2,
+        "matched_tokens_eos_cap": true,
+        "off_tokens": 35,
+        "on_tokens": 35,
+        "off_finish_reason": "stop",
+        "on_finish_reason": "stop",
+        "off_cap_condition": "stop",
+        "on_cap_condition": "stop",
+        "off_wall_s": 0.757,
+        "on_wall_s": 0.477,
+        "on_minus_off_wall_s": -0.28
+      },
+      {
+        "pair": 3,
+        "matched_tokens_eos_cap": true,
+        "off_tokens": 35,
+        "on_tokens": 35,
+        "off_finish_reason": "stop",
+        "on_finish_reason": "stop",
+        "off_cap_condition": "stop",
+        "on_cap_condition": "stop",
+        "off_wall_s": 0.741,
+        "on_wall_s": 0.6547,
+        "on_minus_off_wall_s": -0.0863
+      }
+    ],
+    "text_summary": [
+      {
+        "pair": 1,
+        "matched_tokens_eos_cap": false,
+        "off_tokens": 54,
+        "on_tokens": 55,
+        "off_finish_reason": "stop",
+        "on_finish_reason": "stop",
+        "off_cap_condition": "stop",
+        "on_cap_condition": "stop",
+        "off_wall_s": 0.7026,
+        "on_wall_s": 0.5944,
+        "on_minus_off_wall_s": null
+      },
+      {
+        "pair": 2,
+        "matched_tokens_eos_cap": false,
+        "off_tokens": 54,
+        "on_tokens": 55,
+        "off_finish_reason": "stop",
+        "on_finish_reason": "stop",
+        "off_cap_condition": "stop",
+        "on_cap_condition": "stop",
+        "off_wall_s": 0.8367,
+        "on_wall_s": 0.6608,
+        "on_minus_off_wall_s": null
+      },
+      {
+        "pair": 3,
+        "matched_tokens_eos_cap": false,
+        "off_tokens": 54,
+        "on_tokens": 55,
+        "off_finish_reason": "stop",
+        "on_finish_reason": "stop",
+        "off_cap_condition": "stop",
+        "on_cap_condition": "stop",
+        "off_wall_s": 0.8438,
+        "on_wall_s": 0.755,
+        "on_minus_off_wall_s": null
+      }
+    ]
+  },
+  "activation": {
+    "summary": {
+      "status": "active_counters_observed",
+      "on_measurements_attempted": 6,
+      "counter_rows_available": {
+        "drafted_tokens": 6,
+        "accepted_tokens": 6
+      },
+      "counter_totals": {
+        "drafted_tokens": 270,
+        "accepted_tokens": 174
+      },
+      "activation_confirmed": true,
+      "speedup_claim_allowed": false,
+      "coding_behavior_gate": "pending"
+    },
+    "on_measurement_counter_rows": {
+      "drafted_tokens": {
+        "available_rows": 6,
+        "positive_rows": 6,
+        "total_delta": 270.0
+      },
+      "accepted_tokens": {
+        "available_rows": 6,
+        "positive_rows": 6,
+        "total_delta": 174.0
+      },
+      "verification_steps": {
+        "available_rows": 6,
+        "positive_rows": 6,
+        "total_delta": 90.0
+      }
+    },
+    "draft_kv": "f16",
+    "interpretation": "activation observed from nonzero runtime counters; no quality or speedup claim"
+  },
+  "resources": {
+    "session_count": 6,
+    "sample_count": 27,
+    "ram_used_mb": {
+      "min": 820.0,
+      "max": 1810.0
+    },
+    "swap_used_mb": {
+      "min": 0.0,
+      "max": 0.0
+    },
+    "vram_used_mb": {
+      "min": 1603.0,
+      "max": 5703.0
+    },
+    "gpu_util_pct": {
+      "min": 1.0,
+      "max": 87.0
+    }
+  },
+  "oom_markers_found": [],
+  "cleanup": {
+    "llama_server_processes": "none observed after run",
+    "port_18763": "free after run",
+    "gpu_compute_apps": "none observed after run",
+    "postrun_gpu": "NVIDIA RTX 3070, 1506 MiB of 8192 MiB used, 2% utilization",
+    "swap_used_mb": {
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  "wrapper_setup_stops_before_controller": [
+    {
+      "log": "mtp-paired-probe-r2-20261012-031324-148e246f-preflight.log",
+      "cause": "date command received extra printf operand; no controller launch"
+    },
+    {
+      "log": "mtp-paired-probe-r2-20261012-031352-33cc544a-preflight.log",
+      "cause": "empty port-list ss returned status 1 under set -e; no controller launch"
+    },
+    {
+      "log": "mtp-paired-probe-r2-20261012-031422-a48fb867-preflight.log",
+      "cause": "empty ps process-list returned status 1 under set -e; no controller launch"
+    }
+  ],
+  "conclusion": {
+    "activation_gate": "satisfied",
+    "coding_behavior_gate": "pending",
+    "promotion_status": "blocked_pending_coding_behavior",
+    "speedup_claim_allowed": false,
+    "quality_gain_claim_allowed": false
+  }
+}

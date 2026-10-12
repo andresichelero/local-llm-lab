@@ -19,8 +19,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from benchmark.provenance import git_provenance
-from benchmark.harness_eval import grade_workspace
+from benchmark.provenance import git_provenance  # noqa: E402
+from benchmark.harness_eval import grade_workspace  # noqa: E402
 
 DEFAULT_ROOT = Path.home() / "local-llm-benchmark"
 DEFAULT_MODEL = "Qwen3.5-9B-Q4_K_M"
@@ -41,6 +41,18 @@ TASK_PATHS = {
     "dotenv_line_parser": (
         Path("benchmark/fixtures/harness_env_parser"),
         Path("benchmark/fixtures/harness_env_parser/TASK.md"),
+    ),
+    "config_precedence": (
+        Path("benchmark/fixtures/config_precedence_task"),
+        Path("benchmark/fixtures/config_precedence_task/TASK.md"),
+    ),
+    "retry_policy": (
+        Path("benchmark/fixtures/retry_policy_task"),
+        Path("benchmark/fixtures/retry_policy_task/TASK.md"),
+    ),
+    "package_refactor": (
+        Path("benchmark/fixtures/package_refactor_task"),
+        Path("benchmark/fixtures/package_refactor_task/TASK.md"),
     ),
 }
 
@@ -65,7 +77,6 @@ def build_command(
     time_limit: int = 180,
 ) -> list[str]:
     prompt = prompt_file.read_text(encoding="utf-8").strip()
-    node_bin = install_root / "runtimes/node-v22.23.3-linux-x64/bin"
     if harness == "pi":
         executable = install_root / "envs/node-harnesses/pi/node_modules/.bin/pi"
         return [
@@ -348,6 +359,18 @@ def _prepare_run(
             model: {"name": model, "limit": {"context": context, "output": 1024}, "options": {"temperature": 0}}
         }
         (config_dir / "opencode.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+        for candidate_root in (
+            install_root / "cache/opencode-node-modules",
+            REPO_ROOT.parent / "cache/opencode-node-modules",
+            Path("/home/foxtrot/local-llm-benchmark/cache/opencode-node-modules"),
+        ):
+            if candidate_root.is_dir() and not (config_dir / "node_modules").exists():
+                shutil.copytree(candidate_root, config_dir / "node_modules")
+                for pkg_file in ("package.json", "package-lock.json"):
+                    src_pkg = candidate_root.parent / pkg_file
+                    if src_pkg.is_file() and not (config_dir / pkg_file).exists():
+                        shutil.copy(src_pkg, config_dir / pkg_file)
+                break
     elif harness == "vibe":
         text = (REPO_ROOT / "benchmark/configs/harnesses/vibe.config.toml").read_text(encoding="utf-8")
         replacements = {

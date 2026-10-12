@@ -1,0 +1,6 @@
+0.01.544.772 I llama_model_loader: - kv  30:                qwen35.nextn_predict_layers u32              = 1
+0.02.584.156 I common_speculative_init_result: creating MTP draft context against the target model '/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf'
+0.02.638.646 I spec common_specu: adding speculative implementation 'draft-mtp'
+0.02.702.782 I srv    load_model: speculative decoding context initialized
+0.04.771.804 I slot print_timing: id  0 | task 0 | draft acceptance = 0.91667 (  187 accepted /   204 generated), mean len =  3.75
+0.04.771.826 I spec common_specu: statistics        draft-mtp: #calls(b,g,a) =    1     68     68, #gen drafts =     68, #acc drafts =    67, #gen tokens =    204, #acc tokens =   187, #mean acc len = 3.75, #acc rate/pos = (0.985, 0.926, 0.838), dur(b,g,a) = 0.008, 523.389, 0.071 ms

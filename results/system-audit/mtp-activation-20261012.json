@@ -1,0 +1,69 @@
+{
+  "audit_timestamp_utc": "2026-10-12T05:10:12Z",
+  "status": "incomplete_setup_invalid_no_generation",
+  "repository": {
+    "commit": "a734283cdb7941017f0a6129742249461880a1ec",
+    "source_snapshot": "/home/foxtrot/local-llm-benchmark/ssd-checkouts/round2-mtp-a734283-20261012",
+    "source_archive_sha256": "c53960fa04cb7408d4b029dc92f0c6151629d604d4eea4389fe7d466154760ad"
+  },
+  "model": {
+    "path": "/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
+    "sha256": "13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983",
+    "mtp_metadata": "qwen35.nextn_predict_layers = 1"
+  },
+  "runtime": {
+    "path": "/home/foxtrot/local-llm-benchmark/tools/llama-bin",
+    "version": "0.6.0-dev build 1 commit d81235049",
+    "server_sha256": "83005935917f6e3ec98319e277bd4c4c7e3da3e4dc1876bcc451c32d8d4d37d1",
+    "ldd_return_code": 0,
+    "dependencies_not_found": false
+  },
+  "launch": {
+    "started_at_utc": "2026-10-12T05:09:10.940286+00:00",
+    "elapsed_seconds_including_cleanup": 3.585,
+    "argv": [
+      "llama-server", "--offline", "--model", "/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
+      "--host", "127.0.0.1", "--port", "18762", "--ctx-size", "16384", "--n-predict", "256",
+      "--gpu-layers", "99", "--flash-attn", "on", "--cache-type-k", "q4_0", "--cache-type-v", "q4_0",
+      "--no-cache-prompt", "--parallel", "1", "--spec-type", "draft-mtp", "--spec-draft-n-max", "3",
+      "--reasoning", "off", "--temp", "0", "--metrics", "--slots", "--log-timestamps", "--verbosity", "4"
+    ],
+    "prompt": "Repeat the sequence 0 1 2 3 4 5 6 7 8 9, separated by spaces, over and over.",
+    "prompt_sha256": "7acea3cebb1d8d5415eb7c215bcc84a2c16197c08482c6ff58e02d939354a981",
+    "health_status": 200,
+    "openapi_probe": {
+      "path": "/openapi.json",
+      "status": 404,
+      "interpretation": "runner setup error; no inference request followed"
+    },
+    "completion_request_sent": false,
+    "process_return_code": 0,
+    "process_group_released": true
+  },
+  "runtime_observations": {
+    "model_declares_one_nextn_layer": true,
+    "mtp_draft_context_created": true,
+    "draft_mtp_implementation_added": true,
+    "speculative_context_initialized": true,
+    "generation_executed": false,
+    "drafted_counter": null,
+    "accepted_counter": null,
+    "counter_status": "not observed because no generation request was sent",
+    "mtp_decode_activation_proven": false,
+    "mtp_incompatible_or_unsupported": false
+  },
+  "post_cleanup": {
+    "checked_at_utc": "2026-10-12T05:10:12Z",
+    "llama_inference_processes_found": 0,
+    "nvidia_smi_compute_applications": 0,
+    "gpu_sample": "NVIDIA GeForce RTX 3070, 8192 MiB, 1280 MiB, 2 %, 35",
+    "wsl_ext4_available_gib": 16,
+    "wsl_memory_available_mib": 7330,
+    "wsl_swap_free_mib": 4095
+  },
+  "limitations": [
+    "No prompt was generated; there are no draft or acceptance counters.",
+    "This evidence establishes MTP-head loading and context initialization only.",
+    "It establishes neither decoding activation nor correctness, performance, or useful gain."
+  ]
+}

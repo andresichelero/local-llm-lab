@@ -1,0 +1,80 @@
+{
+  "records": [
+    {
+      "timestamp_utc": "2026-10-11T21:28:12.606031+00:00",
+      "arm": "smoke",
+      "run_label": "smoke",
+      "task": "readonly",
+      "command": [
+        "/home/foxtrot/local-llm-benchmark/envs/node-harnesses/opencode/node_modules/opencode-linux-x64/bin/opencode",
+        "run",
+        "--auto",
+        "--format",
+        "json",
+        "--agent",
+        "build",
+        "--model",
+        "local/Qwen3.5-9B-Q4_K_M",
+        "--dir",
+        "/home/foxtrot/local-llm-benchmark/results/raw/opencode-controlled-20261011-20261011T212742Z/smoke/workspace",
+        "Use repo-explorer to inspect tests/test_config_parser.py. Return only the exact three test function names. Do not edit, run commands, create files, or call any other tool."
+      ],
+      "profile_sha256": "8d5623f9d3163076d1c9c0a1a58804851f5db3c39518af36b7cbcb1d8620d2fd",
+      "tracked_profile_sha256": "1c9a852168ea3df6ff2afef26dacee19bc160efe56989b4120157b5fa5abdef3",
+      "source_git_sha": "80a50c5041bf0deef219fcf495aff6c6a5e2c40c",
+      "source_tree_dirty": false,
+      "fixture_sha256": "4a4eac3a530a28832cd02d0d73a57d0ebe6a5b74dcc5e93975ca0bfeac06eb1b",
+      "task_prompt_sha256": "1bd44ad401cfc2c1f2ab688d36aa7f9f1d758e67dbc8fba8b059fbd91fc0ef1a",
+      "effective_profile_checks": {
+        "local_endpoint": true,
+        "autoupdate_disabled": true,
+        "configured_model": true,
+        "build_primary": true,
+        "build_steps": true,
+        "task_permissions_exact": true,
+        "repo-explorer_readonly": true,
+        "independent-reviewer_readonly": true
+      },
+      "return_code": 0,
+      "timed_out": false,
+      "wall_seconds": 20.132,
+      "child_task_calls_completed": [
+        "repo-explorer"
+      ],
+      "workflow_gate": true,
+      "primary_text": "test_ignores_blank_and_comment_lines\ntest_splits_on_first_equals_and_trims\ntest_strips_matching_quotes",
+      "changed_files": [],
+      "success": true,
+      "quality": null,
+      "usage": {
+        "model_calls": 2,
+        "prompt_tokens": 15130,
+        "first_prompt_tokens": 7476,
+        "completion_tokens": 117,
+        "tool_calls": 1,
+        "tool_failures": 0,
+        "compactions": 0
+      },
+      "resources": {
+        "sample_count": 19,
+        "cpu_util_pct_avg": 18.7,
+        "cpu_util_pct_peak": 26.1,
+        "ram_used_mb_avg": 1853.1,
+        "ram_used_mb_peak": 2247.0,
+        "swap_used_mb_avg": 45.0,
+        "swap_used_mb_peak": 45.0,
+        "vram_used_mb_avg": 6030.8,
+        "vram_used_mb_peak": 6035.0,
+        "gpu_util_pct_avg": 77.0,
+        "gpu_util_pct_peak": 98.0,
+        "temperature_c_avg": 48.2,
+        "temperature_c_peak": 53.0,
+        "gpu_clock_mhz_avg": 1871.8,
+        "gpu_clock_mhz_peak": 1905.0,
+        "power_w_avg": 194.4,
+        "power_w_peak": 238.2
+      },
+      "prompt_file": "/home/foxtrot/local-llm-benchmark/results/raw/opencode-controlled-20261011-20261011T212742Z/smoke/TASK_PROMPT.md"
+    }
+  ]
+}

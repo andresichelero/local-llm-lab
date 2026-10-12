@@ -1,0 +1,24 @@
+OpenCode controlled-probe permission validation
+Date: 2026-10-12
+Scope: read-only runtime diagnostics and Python tests; no model inference or benchmark run.
+
+Validation environment
+- WSL Ubuntu 24.04, isolated lab-validation Python 3.12.3 environment.
+- pytest 9.1.1; no package installs or downloads during this audit.
+- Full suite source: ext4 /tmp/lab-validation-20261012-final-9srZwa, created from git archive HEAD with only the two audited files overlaid. Bytecode and pytest cache disabled.
+- Focused tests: 7 passed.
+- Full suite: 80 passed, 3 subtests passed.
+- OpenCode debug config/agent inspection: smoke, control, and treatment each passed all 14 profile gates. No inference was started.
+- `git diff --check` for the two owned Python files passed.
+
+Permission findings
+- Derived profiles explicitly deny `external_directory` for build, repo-explorer, and independent-reviewer.
+- Smoke explicitly denies primary bash/edit. Control and treatment explicitly allow primary bash/edit. Both child agents deny bash/edit in every profile.
+- Task rules remained exact in all three arms.
+- The OpenCode effective permission list contains an inherited `permission: * / pattern: * / allow`, an external-directory ask default, built-in `/tmp/opencode/*` and generated tool-output allows, and the profile's later broad external-directory deny. OpenCode also appends a generated `XDG_DATA_HOME/opencode/tool-output/*` allow after that deny. The gate records these effective rules, checks the final wildcard action (including permission `*`), rejects later allow/ask overrides, and permits only this exact generated-output exception.
+- The effective tool-output exception means this policy is not an OS sandbox. Primary bash is explicitly allowed in coding arms and may access host resources unless separately isolated by the runtime environment.
+- The runner no longer passes `--auto`; OpenCode's installed CLI describes that option as auto-approving permissions not explicitly denied. No interactive or inference run was used to test behavior after removing it.
+
+Audited source SHA-256
+- benchmark/opencode_controlled_probe.py: BBef19a6b5427cdd75745989ec5f2673bc977cd7dc917aa1763eae82eab59d1c
+- tests/test_opencode_controlled_probe.py: 15af97cc1ad4f9d298fb60bba4edd1cb3a6888e224f7e6caa4a46f769cc4cc04

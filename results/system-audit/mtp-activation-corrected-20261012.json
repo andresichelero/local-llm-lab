@@ -1,0 +1,120 @@
+{
+  "audit_timestamp_utc": "2026-10-12T05:12:40Z",
+  "status": "activation_gate_passed_single_request",
+  "repository": {
+    "commit": "a734283cdb7941017f0a6129742249461880a1ec",
+    "source_snapshot": "/home/foxtrot/local-llm-benchmark/ssd-checkouts/round2-mtp-a734283-20261012",
+    "source_archive_sha256": "c53960fa04cb7408d4b029dc92f0c6151629d604d4eea4389fe7d466154760ad",
+    "llama_cpp_source_commit": "d81235049384534c167caea52b85a694f6103d14"
+  },
+  "model": {
+    "path": "/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
+    "sha256": "13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983",
+    "mtp_metadata": "qwen35.nextn_predict_layers = 1"
+  },
+  "runtime": {
+    "path": "/home/foxtrot/local-llm-benchmark/tools/llama-bin",
+    "version": "0.6.0-dev build 1 commit d81235049",
+    "server_sha256": "83005935917f6e3ec98319e277bd4c4c7e3da3e4dc1876bcc451c32d8d4d37d1",
+    "ldd_return_code": 0,
+    "dependencies_not_found": false,
+    "library_directory": "/home/foxtrot/local-llm-benchmark/tools/llama-bin"
+  },
+  "api_contract": {
+    "route": "POST /completion",
+    "documentation": "tools/server/README.md at llama.cpp source commit d81235049384534c167caea52b85a694f6103d14",
+    "completion_requests_sent": 1,
+    "http_status": 200
+  },
+  "configuration": {
+    "ctx_size": 16384,
+    "max_output_tokens": 256,
+    "gpu_layers": 99,
+    "flash_attention": "on",
+    "target_cache_k": "q4_0",
+    "target_cache_v": "q4_0",
+    "prompt_cache": false,
+    "parallel_slots": 1,
+    "spec_type": "draft-mtp",
+    "spec_draft_n_max": 3,
+    "reasoning": "off",
+    "temperature": 0,
+    "offline": true,
+    "mtp_context_cache_k_observed": "f16",
+    "mtp_context_cache_v_observed": "f16"
+  },
+  "prompt": {
+    "text": "Repeat the sequence 0 1 2 3 4 5 6 7 8 9, separated by spaces, over and over.",
+    "sha256": "7acea3cebb1d8d5415eb7c215bcc84a2c16197c08482c6ff58e02d939354a981",
+    "request": {
+      "prompt": "Repeat the sequence 0 1 2 3 4 5 6 7 8 9, separated by spaces, over and over.",
+      "n_predict": 256,
+      "temperature": 0,
+      "ignore_eos": true,
+      "cache_prompt": false
+    }
+  },
+  "run": {
+    "started_at_utc": "2026-10-12T05:12:33.224632+00:00",
+    "elapsed_seconds_including_preflight_and_cleanup": 7.397,
+    "elapsed_seconds_after_launch_including_cleanup": 5.501,
+    "hard_cap_seconds": 180,
+    "timed_out": false,
+    "health_status": 200,
+    "completion_status": 200,
+    "process_return_code": 0,
+    "process_group_released": true,
+    "slots_status": 200,
+    "metrics_status": 200
+  },
+  "activation_evidence": {
+    "explicit_runtime_activation": true,
+    "runtime_log_signals": [
+      "qwen35.nextn_predict_layers = 1",
+      "creating MTP draft context against the target model",
+      "adding speculative implementation 'draft-mtp'",
+      "speculative decoding context initialized"
+    ],
+    "drafted_tokens": 204,
+    "accepted_tokens": 187,
+    "acceptance_ratio": 0.9166666667,
+    "verification_steps": 68,
+    "per_position_accepted": {
+      "0": 67,
+      "1": 63,
+      "2": 57
+    },
+    "completion_timings": {
+      "prompt_tokens": 32,
+      "prompt_ms": 338.603,
+      "generated_tokens": 256,
+      "generation_ms": 1674.224,
+      "generation_tokens_per_second": 152.3093683999274
+    },
+    "gate": "passed: explicit runtime initialization and nonzero drafted and accepted counters"
+  },
+  "quality_and_performance": {
+    "prompt_following": "not established; output began with an unrelated explanation rather than repeating the requested sequence",
+    "correctness_comparison": "not run",
+    "speculation_off_control": "not run",
+    "speedup_claim": false,
+    "quality_gain_claim": false
+  },
+  "resource_and_cleanup": {
+    "wsl_ext4_available_gib_before": 16,
+    "wsl_memory_available_mib_before": 7418,
+    "wsl_swap_free_mib_before": 4095,
+    "peak_vram_time_series_sampled": false,
+    "target_kv_allocation_mib": 144,
+    "mtp_context_kv_allocation_mib": 64,
+    "post_cleanup_gpu_sample": "NVIDIA GeForce RTX 3070, 8192 MiB, 1454 MiB, 5 %, 38",
+    "llama_inference_processes_after": 0,
+    "nvidia_compute_apps_after": 0
+  },
+  "limitations": [
+    "One request establishes activation only; it is not a performance comparison.",
+    "The prompt-following sample did not match the requested repeating sequence.",
+    "Target K/V cache was Q4_0; the separate MTP context used F16 K/V.",
+    "Peak VRAM was not time-series sampled."
+  ]
+}
