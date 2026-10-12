@@ -42,6 +42,18 @@ TASK_PATHS = {
         Path("benchmark/fixtures/harness_env_parser"),
         Path("benchmark/fixtures/harness_env_parser/TASK.md"),
     ),
+    "config_precedence": (
+        Path("benchmark/fixtures/config_precedence_task"),
+        Path("benchmark/fixtures/config_precedence_task/TASK.md"),
+    ),
+    "retry_policy": (
+        Path("benchmark/fixtures/retry_policy_task"),
+        Path("benchmark/fixtures/retry_policy_task/TASK.md"),
+    ),
+    "package_refactor": (
+        Path("benchmark/fixtures/package_refactor_task"),
+        Path("benchmark/fixtures/package_refactor_task/TASK.md"),
+    ),
 }
 
 
