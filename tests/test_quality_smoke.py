@@ -47,3 +47,54 @@ def test_multiple_tool_calls_are_rejected_as_not_one_round_trip():
         quality_smoke.get_required_tool_call({"content": None,
                                                "tool_calls": [add_call, second_call],
                                                "finish_reason": "tool_calls"})
+
+
+def test_tool_call_requires_valid_id_and_function_dict():
+    with pytest.raises(RuntimeError, match="exactly one"):
+        quality_smoke.get_required_tool_call({"tool_calls": [{"function": {"name": "add"}}]})
+    with pytest.raises(RuntimeError, match="exactly one"):
+        quality_smoke.get_required_tool_call({"tool_calls": [{"id": "", "function": {"name": "add"}}]})
+    with pytest.raises(RuntimeError, match="exactly one"):
+        quality_smoke.get_required_tool_call({"tool_calls": [{"id": "call_1", "function": None}]})
+
+
+def test_validate_add_arguments_accepts_exact_19_and_23():
+    assert quality_smoke.validate_add_arguments({"a": 19, "b": 23})
+
+
+@pytest.mark.parametrize("adversarial_args", [
+    {"a": 20, "b": 22},          # sum is 42, but wrong values!
+    {"a": True, "b": 41},        # boolean as int
+    {"a": 19.0, "b": 23.0},      # float
+    {"a": 19, "b": 23, "extra": 1}, # extra keys
+    {"a": 19},                   # missing b
+    {"b": 23},                   # missing a
+    {"a": "19", "b": "23"},      # string
+    None,                        # None
+    [19, 23],                    # list
+    "a=19, b=23",                # string
+])
+def test_validate_add_arguments_rejects_adversarial_inputs(adversarial_args):
+    assert not quality_smoke.validate_add_arguments(adversarial_args)
+
+
+def test_validate_add_final_accepts_exact_json_result():
+    assert quality_smoke.validate_add_final('{"result": 42}')
+    assert quality_smoke.validate_add_final('{\n  "result": 42\n}')
+
+
+@pytest.mark.parametrize("adversarial_final", [
+    'The result of adding 19 and 23 is 42.',  # free text
+    'The answer is not 42',                  # free text with negation
+    '{"result": 42, "extra": 1}',            # extra keys
+    '{"result": "42"}',                      # string value
+    '{"result": 42.0}',                      # float value
+    '{"result": true}',                      # bool value
+    '{"result": 41}',                        # wrong answer
+    '{"answer": 42}',                        # wrong key
+    '{"result": 42} and more text',          # trailing text outside JSON
+    '',                                      # empty string
+    None,                                    # None
+])
+def test_validate_add_final_rejects_adversarial_inputs(adversarial_final):
+    assert not quality_smoke.validate_add_final(adversarial_final)

@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import signal
 import stat
 import socket
@@ -174,6 +175,89 @@ def compatibility_gate(*, server_loaded: bool, effective_profile_ok: bool,
                        bash_tool_round_trip: bool, edit_tool_round_trip: bool) -> bool:
     """Only setup/load/tool compatibility decides whether the matrix may start."""
     return server_loaded and effective_profile_ok and bash_tool_round_trip and edit_tool_round_trip
+
+
+FAILURE_CLASSES: set[str] = {
+    "none",
+    "runner",
+    "transport",
+    "capability",
+    "tool_env",
+    "model_contract",
+    "functional",
+    "scope",
+    "resource",
+    "timeout",
+}
+
+
+def classify_failure(
+    *,
+    runner_error: bool = False,
+    transport_error: bool = False,
+    resource_error: bool = False,
+    tool_env_error: bool = False,
+    timeout_error: bool = False,
+    scope_error: bool = False,
+    contract_error: bool = False,
+    functional_error: bool = False,
+) -> str:
+    """Classify the primary failure class into the standardized laboratory taxonomy."""
+    if runner_error:
+        return "runner"
+    if transport_error:
+        return "transport"
+    if resource_error:
+        return "resource"
+    if tool_env_error:
+        return "tool_env"
+    if timeout_error:
+        return "timeout"
+    if scope_error:
+        return "scope"
+    if contract_error:
+        return "model_contract"
+    if functional_error:
+        return "functional"
+    return "none"
+
+
+def mechanical_preflight(
+    *,
+    python_executable: str | Path | None = None,
+    fixture_dir: Path | None = None,
+    endpoint_url: str | None = None,
+) -> dict[str, Any]:
+    """Verify system prerequisites (python3, fixture readable, endpoint) without running model inference."""
+    py_target = str(python_executable or "python3")
+    py_path = shutil.which(py_target)
+    python_ok = py_path is not None
+    fixture_ok = True
+    if fixture_dir is not None:
+        p = Path(fixture_dir)
+        fixture_ok = p.is_dir() and any(p.iterdir())
+    endpoint_ok = True
+    if endpoint_url is not None:
+        try:
+            req = urllib.request.Request(endpoint_url.rstrip("/") + "/v1/models", method="GET")
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                endpoint_ok = resp.status == 200
+        except Exception:
+            endpoint_ok = False
+    passed = python_ok and fixture_ok and endpoint_ok
+    fc = "none"
+    if not python_ok or not fixture_ok:
+        fc = "tool_env"
+    elif not endpoint_ok:
+        fc = "transport"
+    return {
+        "passed": passed,
+        "python_executable": py_path,
+        "python_ok": python_ok,
+        "fixture_ok": fixture_ok,
+        "endpoint_ok": endpoint_ok,
+        "failure_class": fc,
+    }
 
 
 def swap_growth_breach(samples: list[dict[str, Any]], baseline_bytes: int) -> bool:

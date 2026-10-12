@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import time
 import urllib.error
 import urllib.request
@@ -41,10 +40,46 @@ def is_valid_strict_json_response(parsed: object) -> bool:
     )
 
 
+def validate_add_arguments(arguments: object) -> bool:
+    """Validate that arguments is a dictionary containing exclusively a=19 and b=23 as ints."""
+    if not isinstance(arguments, dict):
+        return False
+    if set(arguments.keys()) != {"a", "b"}:
+        return False
+    val_a = arguments["a"]
+    val_b = arguments["b"]
+    if type(val_a) is not int or type(val_b) is not int:
+        return False
+    return val_a == 19 and val_b == 23
+
+
+def validate_add_final(content: object) -> bool:
+    """Validate that content is exclusively a JSON object with exactly {'result': 42}."""
+    if not isinstance(content, str):
+        return False
+    stripped = content.strip()
+    if not stripped:
+        return False
+    try:
+        data = json.loads(stripped)
+    except Exception:
+        return False
+    if not isinstance(data, dict):
+        return False
+    if set(data.keys()) != {"result"}:
+        return False
+    val = data["result"]
+    if type(val) is not int:
+        return False
+    return val == 42
+
+
 def get_required_tool_call(message: dict) -> dict:
     calls = message.get("tool_calls")
     if (not isinstance(calls, list) or len(calls) != 1
             or not isinstance(calls[0], dict)
+            or not calls[0].get("id")
+            or not isinstance(calls[0].get("function"), dict)
             or calls[0].get("function", {}).get("name") != "add"):
         details = {
             "finish_reason": message.get("finish_reason"),
@@ -56,6 +91,7 @@ def get_required_tool_call(message: dict) -> dict:
 
 
 def record(mode: str, model: str, elapsed: float, success: bool, **fields) -> dict:
+    source_dirty_env = os.environ.get("LAB_SOURCE_DIRTY")
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "experiment": "tier0_quality_smoke",
@@ -64,7 +100,7 @@ def record(mode: str, model: str, elapsed: float, success: bool, **fields) -> di
         "quant": "GGUF Q4_K_M",
         "runtime": "llama.cpp",
         "git_sha": os.environ.get("LAB_GIT_SHA"),
-        "source_tree_dirty": os.environ.get("LAB_SOURCE_DIRTY", "unknown") == "true",
+        "source_tree_dirty": (source_dirty_env.lower() == "true") if source_dirty_env is not None else None,
         "runtime_commit": os.environ.get("LAB_RUNTIME_COMMIT"),
         "reasoning": os.environ.get("LAB_REASONING", "unknown"),
         "context_tokens": int(os.environ.get("LAB_CONTEXT_TOKENS", "2048")),
@@ -121,22 +157,24 @@ def main() -> int:
             },
         },
     }]
-    messages = [{"role": "user", "content": "Use the add tool with a=19 and b=23. Then report the result."}]
+    messages = [{"role": "user", "content": 'Use the add tool with a=19 and b=23. Then report the result exclusively as a JSON object {"result": 42}.'}]
     started = time.perf_counter()
     try:
         first, _ = request(args.url, args.model, messages, tools=tools, tool_choice="required")
         assistant = first["choices"][0]["message"]
         call = get_required_tool_call(assistant)
         arguments = json.loads(call["function"]["arguments"])
-        if set(arguments) != {"a", "b"} or any(type(arguments[key]) is not int for key in ("a", "b")):
-            raise RuntimeError(f"invalid tool arguments: {arguments!r}")
+        valid_args = validate_add_arguments(arguments)
+        if not valid_args:
+            raise RuntimeError(f"invalid tool arguments against contract: {arguments!r}")
         result = arguments["a"] + arguments["b"]
         followup_messages = messages + [assistant, {
             "role": "tool", "tool_call_id": call["id"], "name": "add", "content": json.dumps({"result": result}),
         }]
         final, _ = request(args.url, args.model, followup_messages)
         final_text = final["choices"][0]["message"].get("content") or ""
-        success = result == 42 and bool(re.search(r"\b42\b|forty[- ]two", final_text, re.IGNORECASE))
+        valid_final = validate_add_final(final_text)
+        success = valid_args and valid_final
         first_usage, final_usage = first.get("usage", {}), final.get("usage", {})
         results.append(record(
             "tool_round_trip", args.model, time.perf_counter() - started, success,
@@ -144,6 +182,7 @@ def main() -> int:
             input_tokens=(first_usage.get("prompt_tokens") or 0) + (final_usage.get("prompt_tokens") or 0),
             output_tokens=(first_usage.get("completion_tokens") or 0) + (final_usage.get("completion_tokens") or 0),
             tool_name="add", arguments=arguments, tool_result=result, final_output=final_text,
+            raw_response={"first": first, "final": final},
         ))
     except (OSError, RuntimeError, KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
         results.append(record(

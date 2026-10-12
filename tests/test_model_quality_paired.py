@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import json
 import unittest
 import tempfile
@@ -417,6 +418,30 @@ class ModelQualityPairedTests(unittest.TestCase):
             self.assertEqual(record["events_sha256"], paired._sha256(run_dir / "events.jsonl"))
             self.assertEqual(record["events_path"], str(run_dir / "events.jsonl"))
             self.assertEqual(record["model_sha256"], MODELS["qwen3.5-4b"]["sha256"])
+
+    def test_classify_failure_covers_all_categories(self) -> None:
+        self.assertEqual(paired.classify_failure(runner_error=True), "runner")
+        self.assertEqual(paired.classify_failure(transport_error=True), "transport")
+        self.assertEqual(paired.classify_failure(resource_error=True), "resource")
+        self.assertEqual(paired.classify_failure(tool_env_error=True), "tool_env")
+        self.assertEqual(paired.classify_failure(timeout_error=True), "timeout")
+        self.assertEqual(paired.classify_failure(scope_error=True), "scope")
+        self.assertEqual(paired.classify_failure(contract_error=True), "model_contract")
+        self.assertEqual(paired.classify_failure(functional_error=True), "functional")
+        self.assertEqual(paired.classify_failure(), "none")
+
+    def test_mechanical_preflight_validates_python3_and_fixture(self) -> None:
+        result = paired.mechanical_preflight(python_executable=sys.executable,
+                                             fixture_dir=Path(__file__).resolve().parents[1] / "benchmark/fixtures/harness_task")
+        self.assertTrue(result["passed"])
+        self.assertTrue(result["python_ok"])
+        self.assertTrue(result["fixture_ok"])
+        self.assertEqual(result["failure_class"], "none")
+
+        missing = paired.mechanical_preflight(python_executable="non_existent_python_binary_xyz_123")
+        self.assertFalse(missing["passed"])
+        self.assertFalse(missing["python_ok"])
+        self.assertEqual(missing["failure_class"], "tool_env")
 
 
 if __name__ == "__main__":
