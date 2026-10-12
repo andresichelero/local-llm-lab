@@ -30,6 +30,10 @@ results/raw/*
 !results/raw/mtp-activation-20261012/**
 !results/raw/mtp-activation-corrected-20261012/
 !results/raw/mtp-activation-corrected-20261012/**
+!results/raw/cascade-routing-evaluation-20261012/
+!results/raw/cascade-routing-evaluation-20261012/**
+!results/raw/continuation-pilot-20261012/
+!results/raw/continuation-pilot-20261012/**
 results/raw/mtp-activation*/source-*.tar
 __pycache__/
 unsloth_compiled_cache/

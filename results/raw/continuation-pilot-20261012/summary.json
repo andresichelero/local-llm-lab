@@ -1,0 +1,27 @@
+{
+  "experiment": "continuation-pilot-20261012-trilha-b",
+  "timestamp": "2026-10-12T23:28:17.496930+00:00",
+  "git_sha": "b615b4ea76953a4db7aa0675b86dc0c545c0733f",
+  "source_dirty": true,
+  "total_trials": 2,
+  "arms": {
+    "baseline": {
+      "trials": 1,
+      "success_count": 0,
+      "success_pct": 0.0,
+      "mean_manifest_count": 0,
+      "recovery_rate_pct": 0.0,
+      "median_wall_seconds": 84.28,
+      "peak_vram_mib": 6922
+    },
+    "checkpoint_manifest": {
+      "trials": 1,
+      "success_count": 1,
+      "success_pct": 100.0,
+      "mean_manifest_count": 32,
+      "recovery_rate_pct": 100.0,
+      "median_wall_seconds": 131.22,
+      "peak_vram_mib": 6622
+    }
+  }
+}
