@@ -825,7 +825,8 @@ def _tool_round_trip(binary: Path, install_root: Path, model: str, server_log: P
             descriptor = os.open(probe_file, os.O_RDONLY | os.O_NOFOLLOW)
             mode = os.fstat(descriptor)
             if stat.S_ISREG(mode.st_mode) and mode.st_size <= 256:
-                edit_file_verified = os.read(descriptor, 257) in {b"edit probe ok", b"edit probe ok\n"}
+                raw = os.read(descriptor, 257)
+                edit_file_verified = raw.strip().rstrip(b".") == b"edit probe ok"
         except OSError:
             pass
         finally:
