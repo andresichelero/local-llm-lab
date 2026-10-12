@@ -1,5 +1,9 @@
 # Execution status — updated 2026-10-12
 
+## Research revision — no new benchmark
+
+The current machine was rechecked: 16 GiB free ext4, 7.3 GiB available WSL RAM and 7396 MiB free GPU memory in the read-only snapshot. No inference process was active. The [research review](state-of-art-20261012.md) distinguishes primary releases, engineering reports and anecdotal community observations. The [active plan](../../docs/superpowers/plans/2026-10-12-evidence-first-local-lab.md) moves matched model quality and no-download optimization gates ahead of live routing. New candidate files/versions are researched only; no weights, dependencies or drivers were changed. The historical delegated calibration remains closed.
+
 ## Publication permission validation — 2026-10-12
 
 The current controlled runner removes automatic approval, denies primary shell/edit during smoke, and checks effective outside-project denies with only the runtime-generated tool-output exception. Real diagnostics passed all 14 gates for each of three profiles; the revised source passed 80 tests and 3 subtests. No new inference was run; historical measurements retain source `80a50c5`. Environment separation and application permissions are not an OS sandbox for allowed coding shell commands. Details and source hashes: `results/system-audit/lab-validation-20261012.txt`.

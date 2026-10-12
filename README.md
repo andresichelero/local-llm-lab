@@ -59,6 +59,8 @@ The [fresh audit and comparison](results/reports/audit-continuation-20261011.md)
 
 A gated calibration on the existing calculator task used equal 20-step/180-second limits: the single-agent control passed in 44.075 s. The delegated treatment passed the independent coding grader, but timed out at 180.378 s with only the explorer completed and no independent reviewer. Workflow success therefore failed; no warmups or measured pairs were started. This is a failed coordination calibration, not a repeated quality/speed comparison. See the [controlled probe](results/reports/opencode-controlled-20261011.md) and [round plan](docs/superpowers/plans/2026-10-11-opencode-controlled.md). The lab remains incomplete; bounded local routing/failure escalation and broader unsaturated quality tasks take priority over raising delegation limits until one run passes.
 
+The [October 12 research review](results/reports/state-of-art-20261012.md) and [revised round plan](docs/superpowers/plans/2026-10-12-evidence-first-local-lab.md) now prioritize matched 4B/9B quality, no-download MTP/cache probes and one-at-a-time model admission before live routing. OmniCoder-9B, Gemma 4 E4B and Bonsai 2 are researched candidates, not new local results. Bonsai 2 requires its publisher's runtime fork; small weight files alone do not establish memory fit or correctness. No new inference or installation was performed in that research revision.
+
 ## Reproducibility rules
 
 - Each run records the git revision, model revision, runtime version, quantization, context, generation limit, and hardware readings when available.

@@ -10,6 +10,8 @@
 
 **Spec:** User continuation instructions and results/reports/progress-resume-20261011.md; this plan replaces its suggested sequence with evidence-based gates.
 
+**Historical round:** This calibration is closed. The active priority queue is `2026-10-12-evidence-first-local-lab.md`; it revises the router-first recommendation below without reopening failed repetitions.
+
 ## Global constraints
 
 - Active input/runtime/libraries/workspace/cache/logs/results on C-backed ext4; D checkout and E archives are storage only. No HDD benchmarks.

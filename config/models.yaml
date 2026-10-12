@@ -244,19 +244,52 @@ models:
     evidence: official Hugging Face model repository
   - id: bonsai-2-27b
     repo: prism-ml/Ternary-Bonsai-2-27B-gguf
+    revision: b072e1d3b35a0a630cece372c2127528e0994386
     params: 27B
     active_params: 27B
     architecture: ternary compressed Qwen3.8 derivative
-    license: Apache-2.0 (verify repo license at pinned revision)
+    license: Apache-2.0
     context_claim: inherited architecture; practical limit unmeasured
     tool_use: unmeasured
     formats: [PQ2_0, PTQ1_0]
-    candidate_quant: PQ2_0
-    estimated_weight_gib: 7.6
+    candidate_quant: PTQ1_0; Ternary-Bonsai-2-27B-PTQ1_0.gguf; 5946648928 bytes; SHA-256 53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3
+    estimated_weight_gib: 5.54
     realistic_context_tokens: 1024
-    status: deferred; specialized activation transform/fork required
+    status: researched_only; conditional on pinned Prism fork CUDA sm86 compatibility and memory gates; not downloaded
     purpose: evaluate extreme quant only if correct runtime is available
-    evidence: community model-card; stock llama.cpp can produce incorrect output silently
+    evidence: publisher model API and Prism backend support notes observed 2026-10-12; stock llama.cpp can omit required transforms; see results/reports/state-of-art-20261012.md
+  - id: omnicoder-9b
+    repo: Tesslate/OmniCoder-9B-GGUF
+    revision: c06117a99179f36962d782946970726b9fc9e533
+    params: 9B
+    active_params: 9B
+    architecture: coding-post-trained Qwen3.5-9B hybrid
+    license: Apache-2.0
+    context_claim: 262144; not a local fit result
+    tool_use: publisher agentic claims; unmeasured locally
+    formats: [GGUF, Transformers]
+    candidate_quant: Q4_K_M; omnicoder-9b-q4_k_m.gguf; 5737242944 bytes; SHA-256 550e8f7253c8e07997fbce2570d37259b69b0d21faf77e5ed518d4ee4c73d8b3
+    estimated_weight_gib: 5.34
+    realistic_context_tokens: unmeasured; start 2K-4K compatibility then gate matched 16K
+    status: researched_only_not_downloaded
+    purpose: isolate coding post-training effect against existing Qwen9B control
+    evidence: publisher HF card/API observed 2026-10-12; self-reported scores and conflicting BibTeX year; see state-of-art report
+  - id: gemma-4-e4b-it
+    repo: unsloth/gemma-4-E4B-it-GGUF
+    revision: bfc15c382204943c3a8fff0c750b94ae2364d7a3
+    params: 8B including embeddings; 4.5B effective
+    active_params: effective count does not define resident memory
+    architecture: dense sliding/global attention with per-layer embeddings
+    license: Apache-2.0
+    context_claim: 131072; not a local fit result
+    tool_use: native function calling per Google card; unmeasured locally
+    formats: [Transformers, community-GGUF]
+    candidate_quant: Q4_K_M; gemma-4-E4B-it-Q4_K_M.gguf; 4977171584 bytes; SHA-256 85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87
+    estimated_weight_gib: 4.64
+    realistic_context_tokens: unmeasured; start 2K-4K compatibility then gate matched 16K
+    status: researched_only_not_downloaded
+    purpose: independent architecture and compact tool-worker comparison
+    evidence: Google card and Unsloth HF files API observed 2026-10-12; see state-of-art report
   - id: qwen3.9
     repo: null
     params: unknown
