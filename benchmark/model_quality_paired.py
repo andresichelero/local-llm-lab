@@ -805,6 +805,7 @@ def _tool_round_trip(binary: Path, install_root: Path, model: str, server_log: P
                 _terminate_process_group(proc, grace_seconds=3)
             if sampler is not None:
                 _terminate_process_group(sampler, grace_seconds=3)
+            shutil.rmtree(run_dir / "home/.config/opencode/node_modules", ignore_errors=True)
     stop_reason = _post_child_stop_reason(
         server_log, event_log_offset, server_healthy=_server_ready(SERVER_URL),
         existing_reason=stop_reason, resource_samples=_read_jsonl(resource_path),
@@ -943,6 +944,7 @@ def _run_task(binary: Path, install_root: Path, model: str, task: str, stage: st
             _terminate_process_group(process, grace_seconds=4)
         if sampler is not None:
             _terminate_process_group(sampler, grace_seconds=3)
+        shutil.rmtree(run_dir / "home/.config/opencode/node_modules", ignore_errors=True)
     final_resources = _read_jsonl(run_dir / "resources.jsonl")
     stop_reason = _post_child_stop_reason(
         server_log, server_log_offset, server_healthy=_server_ready(SERVER_URL),
@@ -1098,7 +1100,7 @@ def _record_diagnostic(root: Path, records: list[dict[str, Any]], record: dict[s
 
 
 def _scratch_size(root: Path) -> int:
-    return sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
+    return sum(path.stat().st_size for path in root.rglob("*") if path.is_file() and "node_modules" not in path.parts)
 
 
 def _run_server(server: Path, install_root: Path, model: str, server_log: Path,
