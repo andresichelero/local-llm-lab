@@ -39,7 +39,7 @@ from benchmark.harness_runner import (
 )
 from benchmark.provenance import git_provenance
 
-EXPERIMENT = "model-quality-paired-20261012-r1b"
+EXPERIMENT = "model-quality-paired-20261012-r1c"
 HARNESS = "opencode"
 HARNESS_VERSION = "1.19.0"
 RUNTIME_REVISION = "d81235049384534c167caea52b85a694f6103d14"
@@ -1010,7 +1010,7 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
                                      text=True, timeout=10)
     if runtime_version.returncode != 0:
         raise RuntimeError("Pinned llama.cpp version command failed")
-    version_text = require_runtime_revision(runtime_version.stdout, runtime_version.stderr, RUNTIME_REVISION[:10])
+    version_text = require_runtime_revision(runtime_version.stdout, runtime_version.stderr, RUNTIME_REVISION[:9])
     output_root.mkdir(parents=True, exist_ok=False)
     protocol = frozen_protocol()
     protocol["source_git_sha"], protocol["source_tree_dirty"] = git_provenance(REPO_ROOT)
@@ -1155,7 +1155,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--single-agent-release", action="store_true",
                         help="record the parent's prospective release for this independently gated single-agent series")
     args = parser.parse_args(argv)
-    output = args.output_root or args.benchmark_root / "results/raw" / "model-quality-paired-r1b"
+    output = args.output_root or args.benchmark_root / "results/raw" / "model-quality-paired-r1c"
     if not args.execute:
         print(json.dumps({"protocol": frozen_protocol(), "benchmark_root": str(args.benchmark_root),
                           "output_root": str(output), "inference_started": False}, indent=2))

@@ -25,3 +25,13 @@ OOM/swap/deadline stops; owned process-group cleanup on failure and exceptions.
 Dry-run: protocol model-quality-paired-20261012-r1b, 18 scheduled measurement
 rows, Round0 failed and not_a_single_agent_prerequisite=true. Single-agent
 compatibility pending; inference_started=false. No measurement result implied.
+
+r1c interface correction, independently reviewed before inference:
+Runtime prints nine commit characters; accept RUNTIME_REVISION[:9], not [:10].
+Only experiment identity/default output and version check changed.
+Real literal version regression passed. Focus 22 passed; full 111 passed,
+17 subtests. Python compile, source/overlay equality and diff checks passed.
+7d42ebedd94b7d6638bc2578c408d6077d54760381adb8400c9bd795c88418f4 benchmark/model_quality_paired.py
+2ce4b1393f8bab4ea99375f4c7d0b39729771999bc3c626b936ac5507e66eb79 tests/test_model_quality_paired.py
+Pinned llama.cpp source independently confirms /v1/models data[].meta.n_ctx
+is the runtime slot context; n_ctx_train is separate. No guessed API field.

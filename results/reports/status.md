@@ -2,7 +2,7 @@
 
 ## Plan implementation — in progress
 
-The hardened delegation smoke failed its workflow gate: correct names in 13.716 s, zero changes and 14 passing effective-profile diagnostics, but no explorer call. No retry or permission widening was made. See [Round 0](round0-permission-smoke-20261012.md). Technical review separated the future single-agent comparison from this unrelated delegation requirement: protocol `r1b` must pass its own load/profile/bash/edit gates for both models before any measured arms.
+The hardened delegation smoke failed its workflow gate: correct names in 13.716 s, zero changes and 14 passing effective-profile diagnostics, but no explorer call. No retry or permission widening was made. See [Round 0](round0-permission-smoke-20261012.md). Technical review separated the future single-agent comparison from this unrelated delegation requirement: protocol `r1c` must pass its own load/profile/bash/edit gates for both models before any measured arms. The first `r1b` call failed before model load because its version check expected ten commit characters instead of the runtime's nine. That executor error is preserved separately and corrected without changing experiment caps or grading.
 
 The existing 4B MTP head activated in one corrected request, with 204 draft tokens and 187 accepted. The first attempt sent no generation because of an executor HTTP-contract error and remains setup-invalid. The corrected output did not satisfy its sequence instruction; no quality or speed advantage is established. Target KV was Q4_0 and MTP KV was F16. See [MTP activation](mtp-activation-20261012.md). No weights, dependencies or drivers changed.
 
