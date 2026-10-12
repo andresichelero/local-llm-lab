@@ -3,6 +3,8 @@ from __future__ import annotations
 import unittest
 
 from benchmark.opencode_controlled_probe import (
+    _last_wildcard_action,
+    _terminal_deny_rule,
     calibration_gate,
     child_task_calls,
     derive_profile,
@@ -35,7 +37,9 @@ class ControlledProbeTests(unittest.TestCase):
                             "independent-reviewer": "allow",
                         }
                     },
-                }
+                },
+                "repo-explorer": {"mode": "subagent", "permission": {"edit": "deny", "bash": "deny"}},
+                "independent-reviewer": {"mode": "subagent", "permission": {"edit": "deny", "bash": "deny"}},
             }
         }
 
@@ -50,6 +54,42 @@ class ControlledProbeTests(unittest.TestCase):
         self.assertEqual(
             treatment["agent"]["build"]["permission"]["task"],
             {"*": "deny", "repo-explorer": "allow", "independent-reviewer": "allow"},
+        )
+        for profile in (smoke, control, treatment):
+            for agent in profile["agent"].values():
+                self.assertEqual(agent["permission"]["external_directory"], {"*": "deny"})
+            for child in ("repo-explorer", "independent-reviewer"):
+                self.assertEqual(profile["agent"][child]["permission"]["bash"], {"*": "deny"})
+                self.assertEqual(profile["agent"][child]["permission"]["edit"], {"*": "deny"})
+        for tool in ("bash", "edit"):
+            self.assertEqual(smoke["agent"]["build"]["permission"][tool], {"*": "deny"})
+            self.assertEqual(control["agent"]["build"]["permission"][tool], {"*": "allow"})
+            self.assertEqual(treatment["agent"]["build"]["permission"][tool], {"*": "allow"})
+
+    def test_permission_gate_rejects_rules_that_follow_a_broad_deny(self) -> None:
+        base = [
+            {"permission": "*", "pattern": "*", "action": "allow"},
+            {"permission": "external_directory", "pattern": "*", "action": "ask"},
+            {"permission": "external_directory", "pattern": "/tmp/opencode/*", "action": "allow"},
+            {"permission": "external_directory", "pattern": "*", "action": "deny"},
+            {"permission": "external_directory", "pattern": "/isolated/tool-output/*", "action": "allow"},
+        ]
+        safe_output_exception = {("external_directory", "/isolated/tool-output/*", "allow")}
+        self.assertEqual(_last_wildcard_action(base, "external_directory"), "deny")
+        self.assertTrue(_terminal_deny_rule(base, "external_directory", safe_output_exception))
+        self.assertFalse(
+            _terminal_deny_rule(
+                [*base, {"permission": "external_directory", "pattern": "/outside/*", "action": "allow"}],
+                "external_directory",
+                safe_output_exception,
+            )
+        )
+        self.assertFalse(
+            _terminal_deny_rule(
+                [*base, {"permission": "*", "pattern": "*", "action": "ask"}],
+                "external_directory",
+                safe_output_exception,
+            )
         )
 
     def test_runtime_revision_accepts_stderr_banner(self) -> None:

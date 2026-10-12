@@ -47,18 +47,67 @@ EXPECTED_SMOKE_NAMES = (
 
 
 def derive_profile(base: dict[str, Any], arm: str) -> dict[str, Any]:
-    """Return the tracked 10-step smoke profile or a 20-step comparison arm."""
+    """Return a hardened 10-step smoke profile or a 20-step comparison arm."""
     if arm not in {"smoke", "control", "treatment"}:
         raise ValueError(f"Unsupported profile arm: {arm}")
     result = copy.deepcopy(base)
-    build = result["agent"]["build"]
+    agents = result["agent"]
+    build = agents["build"]
+    build_permissions = build.setdefault("permission", {})
+    for name, agent in agents.items():
+        agent.setdefault("permission", {})["external_directory"] = {"*": "deny"}
     if arm != "smoke":
         build["steps"] = 20
         permissions = {"*": "deny"}
         if arm == "treatment":
             permissions.update({name: "allow" for name in CHILDREN})
-        build.setdefault("permission", {})["task"] = permissions
+        build_permissions["task"] = permissions
+    coding_action = "deny" if arm == "smoke" else "allow"
+    for tool in ("bash", "edit"):
+        build_permissions[tool] = {"*": coding_action}
+    for child_name in CHILDREN:
+        child_permissions = agents[child_name].setdefault("permission", {})
+        child_permissions["bash"] = {"*": "deny"}
+        child_permissions["edit"] = {"*": "deny"}
     return result
+
+
+def _last_wildcard_action(permissions: list[dict[str, Any]], permission: str) -> str | None:
+    """Return the last global action for a permission, including the global tool rule."""
+    return next(
+        (
+            item.get("action")
+            for item in reversed(permissions)
+            if item.get("permission") in {permission, "*"} and item.get("pattern") == "*"
+        ),
+        None,
+    )
+
+
+def _terminal_deny_rule(
+    permissions: list[dict[str, Any]], permission: str, allowed_later_rules: set[tuple[str, str, str]] | None = None
+) -> bool:
+    """Require the final broad deny to remain effective despite later matching rules."""
+    allowed_later_rules = allowed_later_rules or set()
+    deny_index = next(
+        (
+            index
+            for index in range(len(permissions) - 1, -1, -1)
+            if permissions[index].get("permission") == permission
+            and permissions[index].get("pattern") == "*"
+            and permissions[index].get("action") == "deny"
+        ),
+        None,
+    )
+    if deny_index is None:
+        return False
+    for item in permissions[deny_index + 1 :]:
+        if item.get("permission") not in {permission, "*"} or item.get("action") not in {"allow", "ask"}:
+            continue
+        later_rule = (item.get("permission"), item.get("pattern"), item.get("action"))
+        if later_rule not in allowed_later_rules:
+            return False
+    return True
 
 
 def child_task_calls(events: list[dict[str, Any]]) -> list[str]:
@@ -296,6 +345,11 @@ def _config_gate(binary: Path, home: Path, env: dict[str, str], arm: str) -> dic
     base_url = next((str(value) for key, value in config_values if str(key).lower() == "baseurl"), "")
     autoupdate = next((value for key, value in config_values if str(key).lower() == "autoupdate"), None)
     build_data = agent_data["build"]
+    tool_output_rule = (
+        "external_directory",
+        str(Path(env["XDG_DATA_HOME"]) / "opencode/tool-output/*"),
+        "allow",
+    )
     task_rules = [
         (item.get("pattern"), item.get("action"))
         for item in build_data.get("permission", [])
@@ -312,24 +366,43 @@ def _config_gate(binary: Path, home: Path, env: dict[str, str], arm: str) -> dic
         "build_steps": build_data.get("steps") == (10 if arm == "smoke" else 20),
         "task_permissions_exact": sorted(task_rules) == sorted(expected_rules),
     }
+    expected_coding_action = "deny" if arm == "smoke" else "allow"
+    checks["build_tool_permissions_explicit"] = all(
+        _last_wildcard_action(build_data.get("permission", []), permission) == action
+        for permission, action in (
+            ("bash", expected_coding_action),
+            ("edit", expected_coding_action),
+            ("external_directory", "deny"),
+        )
+    )
+    checks["build_external_directory_terminal_deny"] = _terminal_deny_rule(
+        build_data.get("permission", []), "external_directory", {tool_output_rule}
+    )
+    checks["build_smoke_tool_denies_terminal"] = arm != "smoke" or all(
+        _terminal_deny_rule(build_data.get("permission", []), permission)
+        for permission in ("bash", "edit")
+    )
     selected_agents: dict[str, Any] = {}
     for name, data in agent_data.items():
         permissions = [
             {"permission": item.get("permission"), "pattern": item.get("pattern"), "action": item.get("action")}
             for item in data.get("permission", [])
-            if item.get("permission") in {"task", "edit", "bash"}
+            if item.get("permission") in {"*", "task", "edit", "bash", "external_directory"}
         ]
         selected_agents[name] = {"name": data.get("name"), "mode": data.get("mode"), "steps": data.get("steps"), "permissions": permissions}
+        checks[f"{name}_external_directory_denied"] = (
+            _last_wildcard_action(data.get("permission", []), "external_directory") == "deny"
+            and _terminal_deny_rule(data.get("permission", []), "external_directory", {tool_output_rule})
+        )
     for child in CHILDREN:
         child_data = agent_data[child]
-        child_permissions = [
-            (item.get("permission"), item.get("pattern"), item.get("action"))
-            for item in child_data.get("permission", [])
-            if item.get("permission") in {"edit", "bash"}
-        ]
         checks[f"{child}_readonly"] = (
             child_data.get("mode") == "subagent"
-            and sorted(child_permissions) == [("bash", "*", "deny"), ("edit", "*", "deny")]
+            and _last_wildcard_action(child_data.get("permission", []), "bash") == "deny"
+            and _last_wildcard_action(child_data.get("permission", []), "edit") == "deny"
+            and _terminal_deny_rule(child_data.get("permission", []), "bash")
+            and _terminal_deny_rule(child_data.get("permission", []), "edit")
+            and _terminal_deny_rule(child_data.get("permission", []), "external_directory", {tool_output_rule})
         )
     _write_json(home.parent / f"effective-{arm}.json", {
         "model": next((str(value) for key, value in config_values if str(key).lower() == "model"), None),
@@ -410,7 +483,7 @@ def _run_arm(
         start_new_session=True,
     )
     command = [
-        str(binary), "run", "--auto", "--format", "json", "--agent", "build",
+        str(binary), "run", "--format", "json", "--agent", "build",
         "--model", f"local/{DEFAULT_MODEL}", "--dir", str(workspace), prompt,
     ]
     started = time.perf_counter()

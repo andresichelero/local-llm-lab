@@ -108,3 +108,5 @@ validation.baseline: clean source db190b0620c1688c2bf8a3ebf2f6aaba6ee7b0f7 on SS
 validation.controlled_probe: source 80a50c5041bf0deef219fcf495aff6c6a5e2c40c; 79 tests and 3 subtests passed; 57 Python AST and 40 Bash syntax checks passed
 harness.opencode.controlled_probe: corrected effective local profile verified; readonly smoke passed; calculator control passed; 20-step/180-second delegated workflow timed out before reviewer despite passing final coding grader; no warmups/measured pairs; see results/reports/opencode-controlled-20261011.md
 archive.opencode.controlled_probe: E:\LocalLLMLabArchive\2026-10-11\opencode-controlled-probe-20261011.tar.gz; 37 selected entries; sha256=6f14213c9d2bad0112aaae082579d3f6ceafe0317c174e9614fdefff9fb04ba4; recursive Windows copy manifests verified; no weights/environments/package caches
+
+validation.permission_hardening_20261012: 80 tests and 3 subtests; 7 focused tests; 14 effective runtime gates per profile without inference; --auto removed; source hashes in results/system-audit/lab-validation-20261012.txt

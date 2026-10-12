@@ -38,9 +38,13 @@ The selected evidence was archived to `E:\LocalLLMLabArchive\2026-10-11\opencode
 
 All probe-owned llama-server, OpenCode, and resource-sampler processes were stopped after the run. The archived result includes the timed-out attempt; the original ext4 outputs and the Windows raw copies are retained.
 
-## Reproduction
+## Execution boundary and reproduction
 
-From a clean checkout at the source commit on C-backed WSL ext4, with the pinned model and installed runtimes present:
+The measured source snapshot above used `--auto`: permissions not explicitly denied could be approved automatically. Children denied shell/edit, but the primary did not explicitly deny outside-project access or smoke edits. The retained events and workspace grader establish the observed task scope, not operating-system confinement. Separate HOME/XDG/workspace directories are environment isolation, not a security sandbox. Historical results remain attributed to `80a50c5`; later permission hardening does not retroactively validate that policy.
+
+The 2026-10-12 runner removes `--auto`, explicitly denies primary shell/edit in smoke, and denies outside-project access for all named agents. The gate checks rule order and accepts only the runtime-generated tool-output directory within the isolated XDG data root. Coding arms explicitly allow primary shell/edit, so this still provides no OS sandbox. All three effective profiles passed 14 runtime diagnostic gates without inference; 7 focused tests and the full 80-test/3-subtest suite passed. See `results/system-audit/lab-validation-20261012.txt` for validated source hashes. Interactive/inference behavior with the revised policy has not been measured.
+
+For future runs, use the reviewed current runner on C-backed WSL ext4 with the pinned local assets. Its diagnostics must pass before inference; a future run with changed permissions is a new observation:
 
 ```bash
 python3 -m benchmark.opencode_controlled_probe --phase all

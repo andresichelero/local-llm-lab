@@ -1,4 +1,8 @@
-# Execution status — updated 2026-10-11
+# Execution status — updated 2026-10-12
+
+## Publication permission validation — 2026-10-12
+
+The current controlled runner removes automatic approval, denies primary shell/edit during smoke, and checks effective outside-project denies with only the runtime-generated tool-output exception. Real diagnostics passed all 14 gates for each of three profiles; the revised source passed 80 tests and 3 subtests. No new inference was run; historical measurements retain source `80a50c5`. Environment separation and application permissions are not an OS sandbox for allowed coding shell commands. Details and source hashes: `results/system-audit/lab-validation-20261012.txt`.
 
 ## Fresh continuation audit and bounded OpenCode gate
 
