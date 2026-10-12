@@ -708,9 +708,9 @@ def _tool_round_trip(binary: Path, install_root: Path, model: str, server_log: P
     """One real local OpenCode tool call gates compatibility; excluded from results."""
     run_dir = output_root / "compatibility" / model
     run_dir.mkdir(parents=True, exist_ok=False)
-    prompt = ("Use bash to run python3 -c 'print(6 * 7)'. Use the write tool to replace all of "
-              "TASK.md with exactly this content: edit probe ok. Do not use bash to change TASK.md. "
-              "Return only the bash output.")
+    prompt = ("First, use bash to run python3 -c 'print(6 * 7)'. "
+              "Then, use the write tool to replace all of TASK.md with exactly this content: edit probe ok. "
+              "Do not use bash to change TASK.md.")
     fixture = REPO_ROOT / "benchmark/fixtures/harness_task"
     _prepare_run("opencode", run_dir, install_root, prompt, MODELS[model]["alias"], SERVER_URL, CONTEXT,
                  fixture=fixture)
