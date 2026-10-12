@@ -1,0 +1,39 @@
+{
+  "experiment": "cascade-routing-matrix-20261012-trilha-a",
+  "timestamp": "2026-10-12T23:23:01.106326+00:00",
+  "git_sha": "b615b4ea76953a4db7aa0675b86dc0c545c0733f",
+  "source_dirty": true,
+  "total_trials": 36,
+  "policies": {
+    "always-4b": {
+      "trials": 12,
+      "strict_pass_count": 10,
+      "strict_pass_pct": 83.3,
+      "median_wall_seconds": 22.96,
+      "mean_wall_seconds": 23.1,
+      "escalation_count": 0,
+      "escalation_rate_pct": 0.0,
+      "peak_vram_mib": 5236
+    },
+    "always-9b": {
+      "trials": 12,
+      "strict_pass_count": 10,
+      "strict_pass_pct": 83.3,
+      "median_wall_seconds": 28.14,
+      "mean_wall_seconds": 31.11,
+      "escalation_count": 0,
+      "escalation_rate_pct": 0.0,
+      "peak_vram_mib": 6934
+    },
+    "dynamic-cascade": {
+      "trials": 12,
+      "strict_pass_count": 10,
+      "strict_pass_pct": 83.3,
+      "median_wall_seconds": 23.4,
+      "mean_wall_seconds": 31.5,
+      "escalation_count": 2,
+      "escalation_rate_pct": 16.7,
+      "peak_vram_mib": 5114
+    }
+  }
+}
