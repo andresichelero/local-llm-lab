@@ -1,0 +1,95 @@
+{
+  "timestamp_utc": "2026-10-11T21:33:08.768286+00:00",
+  "arm": "treatment",
+  "run_label": "treatment",
+  "task": "calculator",
+  "command": [
+    "/home/foxtrot/local-llm-benchmark/envs/node-harnesses/opencode/node_modules/opencode-linux-x64/bin/opencode",
+    "run",
+    "--auto",
+    "--format",
+    "json",
+    "--agent",
+    "build",
+    "--model",
+    "local/Qwen3.5-9B-Q4_K_M",
+    "--dir",
+    "/home/foxtrot/local-llm-benchmark/results/raw/opencode-controlled-20261011-20261011T212845Z/calibration-treatment/workspace",
+    "Read `TASK.md` and follow it exactly. Implement the requested change, run its specified unit-test command from the workspace root, inspect the result, and repair any failures. Do not change files outside `src/calculator.py` and `tests/test_calculator.py`. Reply with a brief summary of the implementation and test result.\n\nOrchestration: first call repo-explorer to identify the calculator behavior and relevant tests. Then implement the requested change and run the existing tests. Finally call independent-reviewer to inspect the diff and test evidence. Do not broaden scope."
+  ],
+  "profile_sha256": "6a6d3f917a685d7d8bd38a7ef353607681dcfc622e47da12f572b0423e6487d9",
+  "tracked_profile_sha256": "1c9a852168ea3df6ff2afef26dacee19bc160efe56989b4120157b5fa5abdef3",
+  "source_git_sha": "80a50c5041bf0deef219fcf495aff6c6a5e2c40c",
+  "source_tree_dirty": false,
+  "fixture_sha256": "f80943a2205b218e485c6fbcb171de7fed32b48da83055e3a8497cc4f32507e6",
+  "task_prompt_sha256": "298d5ff10527ad395cc8034dfaae11f19710d89193200a982952f93e5b21678a",
+  "effective_profile_checks": {
+    "local_endpoint": true,
+    "autoupdate_disabled": true,
+    "configured_model": true,
+    "build_primary": true,
+    "build_steps": true,
+    "task_permissions_exact": true,
+    "repo-explorer_readonly": true,
+    "independent-reviewer_readonly": true
+  },
+  "return_code": -15,
+  "timed_out": true,
+  "wall_seconds": 180.378,
+  "child_task_calls_completed": [
+    "repo-explorer"
+  ],
+  "workflow_gate": false,
+  "primary_text": "",
+  "changed_files": [
+    "src/calculator.py",
+    "tests/test_calculator.py",
+    "src/__pycache__/calculator.cpython-312.pyc",
+    "tests/__pycache__/test_calculator.cpython-312.pyc"
+  ],
+  "success": false,
+  "quality": {
+    "success": true,
+    "unit_tests_passed": true,
+    "behavioral_probe_passed": true,
+    "divide_tests_present": true,
+    "required_tests_present": true,
+    "unchanged_helpers": true,
+    "changes_scoped": true,
+    "changed_files": [
+      "src/calculator.py",
+      "tests/test_calculator.py"
+    ],
+    "test_output": "test_add (test_calculator.CalculatorTests.test_add) ... ok\ntest_divide_by_zero (test_calculator.CalculatorTests.test_divide_by_zero) ... ok\ntest_divide_negative (test_calculator.CalculatorTests.test_divide_negative) ... ok\ntest_divide_positive (test_calculator.CalculatorTests.test_divide_positive) ... ok\ntest_multiply (test_calculator.CalculatorTests.test_multiply) ... ok\n\n----------------------------------------------------------------------\nRan 5 tests in 0.000s\n\nOK\n",
+    "behavioral_probe_stderr": ""
+  },
+  "usage": {
+    "model_calls": 6,
+    "prompt_tokens": 51877,
+    "first_prompt_tokens": 7559,
+    "completion_tokens": 1028,
+    "tool_calls": 8,
+    "tool_failures": 0,
+    "compactions": 0
+  },
+  "resources": {
+    "sample_count": 172,
+    "cpu_util_pct_avg": 17.5,
+    "cpu_util_pct_peak": 42.8,
+    "ram_used_mb_avg": 2677.5,
+    "ram_used_mb_peak": 2930.0,
+    "swap_used_mb_avg": 45.0,
+    "swap_used_mb_peak": 45.0,
+    "vram_used_mb_avg": 6030.0,
+    "vram_used_mb_peak": 6030.0,
+    "gpu_util_pct_avg": 92.5,
+    "gpu_util_pct_peak": 99.0,
+    "temperature_c_avg": 69.0,
+    "temperature_c_peak": 72.0,
+    "gpu_clock_mhz_avg": 1824.9,
+    "gpu_clock_mhz_peak": 1890.0,
+    "power_w_avg": 230.9,
+    "power_w_peak": 239.7
+  },
+  "prompt_file": "/home/foxtrot/local-llm-benchmark/results/raw/opencode-controlled-20261011-20261011T212845Z/calibration-treatment/TASK_PROMPT.md"
+}

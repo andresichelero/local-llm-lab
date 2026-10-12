@@ -1,5 +1,13 @@
 # Execution status — updated 2026-10-11
 
+## Fresh continuation audit and bounded OpenCode gate
+
+- PR34 was reviewed against current raw evidence, merged with the expected-head guard as `db190b0`, and continuation moved to `feat/audit-opencode-controlled-20261011`. The machine/model/runtime/SSD-library audit and comparison are in `results/reports/audit-continuation-20261011.md`.
+- OpenCode 1.19.0 runtime-loaded the exact corrected local profile. Effective model/endpoint, auto-update disabled, exact named-child task permissions, and child bash/edit denies passed structural checks. A read-only delegated smoke passed in 20.132 s with exactly one explorer and no workspace changes.
+- The calculator calibration used one control/treatment observation with 20 primary steps and a 180-second time cap. Control passed in 44.075 s; treatment reached the explorer and passed the independent final code/tests/scope grader, but timed out at 180.378 s before the independent reviewer. Its workflow gate failed. No warmups or measured pairs were eligible; no repeated quality/speed advantage is claimed.
+- All active inputs, libraries, source, workspace, cache and records were on C-backed WSL ext4; explicit SSD library preflight was used. Owned processes and port 8080 were clear afterward. The preflight version-stream bug was recorded, corrected and regression-tested; PowerShell normalized Linux gate exit 2 to tool exit 1, separately reproduced without model inference.
+- Final source `80a50c5041bf0deef219fcf495aff6c6a5e2c40c` passed 79 tests and 3 subtests on an ext4 snapshot, Python syntax checks (57 files), shell syntax checks (40 files), and diff check. No linter/typechecker is configured. See `results/reports/opencode-controlled-20261011.md` and the saved round plan for artifacts and remaining work. The broad lab is incomplete; local routing/failure escalation and broader unsaturated tasks are the next priority.
+
 ## SSD-only launcher guard
 
 - The standard llama.cpp inference and JSON/tool quality launchers now default to the C:-hosted WSL ext4 runtime bundle and fail before inference if the model, executable, llama.cpp libraries, benchmark root, or output directories are not ext4-backed.

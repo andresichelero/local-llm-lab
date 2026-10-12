@@ -53,6 +53,12 @@ New benchmark runs use the C:-hosted WSL ext4 SSD for active model/runtime files
 
 These are machine-specific measurements with the Windows desktop sharing the RTX 3070. Check the linked reports and raw JSONL before applying the numbers to another run; each report states its prompt, repetition count, exclusions, and quality limitations. The next priorities are paired quality tests across model/quant/runtime configurations, broader coding and tool-use tasks, and reproducible router and multi-agent comparisons.
 
+### Continuation audit and controlled delegation — 2026-10-11
+
+The [fresh audit and comparison](results/reports/audit-continuation-20261011.md) rechecked Git/PR state, machine resources, model hashes and SSD runtime dependencies before continuation. PR34 was integrated; the next work is on a feature branch. The corrected OpenCode profile was runtime-loaded and its local endpoint, exact child allowlist, and child shell/edit denies were confirmed. A read-only smoke completed in 20.132 s with one explorer call and no workspace changes.
+
+A gated calibration on the existing calculator task used equal 20-step/180-second limits: the single-agent control passed in 44.075 s. The delegated treatment passed the independent coding grader, but timed out at 180.378 s with only the explorer completed and no independent reviewer. Workflow success therefore failed; no warmups or measured pairs were started. This is a failed coordination calibration, not a repeated quality/speed comparison. See the [controlled probe](results/reports/opencode-controlled-20261011.md) and [round plan](docs/superpowers/plans/2026-10-11-opencode-controlled.md). The lab remains incomplete; bounded local routing/failure escalation and broader unsaturated quality tasks take priority over raising delegation limits until one run passes.
+
 ## Reproducibility rules
 
 - Each run records the git revision, model revision, runtime version, quantization, context, generation limit, and hardware readings when available.

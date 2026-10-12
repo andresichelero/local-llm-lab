@@ -1,0 +1,1 @@
+{"phase":"preflight","failed_check":"llama.cpp version banner expected in stdout; local executable emits to stderr","server_started":false,"timestamp_utc":"2026-10-11T21:25:46Z"}

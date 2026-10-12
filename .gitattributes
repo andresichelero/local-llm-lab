@@ -9,4 +9,5 @@
 *.json text eol=lf
 *.jsonl text eol=lf
 *.lock text eol=lf
+results/raw/opencode-controlled-20261011-*/** text eol=lf
 .gitignore text eol=lf

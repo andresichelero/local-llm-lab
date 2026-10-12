@@ -35,25 +35,25 @@
 
 ## Task 2: Effective-profile and bounded compatibility gate
 
-- [ ] Add a small reproducible runner in benchmark/opencode_controlled_probe.py, reusing existing isolation, grading, usage/resource helpers where suitable; add focused tests in tests/test_opencode_controlled_probe.py for gates and event parsing.
-- [ ] Copy a clean committed source snapshot to a unique SSD-side checkout; record Git SHA, config/fixture hashes and exact invocation.
-- [ ] Inspect debug config and debug agent details for the exact corrected profile in isolated HOME; assert local endpoint, auto-update off, allowed children and denied child bash/edit.
-- [ ] Start only the owned server (16K, Q4_0 KV, FA, 99 GPU layers, reasoning off, one slot; no prompt caching) after SSD/model/resource preflight.
-- [ ] Run a read-only delegation with 90-second cap; require exact test names, completed explorer event and zero workspace changes. Preserve events, stdout/stderr, effective settings and resource samples.
+- [x] Add a small reproducible runner in benchmark/opencode_controlled_probe.py, reusing existing isolation, grading, usage/resource helpers where suitable; add focused tests in tests/test_opencode_controlled_probe.py for gates and event parsing.
+- [x] Copy a clean committed source snapshot to a unique SSD-side checkout; record Git SHA, config/fixture hashes and exact invocation.
+- [x] Inspect debug config and debug agent details for the exact corrected profile in isolated HOME; assert local endpoint, auto-update off, allowed children and denied child bash/edit.
+- [x] Start only the owned server (16K, Q4_0 KV, FA, 99 GPU layers, reasoning off, one slot; no prompt caching) after SSD/model/resource preflight.
+- [x] Run a read-only delegation with 90-second cap; require exact test names, completed explorer event and zero workspace changes. Preserve events, stdout/stderr, effective settings and resource samples.
 
 ## Task 3: Matched coding gate and bounded repetitions
 
 Hypothesis: one read-only explorer and one independent reviewer can complete the same calculator task within 20 primary steps and 180 seconds; the extra coordination may cost time without improving this saturated task.
 
-- [ ] If Task 2 passes, run one calibration pair: control denies task calls; treatment permits only the two named children and explicitly requests explorer, implementation/tests, then independent review. Same fixture/model/server settings, equal 20-step and 180-second limits, temperature zero and isolated fresh sessions.
-- [ ] Only if both calibration arms complete and treatment reaches both children, run one warm-up per arm plus three measured pairs, alternating order. Keep cache off; cap total round at 35 minutes. Stop escalation after failed calibration, do not tune until success.
-- [ ] Record behavior/tests/scope, delegation/review completion, wall seconds, tool failures, token counters and sampled resources separately. Include all valid measured failures in denominators. Do not infer general quality advantage from this one task.
-- [ ] Stop only owned processes. Archive completed series to E and verify SHA-256; preserve active data and all failed attempts.
+- [x] If Task 2 passes, run one calibration pair: control denies task calls; treatment permits only the two named children and explicitly requests explorer, implementation/tests, then independent review. Same fixture/model/server settings, equal 20-step and 180-second limits, temperature zero and isolated fresh sessions.
+- [ ] Not eligible after calibration failure: one warm-up per arm plus three measured pairs, alternating order. Keep cache off; cap total round at 35 minutes. Stop escalation after failed calibration, do not tune until success.
+- [x] Record behavior/tests/scope, delegation/review completion, wall seconds, tool failures, token counters and sampled resources separately. Include all valid measured failures in denominators. Do not infer general quality advantage from this one task.
+- [x] Stop only owned processes. Archive completed series to E and verify SHA-256; preserve active data and all failed attempts. Archive SHA256 is recorded in the probe report and versions.lock.
 
 ## Task 4: Validation and publication
 
-- [ ] Run focused tests, full suite in its Linux Bash environment using an existing pytest environment, Python syntax/compile checks, shell/Node syntax where applicable, JSON parsing and git diff --check. No linter/typechecker is configured; report this explicitly.
-- [ ] Revalidate at least three 2026 candidates from official sources without downloads; distinguish upstream claims from installed/measured fit.
+- [x] Run focused tests, full suite in its Linux Bash environment using a small isolated pytest environment (none was already installed), Python syntax/compile checks, shell syntax where applicable, JSON parsing and git diff --check. No linter/typechecker is configured; report this explicitly. Final source passed 79 tests and 3 subtests.
+- [x] Revalidate at least three 2026 candidates from official sources without downloads; distinguish upstream claims from installed/measured fit.
 - [ ] Update README/status/versions/source ledger and audit report with actual gate outcome; commit small artifacts, review full diff, push feature branch and open/attach new PR. Inspect current checks.
 
 ## Decision after this round
