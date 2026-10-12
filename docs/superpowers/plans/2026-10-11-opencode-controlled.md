@@ -54,7 +54,7 @@ Hypothesis: one read-only explorer and one independent reviewer can complete the
 
 - [x] Run focused tests, full suite in its Linux Bash environment using a small isolated pytest environment (none was already installed), Python syntax/compile checks, shell syntax where applicable, JSON parsing and git diff --check. No linter/typechecker is configured; report this explicitly. Final source passed 79 tests and 3 subtests.
 - [x] Revalidate at least three 2026 candidates from official sources without downloads; distinguish upstream claims from installed/measured fit.
-- [ ] Update README/status/versions/source ledger and audit report with actual gate outcome; commit small artifacts, review full diff, push feature branch and open/attach new PR. Inspect current checks.
+- [x] Update README/status/versions/source ledger and audit report with actual gate outcome; commit small artifacts, review full diff, push feature branch and open/attach new PR. PR35 is open and attached: https://github.com/andresichelero/local-llm-lab/pull/35. Its CodeQL checks were inspected after publication; pending checks are not a completed CI result.
 
 ## Decision after this round
 
