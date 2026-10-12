@@ -63,6 +63,8 @@ The [October 12 research review](results/reports/state-of-art-20261012.md) and [
 
 ## Reproducibility rules
 
+The [October 12 implementation status](results/reports/status.md) now records a failed hardened delegation smoke and a successful MTP activation request (204 drafted tokens, 187 accepted), with no demonstrated quality or speed gain. The first MTP attempt was setup-invalid and is retained. The bounded single-agent model comparison uses a separate prerequisite from delegation; offline routing uses explicit capabilities and keeps cloud disabled. See the [Round 0 report](results/reports/round0-permission-smoke-20261012.md) and [MTP report](results/reports/mtp-activation-20261012.md).
+
 - Each run records the git revision, model revision, runtime version, quantization, context, generation limit, and hardware readings when available.
 - Keep raw JSONL and logs. Derived CSV/report files can be regenerated.
 - Use one warm-up and at least three measured repetitions for comparisons. This lab's initial smoke run is explicitly not a final ranking.

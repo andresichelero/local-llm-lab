@@ -24,6 +24,13 @@ results/raw/*
 !results/raw/opencode-controlled-20261011-readonly-smoke-212742Z/**
 !results/raw/opencode-controlled-20261011-sequence-212845Z/
 !results/raw/opencode-controlled-20261011-sequence-212845Z/**
+!results/raw/round0-opencode-smoke-20261012/
+!results/raw/round0-opencode-smoke-20261012/**
+!results/raw/mtp-activation-20261012/
+!results/raw/mtp-activation-20261012/**
+!results/raw/mtp-activation-corrected-20261012/
+!results/raw/mtp-activation-corrected-20261012/**
+results/raw/mtp-activation*/source-*.tar
 __pycache__/
 unsloth_compiled_cache/
 *.py[cod]

@@ -1,5 +1,13 @@
 # Execution status — updated 2026-10-12
 
+## Plan implementation — in progress
+
+The hardened delegation smoke failed its workflow gate: correct names in 13.716 s, zero changes and 14 passing effective-profile diagnostics, but no explorer call. No retry or permission widening was made. See [Round 0](round0-permission-smoke-20261012.md). Technical review separated the future single-agent comparison from this unrelated delegation requirement: protocol `r1b` must pass its own load/profile/bash/edit gates for both models before any measured arms.
+
+The existing 4B MTP head activated in one corrected request, with 204 draft tokens and 187 accepted. The first attempt sent no generation because of an executor HTTP-contract error and remains setup-invalid. The corrected output did not satisfy its sequence instruction; no quality or speed advantage is established. Target KV was Q4_0 and MTP KV was F16. See [MTP activation](mtp-activation-20261012.md). No weights, dependencies or drivers changed.
+
+The bounded 18-row model-quality executor and offline local-only routing filter are being implemented and reviewed. Routing uses caller-supplied capabilities, rejects unsupported/expired/unhealthy destinations and never invokes cloud; no live routing result or measured destination table is claimed. Earlier research and historical results below remain separate.
+
 ## Research revision — no new benchmark
 
 The current machine was rechecked: 16 GiB free ext4, 7.3 GiB available WSL RAM and 7396 MiB free GPU memory in the read-only snapshot. No inference process was active. The [research review](state-of-art-20261012.md) distinguishes primary releases, engineering reports and anecdotal community observations. The [active plan](../../docs/superpowers/plans/2026-10-12-evidence-first-local-lab.md) moves matched model quality and no-download optimization gates ahead of live routing. New candidate files/versions are researched only; no weights, dependencies or drivers were changed. The historical delegated calibration remains closed.

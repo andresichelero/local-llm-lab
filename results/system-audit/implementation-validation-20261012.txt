@@ -1,0 +1,27 @@
+Controlled implementation validation — 2026-10-12
+
+Source baseline: a734283; reviewed feature branch changes overlaid onto
+C-backed WSL ext4 /home/foxtrot/local-llm-benchmark/validation-overlay-20261012-zneU3R.
+Existing lab-validation environment, Python 3.12.3; no dependency installation.
+
+Final paired-runner focus: 21 passed. Combined full suite: 110 passed, 17 subtests.
+Router focus: 14 passed, 7 subtests. Python compile, source/overlay comparison
+and git diff --check passed. No linter/typechecker is configured.
+Validation performed by Luna High implementers; independent Luna High reviewer
+approved final source and prospective single-agent release without running GPU.
+
+SHA-256 of frozen implementation files:
+514192c563ed512cfe7b5907fdd5082812a08e16b71060ef8d7b3d730a7d69e4 benchmark/model_quality_paired.py
+080a9d0301f20fbdd7827367022b176ef08fcf5f7b71bcf7b3c57a0dd7f9c6a1 tests/test_model_quality_paired.py
+f401dd390ac66d5ca017282c8dd4d18242e18ddfa5aaa699658f093420d01d85 router/rules.py
+a7eca7c723f939a45072e722fab67bb309c799bb4472f703703f9325644c7dd8 router/README.md
+0a3cc32c8b2e46a7fcbe1d78a301b4800a9e6c6c166b2e8dde5f1433cb166d75 tests/test_router.py
+
+Runner fixes verified: protected bytes/scope/modes and links before grading;
+sanitized bounded grader environment; effective ordered task/external rules;
+compatibility requires completed bash and TASK.md Edit; per-stage and post-exit
+OOM/swap/deadline stops; owned process-group cleanup on failure and exceptions.
+
+Dry-run: protocol model-quality-paired-20261012-r1b, 18 scheduled measurement
+rows, Round0 failed and not_a_single_agent_prerequisite=true. Single-agent
+compatibility pending; inference_started=false. No measurement result implied.

@@ -32,16 +32,20 @@
 
 ## Round 0 — Close provenance and permission prerequisites
 
+**2026-10-12 execution:** preflight passed at `a734283`; the single hardened smoke failed its delegation gate (13.716 s, exact names, zero changes, no explorer). All 14 effective-profile diagnostics passed. No retry or permission widening. Delegation remains unresolved. Before any Round 1 measurements, technical review removed the unrelated delegation dependency: the separately identified single-agent protocol below must pass its own load/profile/bash/edit gates for both models. Independent Round 2 activation and Round 4 offline checks also use their own prerequisites. See `results/reports/round0-permission-smoke-20261012.md`.
+
 **Files:** Existing `benchmark/opencode_controlled_probe.py`, `benchmark/configs/harnesses/opencode-subagents.json`, `results/system-audit/`, `config/experiments.yaml`, `versions.lock`.
 
 Question: does the revised no-auto-approval policy actually execute a local request?
 
-- [ ] Recheck checkout/PR head, processes, space, hashes, SSD shared-library resolution and profile diagnostics. Record installed versions; do not auto-update.
-- [ ] Run one read-only smoke with the hardened runner, 90 s cap, exact output, completed explorer and zero workspace changes. Diagnostics previously passed without inference; do not call that a measured runtime smoke.
+- [x] Recheck checkout/PR head, processes, space, hashes, SSD shared-library resolution and profile diagnostics. Record installed versions; do not auto-update.
+- [x] Run one read-only smoke with the hardened runner, 90 s cap, exact output, completed explorer and zero workspace changes. Completed attempt failed the explorer requirement; completion of this action is not a passing gate.
 - [ ] Stop if a permission prompt, protocol error or denied necessary tool prevents completion. Diagnose without widening permission rules or rerunning the failed historical coding pair.
-- [ ] Save the new source/profile hashes, raw events and sampled resources. This prerequisite is not a multiagent benefit trial.
+- [x] Save the new source/profile hashes, raw events and sampled resources. This prerequisite is not a multiagent benefit trial.
 
 ## Round 1 — Matched model quality, then harder capability tasks
+
+**Prospective protocol revision:** `model-quality-paired-20261012-r1b`, frozen before measured arms. Round 0 is still failed and is never reclassified. This single-agent study denies `task` and requires its own compatibility probes for both models: correct load/context, exact effective permissions, completed real bash and edit calls. Either compatibility failure stops the matrix. Explicit `--single-agent-release` follows code review and a clean committed SSD snapshot; it is not a delegation release.
 
 **Files:** Reuse `benchmark/harness_runner.py`, `benchmark/harness_eval.py` and existing fixtures. Add a focused capability fixture under `benchmark/fixtures/` and independent grader cases in the existing test structure only when its contract is frozen.
 
@@ -57,6 +61,8 @@ Question: when harness and budget are fixed, does 9B earn its memory/latency cos
 Deliverable: `results/reports/model-quality-paired-20261012.md`, raw JSONL and a destination capability table. No winner if quality is tied or the tasks remain saturated.
 
 ## Round 2 — No-download speculation and independent cache experiments
+
+**Probe correction:** the first MTP launch reached health but sent no generation because the executor incorrectly required `/openapi.json`, which the pinned server does not serve. Preserve that attempt as setup-invalid/incomplete. A separately identified `mtp-activation-corrected-20261012` diagnostic uses the pinned source's documented `POST /completion`, with the prompt/payload frozen before launch, the same settings and 180-second cap. One corrected attempt is allowed; no further retry or runtime change. Initialization alone does not satisfy the draft-activity gate.
 
 **Files:** Existing `scripts/` llama launchers, `benchmark/llama_cpp_bench.py`, `benchmark/quality_smoke.py` and result summaries; add a small speculation summary only if current logs cannot express draft/acceptance counts.
 
