@@ -153,6 +153,16 @@ class ModelQualityPairedTests(unittest.TestCase):
             self.assertEqual(correct_target["edit_task_md_tool_calls"], 1)
             self.assertTrue(correct_target["edit_tool_round_trip"])
 
+            task_md_write = {
+                "type": "tool_use",
+                "part": {"tool": "write", "state": {"status": "completed",
+                         "input": {"filePath": str(workspace / "TASK.md"), "content": "edit probe ok\n"}}},
+            }
+            write_target = paired.compatibility_edit_evidence(
+                [bash_wrote_task, task_md_write], workspace, file_verified=True)
+            self.assertEqual(write_target["edit_task_md_tool_calls"], 1)
+            self.assertTrue(write_target["edit_tool_round_trip"])
+
     def test_effective_permissions_reject_task_allow_overrides_and_external_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             home, tmpdir = str(Path(temporary) / "home"), str(Path(temporary) / "tmp")

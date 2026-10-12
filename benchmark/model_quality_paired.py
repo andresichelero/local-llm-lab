@@ -1041,10 +1041,10 @@ def _edit_event_targets_task_md(event: dict[str, Any], workspace: Path) -> bool:
 
 def compatibility_edit_evidence(events: list[dict[str, Any]], workspace: Path,
                                 *, file_verified: bool) -> dict[str, Any]:
-    """Require a completed edit explicitly targeting TASK.md plus its verified bytes."""
+    """Require a completed edit or write explicitly targeting TASK.md plus its verified bytes."""
     completed_edits = [event for event in events
                        if event.get("type") == "tool_use"
-                       and str(event.get("part", {}).get("tool", "")).lower() == "edit"
+                       and str(event.get("part", {}).get("tool", "")).lower() in {"edit", "write"}
                        and _successful_event(event)]
     task_md_edits = [event for event in completed_edits
                      if _edit_event_targets_task_md(event, workspace)]
