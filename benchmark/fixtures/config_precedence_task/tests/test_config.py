@@ -25,6 +25,12 @@ class ConfigPrecedenceTests(unittest.TestCase):
         self.assertIs(resolved["verbose"], False)
         self.assertEqual(resolved["prefix"], "")
 
+    def test_none_treated_as_absent(self):
+        defaults = {"retries": 3, "verbose": True}
+        file_cfg = {"retries": None}
+        resolved = resolve_config(defaults, file_cfg)
+        self.assertEqual(resolved["retries"], 3)
+
     def test_does_not_mutate_inputs(self):
         defaults = {"a": 1}
         file_cfg = {"b": 2}
