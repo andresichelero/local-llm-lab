@@ -295,10 +295,20 @@ def _preflight(
 def _isolated_environment(
     harness: str, run_dir: Path, install_root: Path, workspace: Path
 ) -> dict[str, str]:
+    bin_dir = run_dir / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    guarded_edit = bin_dir / "guarded-edit"
+    guarded_edit.write_text(
+        "#!/usr/bin/env bash\nexec python3 -m benchmark.guarded_edit \"$@\"\n",
+        encoding="utf-8",
+    )
+    guarded_edit.chmod(0o755)
+
     node_bin = install_root / "runtimes/node-v22.23.3-linux-x64/bin"
     env = {
         "PATH": ":".join(
             [
+                str(bin_dir),
                 "/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
                 "/sbin", "/bin", "/usr/lib/wsl/lib", str(node_bin),
             ]

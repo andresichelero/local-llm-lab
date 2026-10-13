@@ -529,6 +529,23 @@ class ModelQualityPairedTests(unittest.TestCase):
         self.assertFalse(missing["python_ok"])
         self.assertEqual(missing["failure_class"], "tool_env")
 
+    def test_isolated_environment_creates_guarded_edit_executable_on_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir = Path(temp) / "run"
+            workspace = run_dir / "workspace"
+            install_root = Path(temp) / "install"
+            workspace.mkdir(parents=True)
+            env = paired._isolated_environment("opencode", run_dir, install_root, workspace)
+            script = run_dir / "bin" / "guarded-edit"
+            self.assertTrue(script.is_file())
+            self.assertEqual(
+                script.read_text(encoding="utf-8"),
+                '#!/usr/bin/env bash\nexec python3 -m benchmark.guarded_edit "$@"\n',
+            )
+            if os.name != "nt":
+                self.assertEqual(script.stat().st_mode & 0o777, 0o755)
+            self.assertTrue(env["PATH"].startswith(str(run_dir / "bin") + ":"))
+
 
 if __name__ == "__main__":
     unittest.main()
