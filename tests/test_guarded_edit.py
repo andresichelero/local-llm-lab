@@ -12,6 +12,7 @@ Verifies deterministic pre-commit safety guards:
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 import pytest
 
@@ -20,6 +21,7 @@ from benchmark.guarded_edit import (
     apply_guarded_edit,
     check_helper_preservation,
     check_syntax_leak,
+    main,
 )
 
 
@@ -277,5 +279,216 @@ def test_whitespace_tolerance_multiple_fuzzy_matches(tmp_path: Path) -> None:
     assert not res.success
     assert res.status == EditStatus.MULTIPLE_OCCURRENCES
     assert "occurs 2 times" in (res.error_message or "")
+
+
+def test_cli_apply_search_and_replace_strings(tmp_path: Path) -> None:
+    target = tmp_path / "cli_target.py"
+    target.write_text("def hello(): pass\n", encoding="utf-8")
+
+    code = main([
+        "apply",
+        "--file", str(target),
+        "--search", "def hello(): pass\n",
+        "--replace", "def hello(): return 42\n",
+    ])
+    assert code == 0
+    assert "return 42" in target.read_text(encoding="utf-8")
+
+
+def test_cli_apply_search_file_and_replace_file(tmp_path: Path) -> None:
+    target = tmp_path / "cli_target.py"
+    target.write_text("def hello(): pass\n", encoding="utf-8")
+    sf = tmp_path / "search.txt"
+    sf.write_text("def hello(): pass\n", encoding="utf-8")
+    rf = tmp_path / "replace.txt"
+    rf.write_text("def hello(): return 100\n", encoding="utf-8")
+
+    code = main([
+        "apply",
+        "--file", str(target),
+        "--search-file", str(sf),
+        "--replace-file", str(rf),
+    ])
+    assert code == 0
+    assert "return 100" in target.read_text(encoding="utf-8")
+
+
+def test_cli_apply_json_output(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    target = tmp_path / "cli_target.py"
+    target.write_text("def hello(): pass\n", encoding="utf-8")
+
+    code = main([
+        "apply",
+        "--file", str(target),
+        "--search", "def hello(): pass\n",
+        "--replace", "def hello(): return 1\n",
+        "--json",
+    ])
+    assert code == 0
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["success"] is True
+    assert payload["status"] == "applied"
+    assert payload["new_sha256"] is not None
+
+
+def test_cli_apply_failure_exit_code(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    target = tmp_path / "cli_target.py"
+    target.write_text("def hello(): pass\n", encoding="utf-8")
+
+    code = main([
+        "apply",
+        "--file", str(target),
+        "--search", "def non_existent(): pass\n",
+        "--replace", "def non_existent(): return 1\n",
+        "--json",
+    ])
+    assert code == 1
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["success"] is False
+    assert payload["status"] == "zero_occurrences"
+
+
+def test_cli_apply_expected_sha_match_and_mismatch(tmp_path: Path) -> None:
+    target = tmp_path / "cli_target.py"
+    target.write_text("def hello(): pass\n", encoding="utf-8")
+    actual_sha = hashlib.sha256(target.read_bytes()).hexdigest()
+
+    # Mismatch returns 1
+    code_mismatch = main([
+        "apply",
+        "--file", str(target),
+        "--search", "def hello(): pass\n",
+        "--replace", "def hello(): return 1\n",
+        "--expected-sha", "0" * 64,
+    ])
+    assert code_mismatch == 1
+
+    # Match returns 0
+    code_match = main([
+        "apply",
+        "--file", str(target),
+        "--search", "def hello(): pass\n",
+        "--replace", "def hello(): return 1\n",
+        "--expected-sha", actual_sha,
+    ])
+    assert code_match == 0
+
+
+def test_cli_apply_allow_helper_deletion(tmp_path: Path) -> None:
+    original = "def helper(): pass\ndef target(): pass\n"
+    target = tmp_path / "cli_helpers.py"
+    target.write_text(original, encoding="utf-8")
+
+    # Without allow-helper-deletion -> exit 1
+    code_blocked = main([
+        "apply",
+        "--file", str(target),
+        "--search", original,
+        "--replace", "def target(): return 1\n",
+    ])
+    assert code_blocked == 1
+
+    # With allow-helper-deletion -> exit 0
+    code_allowed = main([
+        "apply",
+        "--file", str(target),
+        "--search", original,
+        "--replace", "def target(): return 1\n",
+        "--allow-helper-deletion",
+    ])
+    assert code_allowed == 0
+
+
+def test_cli_check_existing_file_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    target = tmp_path / "valid.py"
+    target.write_text("def foo():\n    return 42\n", encoding="utf-8")
+
+    code = main(["check", "--file", str(target), "--json"])
+    assert code == 0
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["success"] is True
+    assert payload["status"] == "ok"
+
+
+def test_cli_check_with_content_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    target = tmp_path / "existing.py"
+    target.write_text("def foo(): return 1\n", encoding="utf-8")
+
+    code = main([
+        "check",
+        "--file", str(target),
+        "--content", "def foo(): return 2\n",
+        "--json",
+    ])
+    assert code == 0
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["success"] is True
+
+
+def test_cli_check_syntax_leak(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    target = tmp_path / "valid.py"
+    target.write_text("def foo(): return 1\n", encoding="utf-8")
+    leaked = "def foo(): return 1\n(End of file)\n"
+
+    code = main([
+        "check",
+        "--file", str(target),
+        "--content", leaked,
+        "--json",
+    ])
+    assert code == 1
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["success"] is False
+    assert payload["status"] == "syntax_leak"
+
+
+def test_cli_check_invalid_syntax(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    target = tmp_path / "valid.py"
+    target.write_text("def foo(): return 1\n", encoding="utf-8")
+
+    code = main([
+        "check",
+        "--file", str(target),
+        "--content", "def invalid_syntax(:\n",
+        "--json",
+    ])
+    assert code == 1
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["success"] is False
+    assert payload["status"] == "invalid_syntax"
+
+
+def test_cli_check_helper_deletion(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    target = tmp_path / "helpers.py"
+    target.write_text("def helper(): pass\ndef foo(): pass\n", encoding="utf-8")
+
+    code = main([
+        "check",
+        "--file", str(target),
+        "--content", "def foo(): return 1\n",
+        "--json",
+    ])
+    assert code == 1
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["success"] is False
+    assert payload["status"] == "helper_deletion_violation"
+
+
+def test_cli_check_missing_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    missing = tmp_path / "missing.py"
+    code = main(["check", "--file", str(missing), "--json"])
+    assert code == 1
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["success"] is False
+    assert payload["status"] == "file_not_found"
+
 
 
