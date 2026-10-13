@@ -14,7 +14,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import signal
 import statistics
 import subprocess
@@ -38,6 +37,11 @@ from benchmark.harness_runner import (  # noqa: E402
     summarize_usage,
 )
 from benchmark.provenance import git_provenance  # noqa: E402
+from benchmark.visible_feedback import (  # noqa: E402
+    VisibleDevelopmentFeedback,
+    collect_visible_feedback,
+    is_visible_development_feedback,
+)
 
 EXPERIMENT = "cascade-routing-matrix-20261012-trilha-a"
 HARNESS = "opencode"
@@ -244,15 +248,22 @@ class LlamaServerManager:
         return time.monotonic() - unload_start
 
 
-def build_repair_prompt(grade: dict[str, Any]) -> str:
-    """Build repair turn prompt with meaningful failure diagnostics from the previous attempt."""
-    diagnostic = (
-        grade.get("behavioral_probe_stderr")
-        or grade.get("test_output")
-        or grade.get("grader_error")
-        or "Unit tests or behavioral probes failed."
-    )
-    return f"The previous test attempt failed. Fix the issues and ensure all tests pass: {diagnostic}"
+def build_repair_prompt(feedback: object) -> str:
+    """Build repair feedback only from a validated visible-development result."""
+    if not is_visible_development_feedback(feedback):
+        diagnostic = "Visible development feedback is unavailable. Review the task and workspace tests."
+    else:
+        diagnostics = []
+        if feedback["timed_out"]:
+            diagnostics.append("Visible workspace tests timed out.")
+        elif not feedback["passed"]:
+            diagnostics.append("Visible workspace tests did not pass.")
+        diagnostic = "\n".join(diagnostics)
+        if feedback["output"]:
+            diagnostic = f"{diagnostic}\n{feedback['output'][-4000:]}".strip()
+        if not diagnostic:
+            diagnostic = "Review the task requirements and workspace tests."
+    return f"The previous attempt needs repair. Review these visible development results:\n{diagnostic}"
 
 
 def run_single_trial(
@@ -271,8 +282,9 @@ def run_single_trial(
     output_root = output_root.resolve()
     run_dir = (output_root / "runs" / f"trial_{trial_num:02d}_{policy}_{task}_r{repeat}").resolve()
     if run_dir.exists():
-        shutil.rmtree(run_dir)
-    run_dir.mkdir(parents=True, exist_ok=True)
+        raise FileExistsError(f"Run output directory already exists: {run_dir}")
+    run_dir.mkdir(parents=True, exist_ok=False)
+    (run_dir / "tmp").mkdir()
 
     fixture_rel, prompt_rel = __import__("benchmark.harness_runner", fromlist=["resolve_task"]).resolve_task(task)
     prompt = prompt_rel.read_text(encoding="utf-8").strip()
@@ -319,11 +331,13 @@ def run_single_trial(
         start_new_session=True,
     )
 
+    agent_timed_out = False
     try:
-        agent_proc.wait(timeout=TASK_LIMIT_SECONDS)
+        agent_exit_code = agent_proc.wait(timeout=TASK_LIMIT_SECONDS)
     except subprocess.TimeoutExpired:
+        agent_timed_out = True
         agent_proc.kill()
-        agent_proc.wait()
+        agent_exit_code = agent_proc.wait()
 
     try:
         sampler.terminate()
@@ -336,8 +350,22 @@ def run_single_trial(
     res_rows = _read_jsonl(resource_path)
     res_summary = summarize_resources(res_rows)
     usage = summarize_usage("opencode", events)
-    grade = grade_workspace(workspace, fixture_rel, task=task)
-    initial_pass = bool(grade.get("success", False))
+    agent_attempts: list[dict[str, Any]] = [{
+        "model": initial_model,
+        "exit_code": agent_exit_code,
+        "timed_out": agent_timed_out,
+    }]
+    visible_feedback: VisibleDevelopmentFeedback = collect_visible_feedback(
+        workspace,
+        env=env,
+    )
+    initial_pass = (
+        visible_feedback["passed"]
+        and not visible_feedback["timed_out"]
+        and visible_feedback["exit_code"] == 0
+        and not agent_timed_out
+        and agent_exit_code == 0
+    )
 
     escalated = False
     escalation_swap = 0.0
@@ -355,7 +383,7 @@ def run_single_trial(
         profile_path.write_text(json.dumps(profile_9b, indent=2) + "\n", encoding="utf-8")
 
         # Run repair turn on 9B
-        repair_prompt = build_repair_prompt(grade)
+        repair_prompt = build_repair_prompt(visible_feedback)
         repair_command = [
             str(binary), "run", "--format", "json", "--agent", "build", "--model",
             f"local/{m9_alias}", "--dir", str(workspace), repair_prompt
@@ -370,19 +398,39 @@ def run_single_trial(
             stderr=stderr_path.open("a", encoding="utf-8"),
             start_new_session=True,
         )
+        repair_timed_out = False
         try:
-            repair_proc.wait(timeout=TASK_LIMIT_SECONDS)
+            repair_exit_code = repair_proc.wait(timeout=TASK_LIMIT_SECONDS)
         except subprocess.TimeoutExpired:
+            repair_timed_out = True
             repair_proc.kill()
-            repair_proc.wait()
+            repair_exit_code = repair_proc.wait()
+
+        agent_attempts.append({
+            "model": final_model,
+            "exit_code": repair_exit_code,
+            "timed_out": repair_timed_out,
+        })
 
         repair_wall = time.monotonic() - repair_start
         task_wall += repair_wall + escalation_swap
 
-        # Re-grade workspace after 9B repair
-        grade = grade_workspace(workspace, fixture_rel, task=task)
+        visible_feedback = collect_visible_feedback(
+            workspace,
+            env=env,
+        )
 
-    strict_pass = bool(grade.get("success", False))
+    # The private evaluator runs once, after the final agent action and all routing decisions.
+    grade = grade_workspace(workspace, fixture_rel, task=task)
+    final_attempt = agent_attempts[-1]
+    strict_pass = bool(
+        grade.get("success", False)
+        and visible_feedback["passed"]
+        and visible_feedback["exit_code"] == 0
+        and not visible_feedback["timed_out"]
+        and final_attempt["exit_code"] == 0
+        and not final_attempt["timed_out"]
+    )
 
     return {
         "trial": trial_num,
@@ -392,6 +440,7 @@ def run_single_trial(
         "initial_model": initial_model,
         "final_model": final_model,
         "escalated": escalated,
+        "agent_attempts": agent_attempts,
         "swap_duration_seconds": round(escalation_swap if escalated else swap_duration, 3),
         "strict_pass": strict_pass,
         "task_wall_seconds": round(task_wall, 3),
