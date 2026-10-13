@@ -6,9 +6,10 @@ import unittest
 from pathlib import Path
 
 try:
-    from benchmark.harness_eval import grade_workspace
+    from benchmark.harness_eval import _verify_required_tests, grade_workspace
 except ImportError:
     grade_workspace = None  # type: ignore[assignment]
+    _verify_required_tests = None  # type: ignore[assignment]
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -493,6 +494,75 @@ class HarnessEvaluationTests(unittest.TestCase):
             result = grade_workspace(workspace, PACKAGE_REFACTOR_FIXTURE, task="package_refactor")
         self.assertFalse(result["unchanged_helpers"])
         self.assertFalse(result["success"])
+
+    def test_verify_required_tests_semantic_variants(self) -> None:
+        self.assertIsNotNone(_verify_required_tests)
+        # 1. Canonical recommended names
+        canonical = {"test_divide_positive", "test_divide_negative", "test_divide_by_zero"}
+        self.assertTrue(_verify_required_tests(canonical))
+
+        # 2. Mistral Vibe variants
+        vibe_variants = {
+            "test_divide_positive_operands",
+            "test_divide_negative_operand",
+            "test_divide_by_zero",
+        }
+        self.assertTrue(_verify_required_tests(vibe_variants))
+
+        # 3. Pi variants
+        pi_variants = {
+            "test_positive_operands",
+            "test_negative_operand",
+            "test_division_by_zero",
+        }
+        self.assertTrue(_verify_required_tests(pi_variants))
+
+        # 4. Incomplete sets
+        self.assertFalse(_verify_required_tests({"test_divide_positive", "test_divide_negative"}))
+        self.assertFalse(_verify_required_tests({"test_divide_positive", "test_divide_by_zero"}))
+        self.assertFalse(_verify_required_tests({"test_divide_negative", "test_divide_by_zero"}))
+        self.assertFalse(_verify_required_tests(set()))
+
+    def test_calculator_division_accepts_vibe_and_pi_test_name_variants(self) -> None:
+        for variant_names in (
+            ("test_divide_positive_operands", "test_divide_negative_operand", "test_divide_by_zero"),
+            ("test_positive_operands", "test_negative_operand", "test_division_by_zero"),
+        ):
+            pos_name, neg_name, zero_name = variant_names
+            temp, workspace = self.workspace()
+            self.addCleanup(temp.cleanup)
+            (workspace / "src" / "calculator.py").write_text(
+                "def add(a: float, b: float) -> float:\n"
+                "    return a + b\n\n\n"
+                "def multiply(a: float, b: float) -> float:\n"
+                "    return a * b\n\n\n"
+                "def divide(a: float, b: float) -> float:\n"
+                "    if b == 0:\n"
+                "        raise ValueError(\"division by zero\")\n"
+                "    return a / b\n",
+                encoding="utf-8",
+            )
+            (workspace / "tests" / "test_calculator.py").write_text(
+                "import unittest\n\n"
+                "from src.calculator import add, multiply, divide\n\n\n"
+                "class CalculatorTests(unittest.TestCase):\n"
+                "    def test_add(self):\n        self.assertEqual(add(2, 3), 5)\n\n"
+                "    def test_multiply(self):\n        self.assertEqual(multiply(2, 3), 6)\n\n"
+                f"    def {pos_name}(self):\n        self.assertEqual(divide(10, 2), 5)\n\n"
+                f"    def {neg_name}(self):\n        self.assertEqual(divide(-10, 2), -5)\n\n"
+                f"    def {zero_name}(self):\n"
+                "        with self.assertRaisesRegex(ValueError, 'division by zero'):\n"
+                "            divide(10, 0)\n",
+                encoding="utf-8",
+            )
+            result = grade_workspace(workspace, FIXTURE)
+            self.assertTrue(result["divide_tests_present"], f"Failed for variants: {variant_names}")
+            self.assertTrue(result["required_tests_present"])
+            self.assertTrue(result["unit_tests_passed"])
+            self.assertTrue(result["behavioral_probe_passed"])
+            self.assertTrue(result["unchanged_helpers"])
+            self.assertTrue(result["changes_scoped"])
+            self.assertTrue(result["success"], f"Failed for variants: {variant_names}")
 
 
 if __name__ == "__main__":

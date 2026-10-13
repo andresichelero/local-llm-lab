@@ -235,6 +235,43 @@ class ModelQualityPairedTests(unittest.TestCase):
         self.assertTrue(grade["grader_skipped"])
         grader.assert_not_called()
 
+    def test_pregrader_guard_allows_new_allowed_file_with_normal_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "src").mkdir()
+            service = root / "src" / "service.py"
+            service.write_text("def serve(): pass\n", encoding="utf-8")
+            baseline_modes = {"src/service.py": service.stat().st_mode & 0o777}
+
+            # Add newly allowed file for package_refactor (src/metrics.py)
+            metrics = root / "src" / "metrics.py"
+            metrics.write_text("def summarize_metrics(): pass\n", encoding="utf-8")
+
+            allowed = {"src/service.py", "src/metrics.py", "tests/test_service.py"}
+            gate = pregrade_workspace_gate(root, baseline_modes, allowed_files=allowed)
+        self.assertTrue(gate["passed"], f"Gate failed with mode_changes: {gate.get('mode_changes')}")
+        self.assertEqual(gate["mode_changes"], [])
+
+    def test_grade_workspace_when_safe_allows_package_refactor_with_metrics_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            baseline = root / "baseline"
+            workspace = root / "workspace"
+            for d in (baseline, workspace):
+                (d / "src").mkdir(parents=True)
+                (d / "tests").mkdir()
+                (d / "src" / "service.py").write_text("def serve(): pass\n", encoding="utf-8")
+                (d / "tests" / "test_service.py").write_text("assert True\n", encoding="utf-8")
+            # In workspace, create the new required metrics.py
+            (workspace / "src" / "metrics.py").write_text("def summarize_metrics(): pass\n", encoding="utf-8")
+            base_modes = paired._file_modes(baseline)
+
+            with mock.patch.object(paired, "_independent_grade", return_value={"success": True}) as grader:
+                grade, gate = paired._grade_workspace_when_safe(workspace, baseline, "package_refactor", root, base_modes)
+        self.assertTrue(gate["passed"])
+        self.assertFalse(grade.get("grader_skipped", False))
+        grader.assert_called_once()
+
     def test_pregrader_guard_rejects_symlinks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

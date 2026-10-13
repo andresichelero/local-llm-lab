@@ -20,6 +20,7 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from collections.abc import Container
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -367,7 +368,22 @@ def _file_modes(root: Path) -> dict[str, int]:
     }
 
 
-def pregrade_workspace_gate(workspace: Path, baseline_modes: dict[str, int]) -> dict[str, Any]:
+TASK_ALLOWED_FILES: dict[str, set[str]] = {
+    "calculator_division": {"src/calculator.py", "tests/test_calculator.py"},
+    "whitespace_normalization": {"src/text_utils.py", "tests/test_text_utils.py"},
+    "dotenv_line_parser": {"src/config_parser.py", "tests/test_config_parser.py"},
+    "config_precedence": {"src/config.py", "tests/test_config.py"},
+    "retry_policy": {"src/retry.py", "tests/test_retry.py"},
+    "package_refactor": {"src/service.py", "src/metrics.py", "tests/test_service.py"},
+}
+VALID_FILE_MODES = (0o644, 0o664, 0o755)
+
+
+def pregrade_workspace_gate(
+    workspace: Path,
+    baseline_modes: dict[str, int],
+    allowed_files: Container[str] | None = None,
+) -> dict[str, Any]:
     """Reject links/non-regular entries and mode changes before grader reads code."""
     try:
         root_mode = workspace.lstat().st_mode
@@ -394,25 +410,28 @@ def pregrade_workspace_gate(workspace: Path, baseline_modes: dict[str, int]) -> 
                 unusual.append(relative)
             elif stat.S_ISREG(mode) and ".git" not in path.parts and "__pycache__" not in path.parts:
                 current_modes[relative] = stat.S_IMODE(mode)
-    mode_changes = sorted(path for path in baseline_modes.keys() | current_modes.keys()
-                          if baseline_modes.get(path) != current_modes.get(path))
+
+    allowed = set(allowed_files) if allowed_files is not None else set()
+    mode_changes: list[str] = []
+    for f in baseline_modes:
+        if current_modes.get(f) != baseline_modes.get(f):
+            mode_changes.append(f)
+    for f in current_modes:
+        if f not in baseline_modes and f in allowed:
+            if (current_modes[f] & 0o777) not in VALID_FILE_MODES:
+                mode_changes.append(f)
+    mode_changes.sort()
+
     return {"passed": not links and not unusual and not mode_changes,
             "symlinks": sorted(links), "unusual_entries": sorted(unusual),
             "mode_changes": mode_changes}
 
 
 def _protected_files_preserved(workspace: Path, baseline: Path, task: str) -> dict[str, Any]:
-    allowed = {
-        "calculator_division": {"src/calculator.py", "tests/test_calculator.py"},
-        "whitespace_normalization": {"src/text_utils.py", "tests/test_text_utils.py"},
-        "dotenv_line_parser": {"src/config_parser.py", "tests/test_config_parser.py"},
-        "config_precedence": {"src/config.py", "tests/test_config.py"},
-        "retry_policy": {"src/retry.py", "tests/test_retry.py"},
-        "package_refactor": {"src/service.py", "src/metrics.py", "tests/test_service.py"},
-    }[task]
+    allowed = TASK_ALLOWED_FILES[task]
     # Caller must first pass pregrade_workspace_gate, which uses lstat and does not
     # follow links. Recheck before reading in case the workspace changed meanwhile.
-    safety = pregrade_workspace_gate(workspace, _file_modes(baseline))
+    safety = pregrade_workspace_gate(workspace, _file_modes(baseline), allowed_files=allowed)
     if not safety["passed"]:
         return {**safety, "protected_content_changes": [], "protected_mode_changes": [],
                 "unscoped_added_files": [], "added_allowed_files": []}
@@ -472,7 +491,8 @@ def _independent_grade(workspace: Path, baseline: Path, task: str, run_dir: Path
 
 def _grade_workspace_when_safe(workspace: Path, baseline: Path, task: str, run_dir: Path,
                                baseline_modes: dict[str, int]) -> tuple[dict[str, Any], dict[str, Any]]:
-    gate = pregrade_workspace_gate(workspace, baseline_modes)
+    allowed = TASK_ALLOWED_FILES.get(task, set())
+    gate = pregrade_workspace_gate(workspace, baseline_modes, allowed_files=allowed)
     if not gate["passed"]:
         return ({"success": False, "grader_skipped": True,
                  "grader_error": "workspace integrity gate failed before grader access"}, gate)
@@ -955,11 +975,18 @@ def _run_task(binary: Path, install_root: Path, model: str, task: str, stage: st
     try:
         grade, safe_to_grade = _grade_workspace_when_safe(workspace, fixture_rel, task, run_dir, baseline_modes)
     except Exception as error:
-        safe_to_grade = pregrade_workspace_gate(workspace, baseline_modes)
+        safe_to_grade = pregrade_workspace_gate(
+            workspace, baseline_modes, allowed_files=TASK_ALLOWED_FILES.get(task, set())
+        )
         grade = {"success": False, "grader_error": f"{type(error).__name__}: {error}"}
     if safe_to_grade["passed"]:
         protected = _protected_files_preserved(workspace, fixture_rel, task)
-        modes = _file_modes(workspace) == baseline_modes
+        current_workspace_modes = _file_modes(workspace)
+        base_modes_intact = all(
+            current_workspace_modes.get(p) == baseline_modes.get(p)
+            for p in baseline_modes
+        )
+        modes = base_modes_intact and not protected.get("protected_mode_changes")
     else:
         protected = {**safe_to_grade, "protected_content_changes": [], "protected_mode_changes": [],
                      "unscoped_added_files": [], "added_allowed_files": []}

@@ -244,6 +244,17 @@ class LlamaServerManager:
         return time.monotonic() - unload_start
 
 
+def build_repair_prompt(grade: dict[str, Any]) -> str:
+    """Build repair turn prompt with meaningful failure diagnostics from the previous attempt."""
+    diagnostic = (
+        grade.get("behavioral_probe_stderr")
+        or grade.get("test_output")
+        or grade.get("grader_error")
+        or "Unit tests or behavioral probes failed."
+    )
+    return f"The previous test attempt failed. Fix the issues and ensure all tests pass: {diagnostic}"
+
+
 def run_single_trial(
     binary: Path,
     install_root: Path,
@@ -344,7 +355,7 @@ def run_single_trial(
         profile_path.write_text(json.dumps(profile_9b, indent=2) + "\n", encoding="utf-8")
 
         # Run repair turn on 9B
-        repair_prompt = f"The previous test attempt failed. Fix the issues and ensure all tests pass: {grade.get('error', '')}"
+        repair_prompt = build_repair_prompt(grade)
         repair_command = [
             str(binary), "run", "--format", "json", "--agent", "build", "--model",
             f"local/{m9_alias}", "--dir", str(workspace), repair_prompt

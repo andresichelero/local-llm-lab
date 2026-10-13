@@ -1,6 +1,6 @@
 # Retry Policy Task
 
-Implement `execute_with_retry(operation, retryable_exceptions: tuple[type[Exception], ...], max_attempts: int = 3, on_retry: callable | None = None)` in `src/retry.py`.
+Implement `execute_with_retry(operation, retryable_exceptions: tuple[type[Exception], ...], max_attempts: int = 3, on_retry: Callable[[int, Exception], None] | None = None)` in `src/retry.py`.
 
 ## Requirements
 1. Call `operation()`. If it returns successfully, return that result immediately.
