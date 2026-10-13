@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import tempfile
 import unittest
 
 from benchmark.opencode_controlled_probe import (
+    _isolated_environment,
     _last_wildcard_action,
     _terminal_deny_rule,
     calibration_gate,
@@ -152,6 +156,23 @@ class ControlledProbeTests(unittest.TestCase):
         events.pop()
         events.append({"type": "tool_use", "part": {"tool": "read", "state": {"status": "completed", "input": {}}}})
         self.assertFalse(workflow_gate("treatment", True, events))
+
+    def test_isolated_environment_creates_guarded_edit_executable_on_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir = Path(temp) / "run"
+            workspace = run_dir / "workspace"
+            install_root = Path(temp) / "install"
+            workspace.mkdir(parents=True)
+            env = _isolated_environment("opencode", run_dir, install_root, workspace)
+            script = run_dir / "bin" / "guarded-edit"
+            self.assertTrue(script.is_file())
+            self.assertEqual(
+                script.read_text(encoding="utf-8"),
+                '#!/usr/bin/env bash\nexec python3 -m benchmark.guarded_edit "$@"\n',
+            )
+            if os.name != "nt":
+                self.assertEqual(script.stat().st_mode & 0o777, 0o755)
+            self.assertTrue(env["PATH"].startswith(str(run_dir / "bin") + ":"))
 
 
 if __name__ == "__main__":
