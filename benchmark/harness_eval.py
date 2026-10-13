@@ -73,6 +73,191 @@ def _functions(source: str, names: set[str]) -> dict[str, str]:
     }
 
 
+EVAL_SUITES_DIR = Path(__file__).resolve().parent / "eval_suites"
+
+TASK_SUITE_MAP: dict[str, str] = {
+    "calculator_division": "calculator_division",
+    "whitespace_normalization": "whitespace_normalization",
+    "dotenv_line_parser": "dotenv_line_parser",
+    "config_precedence": "config_precedence",
+    "config_precedence_task": "config_precedence",
+    "retry_policy": "retry_policy",
+    "retry_policy_task": "retry_policy",
+    "package_refactor": "package_refactor",
+    "package_refactor_task": "package_refactor",
+}
+
+INLINE_PROBES: dict[str, str] = {
+    "calculator_division": (
+        "from src.calculator import add, divide, multiply\n"
+        "assert divide(10, 2) == 5\n"
+        "assert divide(-10, 2) == -5\n"
+        "assert divide(10, -2) == -5\n"
+        "try:\n"
+        "    divide(10, 0)\n"
+        "except ValueError as error:\n"
+        "    assert str(error) == 'division by zero'\n"
+        "else:\n"
+        "    raise AssertionError('divide(10, 0) must raise ValueError')\n"
+        "assert add(2, 3) == 5\n"
+        "assert multiply(2, 3) == 6\n"
+    ),
+    "whitespace_normalization": (
+        "from src.text_utils import normalize_whitespace, word_count\n"
+        "assert normalize_whitespace('  alpha\\tbeta\\n gamma  ') == 'alpha beta gamma'\n"
+        "assert normalize_whitespace('\\u00a0café\\u2003x') == 'café x'\n"
+        "assert normalize_whitespace(' \\t\\n') == ''\n"
+        "assert word_count('two\\twords') == 2\n"
+    ),
+    "dotenv_line_parser": (
+        "from src.config_parser import normalize_key, parse_assignment\n"
+        "assert parse_assignment('  api_key = a=b  ') == ('api_key', 'a=b')\n"
+        "assert parse_assignment('name=\"two words\"') == ('name', 'two words')\n"
+        "assert parse_assignment(\"name='two words'\") == ('name', 'two words')\n"
+        "assert parse_assignment('  # ignored=x') is None\n"
+        "assert parse_assignment(' = empty key') is None\n"
+        "assert normalize_key(' api_key ') == 'API_KEY'\n"
+    ),
+    "config_precedence": (
+        "from src.config import resolve_config, validate_schema\n"
+        "assert validate_schema({'k': 'v'}) is True\n"
+        "assert validate_schema({}) is False\n"
+        "d = {'a': 1, 'b': 2, 'flag': True}\n"
+        "f = {'b': 20, 'flag': False, 'empty': ''}\n"
+        "c = {'b': 200, 'count': 0}\n"
+        "res = resolve_config(d, f, c)\n"
+        "assert res == {'a': 1, 'b': 200, 'flag': False, 'empty': '', 'count': 0}\n"
+        "assert d == {'a': 1, 'b': 2, 'flag': True}\n"
+        "assert f == {'b': 20, 'flag': False, 'empty': ''}\n"
+        "assert c == {'b': 200, 'count': 0}\n"
+        "assert resolve_config({'x': 10}, None, None) == {'x': 10}\n"
+        "assert resolve_config({'x': 10}, {'x': None}, None) == {'x': 10}\n"
+    ),
+    "retry_policy": (
+        "from src.retry import calculate_backoff, execute_with_retry\n"
+        "assert calculate_backoff(1) == 1.0\n"
+        "assert calculate_backoff(3) == 4.0\n"
+        "attempts = 0\n"
+        "def op():\n"
+        "    global attempts\n"
+        "    attempts += 1\n"
+        "    if attempts < 2:\n"
+        "        raise ConnectionResetError('drop')\n"
+        "    return 42\n"
+        "log = []\n"
+        "def on_retry(att, exc):\n"
+        "    log.append((att, type(exc).__name__))\n"
+        "res = execute_with_retry(op, (ConnectionResetError,), max_attempts=3, on_retry=on_retry)\n"
+        "assert res == 42\n"
+        "assert attempts == 2\n"
+        "assert log == [(1, 'ConnectionResetError')]\n"
+        "unhandled_attempts = 0\n"
+        "def unhandled_op():\n"
+        "    global unhandled_attempts\n"
+        "    unhandled_attempts += 1\n"
+        "    raise ZeroDivisionError('boom')\n"
+        "try:\n"
+        "    execute_with_retry(unhandled_op, (ConnectionResetError,), max_attempts=3)\n"
+        "except ZeroDivisionError:\n"
+        "    assert unhandled_attempts == 1\n"
+        "else:\n"
+        "    raise AssertionError('Did not raise ZeroDivisionError')\n"
+        "try:\n"
+        "    execute_with_retry(lambda: 1, (Exception,), max_attempts=0)\n"
+        "except ValueError as e:\n"
+        "    assert str(e) == 'max_attempts must be >= 1'\n"
+        "else:\n"
+        "    raise AssertionError('Did not raise ValueError on max_attempts=0')\n"
+    ),
+    "package_refactor": (
+        "import src.metrics\n"
+        "import src.service\n"
+        "assert src.service.summarize_metrics is src.metrics.summarize_metrics\n"
+        "assert src.metrics.summarize_metrics([]) == {'count': 0.0, 'mean': 0.0, 'min': 0.0, 'max': 0.0}\n"
+        "res = src.metrics.summarize_metrics([10.0, 30.0])\n"
+        "assert res == {'count': 2.0, 'mean': 20.0, 'min': 10.0, 'max': 30.0}\n"
+        "records = [{'latency': 5.0}, {'latency': None}, {'no_latency': 1}, {'latency': 15.0}]\n"
+        "summary = src.service.generate_service_summary(records)\n"
+        "assert summary == {'count': 2.0, 'mean': 10.0, 'min': 5.0, 'max': 15.0}\n"
+        "assert src.service.sanitize_record({' a ': ' b '}) == {' a ': 'b'}\n"
+    ),
+}
+
+
+def run_held_out_tests(workspace: Path, task: str) -> tuple[bool, str, str]:
+    """Execute isolated held-out test suite or fallback to inline probe."""
+    suite_name = TASK_SUITE_MAP.get(task, task)
+    probe_path = EVAL_SUITES_DIR / suite_name / "test_probe.py"
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(workspace.resolve())
+
+    if probe_path.is_file():
+        try:
+            probe_run = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "unittest",
+                    "discover",
+                    "-s",
+                    str(probe_path.parent),
+                    "-p",
+                    probe_path.name,
+                    "-v",
+                ],
+                cwd=workspace.resolve(),
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            return probe_run.returncode == 0, probe_run.stdout, probe_run.stderr
+        except subprocess.TimeoutExpired as exc:
+            return False, "", f"Probe execution timed out: {exc}"
+        except OSError as exc:
+            return False, "", str(exc)
+
+    inline_code = INLINE_PROBES.get(suite_name)
+    if inline_code:
+        try:
+            probe_run = subprocess.run(
+                [sys.executable, "-c", inline_code],
+                cwd=workspace.resolve(),
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            return probe_run.returncode == 0, probe_run.stdout, probe_run.stderr
+        except subprocess.TimeoutExpired as exc:
+            return False, "", f"Inline probe timed out: {exc}"
+        except OSError as exc:
+            return False, "", str(exc)
+
+    return False, "", f"No evaluation suite or inline probe found for task: {task}"
+
+
+def run_baseline_tests(workspace: Path, baseline: Path) -> tuple[bool, str]:
+    """Execute baseline reference test suite against candidate workspace."""
+    baseline_tests_dir = baseline.resolve() / "tests"
+    if not baseline_tests_dir.is_dir():
+        return True, ""
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(workspace.resolve())
+    try:
+        run = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", str(baseline_tests_dir), "-v"],
+            cwd=workspace.resolve(),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=45,
+        )
+        return run.returncode == 0, f"{run.stdout}{run.stderr}"
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return False, str(exc)
+
+
 def grade_workspace(
     workspace: Path,
     baseline: Path,
@@ -101,31 +286,15 @@ def grade_workspace(
         text=True,
         timeout=45,
     )
+    workspace_tests_passed = test_run.returncode == 0
     test_output = f"{test_run.stdout}{test_run.stderr}"
 
-    probe_code = (
-        "from src.calculator import add, divide, multiply\n"
-        "assert divide(10, 2) == 5\n"
-        "assert divide(-10, 2) == -5\n"
-        "assert divide(10, -2) == -5\n"
-        "try:\n"
-        "    divide(10, 0)\n"
-        "except ValueError as error:\n"
-        "    assert str(error) == 'division by zero'\n"
-        "else:\n"
-        "    raise AssertionError('divide(10, 0) must raise ValueError')\n"
-        "assert add(2, 3) == 5\n"
-        "assert multiply(2, 3) == 6\n"
-    )
-    probe_env = os.environ.copy()
-    probe_env["PYTHONPATH"] = str(workspace)
-    probe_run = subprocess.run(
-        [sys.executable, "-c", probe_code],
-        cwd=workspace,
-        env=probe_env,
-        capture_output=True,
-        text=True,
-        timeout=15,
+    baseline_tests_passed, baseline_test_output = run_baseline_tests(workspace, baseline)
+    if not baseline_tests_passed:
+        test_output = f"{test_output}\n--- Baseline Tests ---\n{baseline_test_output}".strip()
+
+    held_out_tests_passed, probe_stdout, probe_stderr = run_held_out_tests(
+        workspace, "calculator_division"
     )
 
     try:
@@ -155,8 +324,9 @@ def grade_workspace(
     )
     changes_scoped = bool(changed_files) and set(changed_files) <= ALLOWED_CHANGES
     divide_tests_present = _verify_required_tests(test_names)
-    unit_tests_passed = test_run.returncode == 0
-    behavioral_probe_passed = probe_run.returncode == 0
+    unit_tests_passed = workspace_tests_passed and baseline_tests_passed
+    behavioral_probe_passed = held_out_tests_passed
+    behavioral_probe_stderr = "" if behavioral_probe_passed else (probe_stderr or probe_stdout)
     success = all(
         (
             unit_tests_passed,
@@ -170,13 +340,16 @@ def grade_workspace(
         "success": success,
         "unit_tests_passed": unit_tests_passed,
         "behavioral_probe_passed": behavioral_probe_passed,
+        "workspace_tests_passed": workspace_tests_passed,
+        "baseline_tests_passed": baseline_tests_passed,
+        "held_out_tests_passed": held_out_tests_passed,
         "divide_tests_present": divide_tests_present,
         "required_tests_present": divide_tests_present,
         "unchanged_helpers": unchanged_helpers,
         "changes_scoped": changes_scoped,
         "changed_files": changed_files,
         "test_output": test_output,
-        "behavioral_probe_stderr": probe_run.stderr,
+        "behavioral_probe_stderr": behavioral_probe_stderr,
     }
 
 
@@ -190,22 +363,15 @@ def _grade_whitespace_normalization(workspace: Path, baseline: Path) -> dict[str
         text=True,
         timeout=45,
     )
-    probe_code = (
-        "from src.text_utils import normalize_whitespace, word_count\n"
-        "assert normalize_whitespace('  alpha\\tbeta\\n gamma  ') == 'alpha beta gamma'\n"
-        "assert normalize_whitespace('\\u00a0café\\u2003x') == 'café x'\n"
-        "assert normalize_whitespace(' \\t\\n') == ''\n"
-        "assert word_count('two\\twords') == 2\n"
-    )
-    probe_env = os.environ.copy()
-    probe_env["PYTHONPATH"] = str(workspace)
-    probe_run = subprocess.run(
-        [sys.executable, "-c", probe_code],
-        cwd=workspace,
-        env=probe_env,
-        capture_output=True,
-        text=True,
-        timeout=15,
+    workspace_tests_passed = test_run.returncode == 0
+    test_output = f"{test_run.stdout}{test_run.stderr}"
+
+    baseline_tests_passed, baseline_test_output = run_baseline_tests(workspace, baseline)
+    if not baseline_tests_passed:
+        test_output = f"{test_output}\n--- Baseline Tests ---\n{baseline_test_output}".strip()
+
+    held_out_tests_passed, probe_stdout, probe_stderr = run_held_out_tests(
+        workspace, "whitespace_normalization"
     )
     try:
         candidate_source = (workspace / "src/text_utils.py").read_text(encoding="utf-8")
@@ -241,8 +407,9 @@ def _grade_whitespace_normalization(workspace: Path, baseline: Path) -> dict[str
         "test_collapses_mixed_whitespace",
         "test_preserves_unicode_text",
     } <= test_names
-    unit_tests_passed = test_run.returncode == 0
-    behavioral_probe_passed = probe_run.returncode == 0
+    unit_tests_passed = workspace_tests_passed and baseline_tests_passed
+    behavioral_probe_passed = held_out_tests_passed
+    behavioral_probe_stderr = "" if behavioral_probe_passed else (probe_stderr or probe_stdout)
     success = all(
         (
             unit_tests_passed,
@@ -256,12 +423,15 @@ def _grade_whitespace_normalization(workspace: Path, baseline: Path) -> dict[str
         "success": success,
         "unit_tests_passed": unit_tests_passed,
         "behavioral_probe_passed": behavioral_probe_passed,
+        "workspace_tests_passed": workspace_tests_passed,
+        "baseline_tests_passed": baseline_tests_passed,
+        "held_out_tests_passed": held_out_tests_passed,
         "required_tests_present": required_tests_present,
         "unchanged_helpers": unchanged_helpers,
         "changes_scoped": changes_scoped,
         "changed_files": changed_files,
-        "test_output": f"{test_run.stdout}{test_run.stderr}",
-        "behavioral_probe_stderr": probe_run.stderr,
+        "test_output": test_output,
+        "behavioral_probe_stderr": behavioral_probe_stderr,
     }
 
 
@@ -275,24 +445,15 @@ def _grade_env_parser(workspace: Path, baseline: Path) -> dict[str, Any]:
         text=True,
         timeout=45,
     )
-    probe_code = (
-        "from src.config_parser import normalize_key, parse_assignment\n"
-        "assert parse_assignment('  api_key = a=b  ') == ('api_key', 'a=b')\n"
-        "assert parse_assignment('name=\"two words\"') == ('name', 'two words')\n"
-        "assert parse_assignment(\"name='two words'\") == ('name', 'two words')\n"
-        "assert parse_assignment('  # ignored=x') is None\n"
-        "assert parse_assignment(' = empty key') is None\n"
-        "assert normalize_key(' api_key ') == 'API_KEY'\n"
-    )
-    probe_env = os.environ.copy()
-    probe_env["PYTHONPATH"] = str(workspace)
-    probe_run = subprocess.run(
-        [sys.executable, "-c", probe_code],
-        cwd=workspace,
-        env=probe_env,
-        capture_output=True,
-        text=True,
-        timeout=15,
+    workspace_tests_passed = test_run.returncode == 0
+    test_output = f"{test_run.stdout}{test_run.stderr}"
+
+    baseline_tests_passed, baseline_test_output = run_baseline_tests(workspace, baseline)
+    if not baseline_tests_passed:
+        test_output = f"{test_output}\n--- Baseline Tests ---\n{baseline_test_output}".strip()
+
+    held_out_tests_passed, probe_stdout, probe_stderr = run_held_out_tests(
+        workspace, "dotenv_line_parser"
     )
     try:
         candidate_source = (workspace / "src/config_parser.py").read_text(encoding="utf-8")
@@ -328,8 +489,9 @@ def _grade_env_parser(workspace: Path, baseline: Path) -> dict[str, Any]:
         "test_splits_on_first_equals_and_trims",
         "test_strips_matching_quotes",
     } <= test_names
-    unit_tests_passed = test_run.returncode == 0
-    behavioral_probe_passed = probe_run.returncode == 0
+    unit_tests_passed = workspace_tests_passed and baseline_tests_passed
+    behavioral_probe_passed = held_out_tests_passed
+    behavioral_probe_stderr = "" if behavioral_probe_passed else (probe_stderr or probe_stdout)
     success = all(
         (
             unit_tests_passed,
@@ -343,12 +505,15 @@ def _grade_env_parser(workspace: Path, baseline: Path) -> dict[str, Any]:
         "success": success,
         "unit_tests_passed": unit_tests_passed,
         "behavioral_probe_passed": behavioral_probe_passed,
+        "workspace_tests_passed": workspace_tests_passed,
+        "baseline_tests_passed": baseline_tests_passed,
+        "held_out_tests_passed": held_out_tests_passed,
         "required_tests_present": required_tests_present,
         "unchanged_helpers": unchanged_helpers,
         "changes_scoped": changes_scoped,
         "changed_files": changed_files,
-        "test_output": f"{test_run.stdout}{test_run.stderr}",
-        "behavioral_probe_stderr": probe_run.stderr,
+        "test_output": test_output,
+        "behavioral_probe_stderr": behavioral_probe_stderr,
     }
 
 
@@ -362,30 +527,15 @@ def _grade_config_precedence(workspace: Path, baseline: Path) -> dict[str, Any]:
         text=True,
         timeout=45,
     )
-    probe_code = (
-        "from src.config import resolve_config, validate_schema\n"
-        "assert validate_schema({'k': 'v'}) is True\n"
-        "assert validate_schema({}) is False\n"
-        "d = {'a': 1, 'b': 2, 'flag': True}\n"
-        "f = {'b': 20, 'flag': False, 'empty': ''}\n"
-        "c = {'b': 200, 'count': 0}\n"
-        "res = resolve_config(d, f, c)\n"
-        "assert res == {'a': 1, 'b': 200, 'flag': False, 'empty': '', 'count': 0}\n"
-        "assert d == {'a': 1, 'b': 2, 'flag': True}\n"
-        "assert f == {'b': 20, 'flag': False, 'empty': ''}\n"
-        "assert c == {'b': 200, 'count': 0}\n"
-        "assert resolve_config({'x': 10}, None, None) == {'x': 10}\n"
-        "assert resolve_config({'x': 10}, {'x': None}, None) == {'x': 10}\n"
-    )
-    probe_env = os.environ.copy()
-    probe_env["PYTHONPATH"] = str(workspace)
-    probe_run = subprocess.run(
-        [sys.executable, "-c", probe_code],
-        cwd=workspace,
-        env=probe_env,
-        capture_output=True,
-        text=True,
-        timeout=15,
+    workspace_tests_passed = test_run.returncode == 0
+    test_output = f"{test_run.stdout}{test_run.stderr}"
+
+    baseline_tests_passed, baseline_test_output = run_baseline_tests(workspace, baseline)
+    if not baseline_tests_passed:
+        test_output = f"{test_output}\n--- Baseline Tests ---\n{baseline_test_output}".strip()
+
+    held_out_tests_passed, probe_stdout, probe_stderr = run_held_out_tests(
+        workspace, "config_precedence"
     )
     try:
         candidate_source = (workspace / "src/config.py").read_text(encoding="utf-8")
@@ -421,8 +571,9 @@ def _grade_config_precedence(workspace: Path, baseline: Path) -> dict[str, Any]:
         "test_preserves_falsy_values",
         "test_does_not_mutate_inputs",
     } <= test_names
-    unit_tests_passed = test_run.returncode == 0
-    behavioral_probe_passed = probe_run.returncode == 0
+    unit_tests_passed = workspace_tests_passed and baseline_tests_passed
+    behavioral_probe_passed = held_out_tests_passed
+    behavioral_probe_stderr = "" if behavioral_probe_passed else (probe_stderr or probe_stdout)
     success = all(
         (
             unit_tests_passed,
@@ -436,12 +587,15 @@ def _grade_config_precedence(workspace: Path, baseline: Path) -> dict[str, Any]:
         "success": success,
         "unit_tests_passed": unit_tests_passed,
         "behavioral_probe_passed": behavioral_probe_passed,
+        "workspace_tests_passed": workspace_tests_passed,
+        "baseline_tests_passed": baseline_tests_passed,
+        "held_out_tests_passed": held_out_tests_passed,
         "required_tests_present": required_tests_present,
         "unchanged_helpers": unchanged_helpers,
         "changes_scoped": changes_scoped,
         "changed_files": changed_files,
-        "test_output": f"{test_run.stdout}{test_run.stderr}",
-        "behavioral_probe_stderr": probe_run.stderr,
+        "test_output": test_output,
+        "behavioral_probe_stderr": behavioral_probe_stderr,
     }
 
 
@@ -455,51 +609,15 @@ def _grade_retry_policy(workspace: Path, baseline: Path) -> dict[str, Any]:
         text=True,
         timeout=45,
     )
-    probe_code = (
-        "from src.retry import calculate_backoff, execute_with_retry\n"
-        "assert calculate_backoff(1) == 1.0\n"
-        "assert calculate_backoff(3) == 4.0\n"
-        "attempts = 0\n"
-        "def op():\n"
-        "    global attempts\n"
-        "    attempts += 1\n"
-        "    if attempts < 2:\n"
-        "        raise ConnectionResetError('drop')\n"
-        "    return 42\n"
-        "log = []\n"
-        "def on_retry(att, exc):\n"
-        "    log.append((att, type(exc).__name__))\n"
-        "res = execute_with_retry(op, (ConnectionResetError,), max_attempts=3, on_retry=on_retry)\n"
-        "assert res == 42\n"
-        "assert attempts == 2\n"
-        "assert log == [(1, 'ConnectionResetError')]\n"
-        "unhandled_attempts = 0\n"
-        "def unhandled_op():\n"
-        "    global unhandled_attempts\n"
-        "    unhandled_attempts += 1\n"
-        "    raise ZeroDivisionError('boom')\n"
-        "try:\n"
-        "    execute_with_retry(unhandled_op, (ConnectionResetError,), max_attempts=3)\n"
-        "except ZeroDivisionError:\n"
-        "    assert unhandled_attempts == 1\n"
-        "else:\n"
-        "    raise AssertionError('Did not raise ZeroDivisionError')\n"
-        "try:\n"
-        "    execute_with_retry(lambda: 1, (Exception,), max_attempts=0)\n"
-        "except ValueError as e:\n"
-        "    assert str(e) == 'max_attempts must be >= 1'\n"
-        "else:\n"
-        "    raise AssertionError('Did not raise ValueError on max_attempts=0')\n"
-    )
-    probe_env = os.environ.copy()
-    probe_env["PYTHONPATH"] = str(workspace)
-    probe_run = subprocess.run(
-        [sys.executable, "-c", probe_code],
-        cwd=workspace,
-        env=probe_env,
-        capture_output=True,
-        text=True,
-        timeout=15,
+    workspace_tests_passed = test_run.returncode == 0
+    test_output = f"{test_run.stdout}{test_run.stderr}"
+
+    baseline_tests_passed, baseline_test_output = run_baseline_tests(workspace, baseline)
+    if not baseline_tests_passed:
+        test_output = f"{test_output}\n--- Baseline Tests ---\n{baseline_test_output}".strip()
+
+    held_out_tests_passed, probe_stdout, probe_stderr = run_held_out_tests(
+        workspace, "retry_policy"
     )
     try:
         candidate_source = (workspace / "src/retry.py").read_text(encoding="utf-8")
@@ -536,8 +654,9 @@ def _grade_retry_policy(workspace: Path, baseline: Path) -> dict[str, Any]:
         "test_raises_immediately_on_permanent_error",
         "test_exhausts_retries_and_reraises",
     } <= test_names
-    unit_tests_passed = test_run.returncode == 0
-    behavioral_probe_passed = probe_run.returncode == 0
+    unit_tests_passed = workspace_tests_passed and baseline_tests_passed
+    behavioral_probe_passed = held_out_tests_passed
+    behavioral_probe_stderr = "" if behavioral_probe_passed else (probe_stderr or probe_stdout)
     success = all(
         (
             unit_tests_passed,
@@ -551,12 +670,15 @@ def _grade_retry_policy(workspace: Path, baseline: Path) -> dict[str, Any]:
         "success": success,
         "unit_tests_passed": unit_tests_passed,
         "behavioral_probe_passed": behavioral_probe_passed,
+        "workspace_tests_passed": workspace_tests_passed,
+        "baseline_tests_passed": baseline_tests_passed,
+        "held_out_tests_passed": held_out_tests_passed,
         "required_tests_present": required_tests_present,
         "unchanged_helpers": unchanged_helpers,
         "changes_scoped": changes_scoped,
         "changed_files": changed_files,
-        "test_output": f"{test_run.stdout}{test_run.stderr}",
-        "behavioral_probe_stderr": probe_run.stderr,
+        "test_output": test_output,
+        "behavioral_probe_stderr": behavioral_probe_stderr,
     }
 
 
@@ -570,27 +692,15 @@ def _grade_package_refactor(workspace: Path, baseline: Path) -> dict[str, Any]:
         text=True,
         timeout=45,
     )
-    probe_code = (
-        "import src.metrics\n"
-        "import src.service\n"
-        "assert src.service.summarize_metrics is src.metrics.summarize_metrics\n"
-        "assert src.metrics.summarize_metrics([]) == {'count': 0.0, 'mean': 0.0, 'min': 0.0, 'max': 0.0}\n"
-        "res = src.metrics.summarize_metrics([10.0, 30.0])\n"
-        "assert res == {'count': 2.0, 'mean': 20.0, 'min': 10.0, 'max': 30.0}\n"
-        "records = [{'latency': 5.0}, {'latency': None}, {'no_latency': 1}, {'latency': 15.0}]\n"
-        "summary = src.service.generate_service_summary(records)\n"
-        "assert summary == {'count': 2.0, 'mean': 10.0, 'min': 5.0, 'max': 15.0}\n"
-        "assert src.service.sanitize_record({' a ': ' b '}) == {' a ': 'b'}\n"
-    )
-    probe_env = os.environ.copy()
-    probe_env["PYTHONPATH"] = str(workspace)
-    probe_run = subprocess.run(
-        [sys.executable, "-c", probe_code],
-        cwd=workspace,
-        env=probe_env,
-        capture_output=True,
-        text=True,
-        timeout=15,
+    workspace_tests_passed = test_run.returncode == 0
+    test_output = f"{test_run.stdout}{test_run.stderr}"
+
+    baseline_tests_passed, baseline_test_output = run_baseline_tests(workspace, baseline)
+    if not baseline_tests_passed:
+        test_output = f"{test_output}\n--- Baseline Tests ---\n{baseline_test_output}".strip()
+
+    held_out_tests_passed, probe_stdout, probe_stderr = run_held_out_tests(
+        workspace, "package_refactor"
     )
     try:
         candidate_source = (workspace / "src/service.py").read_text(encoding="utf-8")
@@ -627,8 +737,9 @@ def _grade_package_refactor(workspace: Path, baseline: Path) -> dict[str, Any]:
         "test_generate_service_summary_filters_missing",
         "test_service_reexports_metrics",
     } <= test_names
-    unit_tests_passed = test_run.returncode == 0
-    behavioral_probe_passed = probe_run.returncode == 0
+    unit_tests_passed = workspace_tests_passed and baseline_tests_passed
+    behavioral_probe_passed = held_out_tests_passed
+    behavioral_probe_stderr = "" if behavioral_probe_passed else (probe_stderr or probe_stdout)
     success = all(
         (
             unit_tests_passed,
@@ -642,10 +753,13 @@ def _grade_package_refactor(workspace: Path, baseline: Path) -> dict[str, Any]:
         "success": success,
         "unit_tests_passed": unit_tests_passed,
         "behavioral_probe_passed": behavioral_probe_passed,
+        "workspace_tests_passed": workspace_tests_passed,
+        "baseline_tests_passed": baseline_tests_passed,
+        "held_out_tests_passed": held_out_tests_passed,
         "required_tests_present": required_tests_present,
         "unchanged_helpers": unchanged_helpers,
         "changes_scoped": changes_scoped,
         "changed_files": changed_files,
-        "test_output": f"{test_run.stdout}{test_run.stderr}",
-        "behavioral_probe_stderr": probe_run.stderr,
+        "test_output": test_output,
+        "behavioral_probe_stderr": behavioral_probe_stderr,
     }

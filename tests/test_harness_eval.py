@@ -6,10 +6,17 @@ import unittest
 from pathlib import Path
 
 try:
-    from benchmark.harness_eval import _verify_required_tests, grade_workspace
+    from benchmark.harness_eval import (
+        _verify_required_tests,
+        grade_workspace,
+        run_baseline_tests,
+        run_held_out_tests,
+    )
 except ImportError:
     grade_workspace = None  # type: ignore[assignment]
     _verify_required_tests = None  # type: ignore[assignment]
+    run_held_out_tests = None  # type: ignore[assignment]
+    run_baseline_tests = None  # type: ignore[assignment]
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -247,6 +254,8 @@ class HarnessEvaluationTests(unittest.TestCase):
             f"        self.assertEqual(resolve_config({{'a': 1}}, {{'a': 2}}, {{'a': 3}}), {{'a': 3}})\n\n"
             f"    def test_preserves_falsy_values(self):\n"
             f"        self.assertEqual(resolve_config({{'a': 1}}, {{'a': 0}}), {{'a': 0}})\n\n"
+            f"    def test_none_treated_as_absent(self):\n"
+            f"        self.assertEqual(resolve_config({{'a': 1}}, {{'a': None}}), {{'a': 1}})\n\n"
             f"    def test_does_not_mutate_inputs(self):\n"
             f"        d = {{'a': 1}}\n"
             f"        resolve_config(d, {{'b': 2}})\n"
@@ -563,6 +572,102 @@ class HarnessEvaluationTests(unittest.TestCase):
             self.assertTrue(result["unchanged_helpers"])
             self.assertTrue(result["changes_scoped"])
             self.assertTrue(result["success"], f"Failed for variants: {variant_names}")
+
+    def test_config_precedence_baseline_tests_cover_none_treated_as_absent(self) -> None:
+        fixture_test_file = CONFIG_PRECEDENCE_FIXTURE / "tests" / "test_config.py"
+        content = fixture_test_file.read_text(encoding="utf-8")
+        self.assertIn("def test_none_treated_as_absent", content)
+        self.assertIn("retries", content)
+
+    def test_held_out_tests_runner_direct(self) -> None:
+        self.assertIsNotNone(run_held_out_tests)
+        temp, workspace = self.workspace()
+        self.addCleanup(temp.cleanup)
+        self.implement_divide(workspace)
+
+        passed, stdout, stderr = run_held_out_tests(workspace, "calculator_division")
+        self.assertTrue(passed, f"Held-out probe failed: {stderr}")
+
+    def test_held_out_tests_runner_missing_suite_fallback_and_unknown(self) -> None:
+        self.assertIsNotNone(run_held_out_tests)
+        temp, workspace = self.workspace()
+        self.addCleanup(temp.cleanup)
+        self.implement_divide(workspace)
+
+        passed, stdout, stderr = run_held_out_tests(workspace, "nonexistent_task_xyz")
+        self.assertFalse(passed)
+        self.assertIn("No evaluation suite or inline probe found", stderr)
+
+    def test_tampered_workspace_tests_detected_by_held_out_probe(self) -> None:
+        temp, workspace = self.workspace()
+        self.addCleanup(temp.cleanup)
+        (workspace / "src" / "calculator.py").write_text(
+            "def add(a: float, b: float) -> float:\n"
+            "    return a + b\n\n\n"
+            "def multiply(a: float, b: float) -> float:\n"
+            "    return a * b\n\n\n"
+            "def divide(a: float, b: float) -> float:\n"
+            "    return 0.0\n",
+            encoding="utf-8",
+        )
+        (workspace / "tests" / "test_calculator.py").write_text(
+            "import unittest\nfrom src.calculator import divide\n\n"
+            "class CalculatorTests(unittest.TestCase):\n"
+            "    def test_divide_positive(self):\n"
+            "        self.assertEqual(divide(10, 2), 0.0)\n"
+            "    def test_divide_negative(self):\n"
+            "        self.assertEqual(divide(-10, 2), 0.0)\n"
+            "    def test_divide_by_zero(self):\n"
+            "        self.assertEqual(divide(10, 0), 0.0)\n",
+            encoding="utf-8",
+        )
+        result = grade_workspace(workspace, FIXTURE)
+        self.assertTrue(result["workspace_tests_passed"])
+        self.assertFalse(result["held_out_tests_passed"])
+        self.assertFalse(result["behavioral_probe_passed"])
+        self.assertFalse(result["success"])
+
+    def test_stripped_workspace_tests_regression_detected_by_baseline(self) -> None:
+        temp, workspace = self.workspace()
+        self.addCleanup(temp.cleanup)
+        self.implement_divide(workspace)
+        (workspace / "src" / "calculator.py").write_text(
+            "def add(a: float, b: float) -> float:\n"
+            "    return 999.0\n\n\n"
+            "def multiply(a: float, b: float) -> float:\n"
+            "    return a * b\n\n\n"
+            "def divide(a: float, b: float) -> float:\n"
+            "    if b == 0:\n"
+            "        raise ValueError('division by zero')\n"
+            "    return a / b\n",
+            encoding="utf-8",
+        )
+        (workspace / "tests" / "test_calculator.py").write_text(
+            "import unittest\nfrom src.calculator import multiply, divide\n\n"
+            "class CalculatorTests(unittest.TestCase):\n"
+            "    def test_multiply(self):\n        self.assertEqual(multiply(2, 3), 6)\n\n"
+            "    def test_divide_positive(self):\n        self.assertEqual(divide(10, 2), 5)\n\n"
+            "    def test_divide_negative(self):\n        self.assertEqual(divide(-10, 2), -5)\n\n"
+            "    def test_divide_by_zero(self):\n"
+            "        with self.assertRaisesRegex(ValueError, 'division by zero'):\n"
+            "            divide(10, 0)\n",
+            encoding="utf-8",
+        )
+        result = grade_workspace(workspace, FIXTURE)
+        self.assertTrue(result["workspace_tests_passed"])
+        self.assertFalse(result["baseline_tests_passed"])
+        self.assertFalse(result["unit_tests_passed"])
+        self.assertFalse(result["success"])
+
+    def test_grade_workspace_granular_keys_presence(self) -> None:
+        temp, workspace = self.workspace()
+        self.addCleanup(temp.cleanup)
+        self.implement_divide(workspace)
+
+        result = grade_workspace(workspace, FIXTURE)
+        for key in ("workspace_tests_passed", "baseline_tests_passed", "held_out_tests_passed"):
+            self.assertIn(key, result)
+            self.assertIsInstance(result[key], bool)
 
 
 if __name__ == "__main__":
