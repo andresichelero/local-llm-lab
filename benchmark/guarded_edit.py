@@ -135,20 +135,48 @@ def apply_guarded_edit(
 
     # Check occurrence count
     count = current_content.count(search_block)
-    if count == 0:
-        return EditResult(
-            success=False,
-            status=EditStatus.ZERO_OCCURRENCES,
-            error_message="Search block was not found in target file",
-        )
-    if count > 1:
+    if count == 1:
+        new_content = current_content.replace(search_block, replacement_block, 1)
+    elif count > 1:
         return EditResult(
             success=False,
             status=EditStatus.MULTIPLE_OCCURRENCES,
             error_message=f"Search block occurs {count} times (must be unique)",
         )
-
-    new_content = current_content.replace(search_block, replacement_block, 1)
+    else:
+        # count == 0: attempt line-level normalized fuzzy matching
+        orig_lines = current_content.splitlines(keepends=True)
+        search_lines = search_block.splitlines()
+        if not search_lines:
+            return EditResult(
+                success=False,
+                status=EditStatus.ZERO_OCCURRENCES,
+                error_message="Search block was not found in target file",
+            )
+        norm_content = [line.rstrip() for line in orig_lines]
+        norm_search = [line.rstrip() for line in search_lines]
+        m = len(norm_search)
+        matches = [
+            i
+            for i in range(len(norm_content) - m + 1)
+            if norm_content[i : i + m] == norm_search
+        ]
+        if len(matches) == 0:
+            return EditResult(
+                success=False,
+                status=EditStatus.ZERO_OCCURRENCES,
+                error_message="Search block was not found in target file",
+            )
+        if len(matches) > 1:
+            return EditResult(
+                success=False,
+                status=EditStatus.MULTIPLE_OCCURRENCES,
+                error_message=f"Search block occurs {len(matches)} times (must be unique)",
+            )
+        match_idx = matches[0]
+        prefix = "".join(orig_lines[:match_idx])
+        suffix = "".join(orig_lines[match_idx + m :])
+        new_content = prefix + replacement_block + suffix
 
     # Validate Python syntax if file is a Python source
     if file_path.suffix == ".py":

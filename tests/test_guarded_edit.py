@@ -178,3 +178,104 @@ def test_check_helper_preservation_direct() -> None:
     assert not preserved2
     assert "bar" in missing2
 
+
+def test_whitespace_tolerance_trailing_spaces_in_file(tmp_path: Path) -> None:
+    # Target file has trailing spaces on lines, search block has clean lines
+    target = tmp_path / "trailing_in_file.py"
+    target.write_text("def compute():   \n    return 40 + 2  \n", encoding="utf-8")
+    sha = hashlib.sha256(target.read_bytes()).hexdigest()
+
+    search = "def compute():\n    return 40 + 2\n"
+    replacement = "def compute():\n    return 100\n"
+
+    res = apply_guarded_edit(
+        target,
+        expected_sha256=sha,
+        search_block=search,
+        replacement_block=replacement,
+    )
+    assert res.success
+    assert res.status == EditStatus.APPLIED
+    assert "return 100" in target.read_text(encoding="utf-8")
+
+
+def test_whitespace_tolerance_trailing_spaces_in_search(tmp_path: Path) -> None:
+    # Target file has clean lines, search block has trailing spaces
+    target = tmp_path / "trailing_in_search.py"
+    target.write_text("def compute():\n    return 40 + 2\n", encoding="utf-8")
+    sha = hashlib.sha256(target.read_bytes()).hexdigest()
+
+    search = "def compute():  \n    return 40 + 2   \n"
+    replacement = "def compute():\n    return 100\n"
+
+    res = apply_guarded_edit(
+        target,
+        expected_sha256=sha,
+        search_block=search,
+        replacement_block=replacement,
+    )
+    assert res.success
+    assert res.status == EditStatus.APPLIED
+    assert "return 100" in target.read_text(encoding="utf-8")
+
+
+def test_whitespace_tolerance_crlf_file_lf_search(tmp_path: Path) -> None:
+    # Target file has CRLF endings, search block has LF endings
+    target = tmp_path / "crlf_file.py"
+    target.write_bytes(b"def compute():\r\n    return 42\r\n")
+    sha = hashlib.sha256(target.read_bytes()).hexdigest()
+
+    search = "def compute():\n    return 42\n"
+    replacement = "def compute():\n    return 99\n"
+
+    res = apply_guarded_edit(
+        target,
+        expected_sha256=sha,
+        search_block=search,
+        replacement_block=replacement,
+    )
+    assert res.success
+    assert res.status == EditStatus.APPLIED
+    assert "return 99" in target.read_text(encoding="utf-8")
+
+
+def test_whitespace_tolerance_lf_file_crlf_search(tmp_path: Path) -> None:
+    # Target file has LF endings, search block has CRLF endings
+    target = tmp_path / "lf_file.py"
+    target.write_bytes(b"def compute():\n    return 42\n")
+    sha = hashlib.sha256(target.read_bytes()).hexdigest()
+
+    search = "def compute():\r\n    return 42\r\n"
+    replacement = "def compute():\n    return 99\n"
+
+    res = apply_guarded_edit(
+        target,
+        expected_sha256=sha,
+        search_block=search,
+        replacement_block=replacement,
+    )
+    assert res.success
+    assert res.status == EditStatus.APPLIED
+    assert "return 99" in target.read_text(encoding="utf-8")
+
+
+def test_whitespace_tolerance_multiple_fuzzy_matches(tmp_path: Path) -> None:
+    # Two blocks match normalized lines, but exact string match count is 0
+    target = tmp_path / "ambiguous.py"
+    target.write_text("x = 1  \ny = 2\nx = 1    \n", encoding="utf-8")
+    sha = hashlib.sha256(target.read_bytes()).hexdigest()
+
+    search = "x = 1\n"
+    replacement = "x = 10\n"
+
+    res = apply_guarded_edit(
+        target,
+        expected_sha256=sha,
+        search_block=search,
+        replacement_block=replacement,
+    )
+    assert not res.success
+    assert res.status == EditStatus.MULTIPLE_OCCURRENCES
+    assert "occurs 2 times" in (res.error_message or "")
+
+
