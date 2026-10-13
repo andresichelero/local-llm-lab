@@ -7,6 +7,7 @@ from benchmark.cascade_routing_matrix import (
     MODELS,
     POLICIES,
     TASKS,
+    build_repair_prompt,
     build_schedule,
     decide_escalation,
     server_command,
@@ -92,3 +93,42 @@ def test_summarize_cascade_results() -> None:
     assert p_dyn["strict_pass_count"] == 2
     assert p_dyn["escalation_count"] == 1
     assert p_dyn["escalation_rate_pct"] == 50.0
+
+
+def test_build_repair_prompt_diagnostics() -> None:
+    # 1. Probe stderr priority
+    grade_stderr = {
+        "behavioral_probe_stderr": "AssertionError: resolve_config failed on {'x': None}",
+        "test_output": "Ran 4 tests in 0.001s ... OK",
+        "grader_error": "probe failure",
+    }
+    prompt1 = build_repair_prompt(grade_stderr)
+    assert "AssertionError: resolve_config failed on {'x': None}" in prompt1
+    assert "The previous test attempt failed. Fix the issues and ensure all tests pass:" in prompt1
+
+    # 2. Test output fallback when probe stderr is empty/missing
+    grade_test_output = {
+        "behavioral_probe_stderr": "",
+        "test_output": "FAIL: test_divide_by_zero (tests.test_calculator.CalculatorTests)",
+    }
+    prompt2 = build_repair_prompt(grade_test_output)
+    assert "FAIL: test_divide_by_zero" in prompt2
+
+    # 3. Grader error fallback when probe stderr and test output are empty/missing
+    grade_grader_err = {
+        "grader_error": "independent grader exceeded 75 seconds",
+    }
+    prompt3 = build_repair_prompt(grade_grader_err)
+    assert "independent grader exceeded 75 seconds" in prompt3
+
+    # 4. Default fallback when all diagnostics are empty or missing
+    prompt_default = build_repair_prompt({})
+    assert "Unit tests or behavioral probes failed." in prompt_default
+
+    prompt_empty = build_repair_prompt({
+        "behavioral_probe_stderr": "",
+        "test_output": "",
+        "grader_error": "",
+    })
+    assert "Unit tests or behavioral probes failed." in prompt_empty
+
