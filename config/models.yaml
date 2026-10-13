@@ -127,14 +127,14 @@ models:
     architecture: dense; Granite 4.1
     license: Apache-2.0
     context_claim: 131072
-    tool_use: official model-card claims
+    tool_use: official OpenAI tool calling supported in GGUF; agentic multi-turn degraded
     formats: [GGUF, Transformers]
     candidate_quant: Q4_K_M
-    estimated_weight_gib: 4.8
-    realistic_context_tokens: 2048
-    status: tier1_candidate
-    purpose: small dense coding and agent baseline
-    evidence: official Hugging Face collection and model cards
+    estimated_weight_gib: 4.98
+    realistic_context_tokens: 16384
+    status: evaluated_rejected_candidate
+    purpose: small dense coding and agent candidate (Candidate 2 Tarefa 7)
+    evidence: official model repo; revision 865b82c2e7970d82e3731278c88c57ae7138359c; SHA-256 ed902ac9eb6adce5a90c6a08c8ea201b50e23fdc5976d1cd0362006afac5309e; 16K fit passed; agentic paired battery 1/6 (16.7%) passes due to scope violations, invalid type hints and test degradation; see results/reports/model-admission-granite-8b-20261012.md; archived on E: drive
   - id: phi-4-mini-instruct
     repo: microsoft/Phi-4-mini-instruct
     params: 3.8B

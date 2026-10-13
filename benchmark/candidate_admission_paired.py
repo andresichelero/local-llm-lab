@@ -35,7 +35,7 @@ from benchmark.harness_runner import (  # noqa: E402
 )
 from benchmark.provenance import git_provenance  # noqa: E402
 
-EXPERIMENT = "candidate-admission-paired-20261012-m5"
+DEFAULT_EXPERIMENT = "candidate-admission-granite-8b-20261012"
 HARNESS = "opencode"
 HARNESS_VERSION = "1.19.0"
 RUNTIME_REVISION = "d81235049384534c167caea52b85a694f6103d14"
@@ -46,7 +46,7 @@ MAX_PRIMARY_STEPS = 20
 TASK_LIMIT_SECONDS = 180
 ROUND_LIMIT_SECONDS = 45 * 60
 
-TASKS = ("calculator_division", "dotenv_line_parser")
+DEFAULT_TASKS = ("retry_policy", "dotenv_line_parser")
 REPEATS_PER_TASK = 3
 
 MODELS: dict[str, dict[str, str]] = {
@@ -55,6 +55,12 @@ MODELS: dict[str, dict[str, str]] = {
         "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
         "path": "models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
         "sha256": "13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983",
+    },
+    "granite-4.1-8b": {
+        "alias": "granite-4.1-8b-Q4_K_M",
+        "revision": "865b82c2e7970d82e3731278c88c57ae7138359c",
+        "path": "models/gguf/granite-4.1-8b/granite-4.1-8b-Q4_K_M.gguf",
+        "sha256": "ed902ac9eb6adce5a90c6a08c8ea201b50e23fdc5976d1cd0362006afac5309e",
     },
     "gemma-4-e4b": {
         "alias": "gemma-4-E4B-it-qat-UD-Q4_K_XL",
@@ -65,18 +71,24 @@ MODELS: dict[str, dict[str, str]] = {
 }
 
 
-def build_schedule() -> list[dict[str, Any]]:
-    """Build the 12-trial balanced schedule (2 tasks x 2 models x 3 repeats)."""
+def build_schedule(
+    control: str = "qwen3.5-4b",
+    candidate: str = "gemma-4-e4b",
+    tasks: tuple[str, ...] = ("calculator_division", "dotenv_line_parser"),
+    repeats: int = REPEATS_PER_TASK,
+) -> list[dict[str, Any]]:
+    """Build the balanced schedule (tasks x 2 models x repeats)."""
     schedule: list[dict[str, Any]] = []
     trial_num = 1
-    # 3 balanced blocks: AB, BA, AB
-    blocks = [
-        ("qwen3.5-4b", "gemma-4-e4b"),
-        ("gemma-4-e4b", "qwen3.5-4b"),
-        ("qwen3.5-4b", "gemma-4-e4b"),
-    ]
+    blocks = []
+    for r in range(repeats):
+        if r % 2 == 0:
+            blocks.append((control, candidate))
+        else:
+            blocks.append((candidate, control))
+
     for repeat_idx, (first_model, second_model) in enumerate(blocks, start=1):
-        for task in TASKS:
+        for task in tasks:
             for model_key in (first_model, second_model):
                 schedule.append({
                     "trial": trial_num,
@@ -136,6 +148,7 @@ def run_single_trial(
     output_root: Path,
     server_log: Path,
     round_deadline: float,
+    experiment: str = DEFAULT_EXPERIMENT,
 ) -> dict[str, Any]:
     info = MODELS[model]
     run_dir = output_root / "runs" / task / f"{model}_repeat_{repeat}"
@@ -210,7 +223,7 @@ def run_single_trial(
     prefill_tokens = parse_server_prompt_eval_tokens(server_segment)
 
     return {
-        "experiment": EXPERIMENT,
+        "experiment": experiment,
         "model": model,
         "task": task,
         "repeat": repeat,
@@ -256,12 +269,20 @@ def _kill_process_group(proc: subprocess.Popen[Any], *, grace_seconds: int = 4) 
             pass
 
 
-def summarize_admission_results(records: list[dict[str, Any]]) -> dict[str, Any]:
+def summarize_admission_results(
+    records: list[dict[str, Any]],
+    tasks: tuple[str, ...] | None = None,
+    models: list[str] | None = None,
+) -> dict[str, Any]:
     """Calculate comparative summary between control and candidate."""
+    if tasks is None:
+        tasks = tuple(dict.fromkeys(r["task"] for r in records))
+    if models is None:
+        models = list(dict.fromkeys(r["model"] for r in records))
     summary: dict[str, Any] = {}
-    for task in TASKS:
+    for task in tasks:
         task_summary: dict[str, Any] = {}
-        for model_key in MODELS:
+        for model_key in models:
             rows = [r for r in records if r["task"] == task and r["model"] == model_key]
             walls = [r["task_wall_seconds"] for r in rows if r.get("task_wall_seconds") is not None]
             vram_peaks = [
@@ -286,9 +307,14 @@ def run_series(
     install_root: Path,
     output_root: Path,
     *,
+    control: str = "qwen3.5-4b",
+    candidate: str = "granite-4.1-8b",
+    tasks: tuple[str, ...] = DEFAULT_TASKS,
+    repeats: int = REPEATS_PER_TASK,
+    experiment: str = DEFAULT_EXPERIMENT,
     dry_run: bool = False,
 ) -> list[dict[str, Any]]:
-    schedule = build_schedule()
+    schedule = build_schedule(control=control, candidate=candidate, tasks=tasks, repeats=repeats)
     if dry_run:
         print(f"[dry-run] Planned {len(schedule)} admission trials:")
         for item in schedule:
@@ -303,10 +329,12 @@ def run_series(
     binary = install_root / "envs/node-harnesses/opencode/node_modules/opencode-linux-x64/bin/opencode"
 
     protocol = {
-        "experiment": EXPERIMENT,
+        "experiment": experiment,
         "runtime_revision": RUNTIME_REVISION,
-        "models": list(MODELS.keys()),
-        "tasks": list(TASKS),
+        "control": control,
+        "candidate": candidate,
+        "models": [control, candidate],
+        "tasks": list(tasks),
         "schedule": schedule,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -357,7 +385,8 @@ def run_series(
 
             record = run_single_trial(
                 binary, install_root, model_key, task,
-                repeat, output_root, server_log, round_deadline
+                repeat, output_root, server_log, round_deadline,
+                experiment=experiment,
             )
             record["trial"] = trial_id
             records.append(record)
@@ -371,7 +400,7 @@ def run_series(
             log_f.close()
 
     (output_root / "summary.json").write_text(
-        json.dumps(summarize_admission_results(records), indent=2) + "\n", encoding="utf-8"
+        json.dumps(summarize_admission_results(records, tasks, [control, candidate]), indent=2) + "\n", encoding="utf-8"
     )
     return records
 
@@ -380,6 +409,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execute", action="store_true", help="Execute inference on local SSD")
     parser.add_argument("--dry-run", action="store_true", help="Print schedule and exit")
+    parser.add_argument("--control", default="qwen3.5-4b", choices=list(MODELS.keys()))
+    parser.add_argument("--candidate", default="granite-4.1-8b", choices=list(MODELS.keys()))
+    parser.add_argument("--tasks", nargs="+", default=list(DEFAULT_TASKS))
+    parser.add_argument("--repeats", type=int, default=REPEATS_PER_TASK)
+    parser.add_argument("--experiment", default=DEFAULT_EXPERIMENT)
     parser.add_argument("--install-root", type=Path, default=Path("/home/foxtrot/local-llm-benchmark"))
     parser.add_argument("--output-root", type=Path, default=None)
     args = parser.parse_args()
@@ -388,13 +422,24 @@ def main() -> None:
         parser.print_help()
         sys.exit(1)
 
+    tasks_tuple = tuple(args.tasks)
     if args.dry_run:
-        run_series(args.install_root, Path("/tmp/dry-run"), dry_run=True)
+        run_series(
+            args.install_root, Path("/tmp/dry-run"),
+            control=args.control, candidate=args.candidate,
+            tasks=tasks_tuple, repeats=args.repeats,
+            experiment=args.experiment, dry_run=True,
+        )
         return
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    out_dir = args.output_root or (args.install_root / "results/raw" / f"{EXPERIMENT}-{stamp}")
-    run_series(args.install_root, out_dir, dry_run=False)
+    out_dir = args.output_root or (args.install_root / "results/raw" / f"{args.experiment}-{stamp}")
+    run_series(
+        args.install_root, out_dir,
+        control=args.control, candidate=args.candidate,
+        tasks=tasks_tuple, repeats=args.repeats,
+        experiment=args.experiment, dry_run=False,
+    )
 
 
 if __name__ == "__main__":

@@ -85,3 +85,32 @@ def test_summarize_admission_results() -> None:
     assert calc["gemma-4-e4b"]["pass_rate"] == 0.5
     assert calc["gemma-4-e4b"]["wall_median"] == 25.0
     assert calc["gemma-4-e4b"]["vram_peak_max"] == 4250.0
+
+
+def test_build_schedule_granite() -> None:
+    schedule = build_schedule(
+        control="qwen3.5-4b",
+        candidate="granite-4.1-8b",
+        tasks=("retry_policy", "dotenv_line_parser"),
+        repeats=3,
+    )
+    assert len(schedule) == 12
+    # Check trial 1
+    assert schedule[0]["model"] == "qwen3.5-4b"
+    assert schedule[0]["task"] == "retry_policy"
+    # Check trial 2
+    assert schedule[1]["model"] == "granite-4.1-8b"
+    assert schedule[1]["task"] == "retry_policy"
+
+
+def test_server_command_granite() -> None:
+    server_path = Path("/tools/llama-server")
+    model_path = Path("/models/granite-4.1-8b-Q4_K_M.gguf")
+
+    cmd = server_command(server_path, model_path, "granite-4.1-8b")
+    assert "--model" in cmd
+    assert "--cache-prompt" in cmd
+    assert "--alias" in cmd
+    assert cmd[cmd.index("--alias") + 1] == "granite-4.1-8b-Q4_K_M"
+    assert cmd[cmd.index("--ctx-size") + 1] == "16384"
+
