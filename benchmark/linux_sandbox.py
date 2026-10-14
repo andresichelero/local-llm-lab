@@ -1,0 +1,732 @@
+"""Rootless Linux namespace supervisor for untrusted native benchmark agents.
+
+The host-side supervisor stays outside the private namespaces.  The candidate
+receives only a bounded tmpfs workspace, explicit read-only runtime mounts, a
+clean environment, and (optionally) the narrow loopback model adapter.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import shutil
+import socket
+import struct
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import uuid
+from dataclasses import asdict, dataclass, field
+from pathlib import Path, PurePosixPath
+from types import MappingProxyType
+from typing import Any, Mapping
+
+from .model_broker import BrokerEvent, BrokerPolicy, ModelBroker
+
+
+class SandboxError(RuntimeError):
+    """The sandbox could not be established or its evidence was incomplete."""
+
+
+_OWNED_UNIT = re.compile(r"^safe-model-(?:sandbox|trusted-grader)-[0-9a-f]{32}\.scope$")
+
+
+@dataclass(frozen=True)
+class ResourceLimits:
+    memory_bytes: int = 2 * 1024**3
+    swap_bytes: int = 512 * 1024**2
+    cpu_quota_percent: int = 100
+    cpu_seconds: int = 600
+    pids: int = 96
+    wall_seconds: int = 300
+    output_bytes: int = 256 * 1024
+    workspace_bytes: int = 256 * 1024**2
+    workspace_files: int = 5000
+    workspace_file_bytes: int = 64 * 1024**2
+    scratch_bytes: int = 256 * 1024**2
+    file_bytes: int = 128 * 1024**2
+    open_files: int = 1024
+    export_file_bytes: int = 2 * 1024**2
+    export_total_bytes: int = 8 * 1024**2
+    rootfs_bytes: int = 32 * 1024**2
+    startup_seconds: int = 15
+    stop_grace_seconds: int = 3
+
+    def __post_init__(self) -> None:
+        for name, value in asdict(self).items():
+            if type(value) is not int or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
+        if not 1 <= self.cpu_quota_percent <= 800:
+            raise ValueError("cpu_quota_percent must be between 1 and 800")
+        if self.swap_bytes > self.memory_bytes:
+            raise ValueError("swap_bytes cannot exceed memory_bytes")
+        if self.export_file_bytes > self.export_total_bytes:
+            raise ValueError("export_file_bytes cannot exceed export_total_bytes")
+        if self.workspace_file_bytes > self.workspace_bytes:
+            raise ValueError("workspace_file_bytes cannot exceed workspace_bytes")
+
+
+@dataclass(frozen=True)
+class RuntimeBind:
+    source: Path
+    target: PurePosixPath | str
+
+    def __post_init__(self) -> None:
+        source = Path(self.source)
+        target = PurePosixPath(self.target)
+        if not target.is_absolute() or target == PurePosixPath("/") or ".." in target.parts:
+            raise ValueError("runtime target must be a safe absolute path")
+        object.__setattr__(self, "source", source)
+        object.__setattr__(self, "target", target)
+
+
+@dataclass(frozen=True)
+class SandboxSpec:
+    argv: tuple[str, ...]
+    workspace: Path
+    workspace_exports: tuple[str, ...] = ()
+    runtime_ro: tuple[RuntimeBind, ...] = ()
+    env: Mapping[str, str] = field(default_factory=dict)
+    limits: ResourceLimits = field(default_factory=ResourceLimits)
+    broker: BrokerPolicy | None = None
+
+    def __post_init__(self) -> None:
+        argv = tuple(self.argv)
+        if not argv or any(not isinstance(arg, str) or not arg or "\x00" in arg for arg in argv):
+            raise ValueError("argv must contain non-empty strings without NULs")
+        exports = tuple(self.workspace_exports)
+        for item in exports:
+            _validate_relative_path(item)
+        if len(set(exports)) != len(exports):
+            raise ValueError("workspace export paths must be unique")
+        binds = tuple(self.runtime_ro)
+        targets = [item.target for item in binds]
+        if len(set(targets)) != len(targets):
+            raise ValueError("runtime bind targets must be unique")
+        for left in targets:
+            if any(left in right.parents or right in left.parents for right in targets if left != right):
+                raise ValueError("runtime bind targets cannot overlap")
+        env = dict(self.env)
+        reserved = {
+            "HOME", "PATH", "TMPDIR", "LANG", "LC_ALL", "XDG_CONFIG_HOME",
+            "XDG_CACHE_HOME", "XDG_DATA_HOME", "OPENAI_BASE_URL", "OPENAI_API_KEY",
+            "OPENAI_API_TOKEN", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY",
+        }
+        for key, value in env.items():
+            if (not isinstance(key, str) or not isinstance(value, str) or not key
+                    or "\x00" in key or "\x00" in value or "=" in key):
+                raise ValueError("env must contain valid string pairs")
+            normalized_key = key.upper()
+            if key in reserved or any(marker in normalized_key for marker in ("_KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL", "AUTH")):
+                raise ValueError(f"env key is reserved or may carry credentials: {key}")
+        workspace = Path(self.workspace)
+        object.__setattr__(self, "argv", argv)
+        object.__setattr__(self, "workspace", workspace)
+        object.__setattr__(self, "workspace_exports", exports)
+        object.__setattr__(self, "runtime_ro", binds)
+        object.__setattr__(self, "env", MappingProxyType(env))
+
+
+@dataclass(frozen=True)
+class RunResult:
+    returncode: int | None
+    timed_out: bool
+    cleanup_verified: bool
+    output_limited: bool
+    output: bytes
+    workspace_outputs: Mapping[str, bytes]
+    namespace_evidence: Mapping[str, Any]
+    file_evidence: Mapping[str, Any]
+    network_evidence: Mapping[str, Any]
+    resource_evidence: Mapping[str, Any]
+    broker_events: tuple[BrokerEvent, ...] = ()
+    infrastructure_error: str | None = None
+
+
+def _validate_relative_path(value: str) -> PurePosixPath:
+    path = PurePosixPath(value)
+    if not value or path.is_absolute() or ".." in path.parts or "." in path.parts:
+        raise ValueError("workspace path must be a normalized relative path")
+    if any(part in ("", ".") for part in path.parts):
+        raise ValueError("workspace path must be normalized")
+    return path
+
+
+def _recv_exact(channel: socket.socket, length: int) -> bytes:
+    result = bytearray()
+    while len(result) < length:
+        chunk = channel.recv(length - len(result))
+        if not chunk:
+            raise EOFError("sandbox control channel closed")
+        result.extend(chunk)
+    return bytes(result)
+
+
+def _send_message(channel: socket.socket, message: Mapping[str, Any]) -> None:
+    data = json.dumps(message, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    if len(data) > 1024 * 1024:
+        raise SandboxError("control message exceeds its limit")
+    channel.sendall(struct.pack("!I", len(data)) + data)
+
+
+def _recv_message(channel: socket.socket, *, max_bytes: int = 1024 * 1024) -> dict[str, Any]:
+    size = struct.unpack("!I", _recv_exact(channel, 4))[0]
+    if size > max_bytes:
+        raise SandboxError("control message exceeds its limit")
+    message = json.loads(_recv_exact(channel, size).decode("utf-8"))
+    if not isinstance(message, dict):
+        raise SandboxError("control message is not an object")
+    return message
+
+
+def _namespace_inodes() -> dict[str, int]:
+    return {name: os.stat(f"/proc/self/ns/{name}").st_ino for name in ("user", "mnt", "pid", "net", "uts", "ipc")}
+
+
+def _canonical_workspace(path: Path) -> Path:
+    try:
+        absolute = Path(os.path.abspath(path))
+        resolved = absolute.resolve(strict=True)
+    except OSError as exc:
+        raise ValueError("workspace must be an existing directory") from exc
+    repo = Path(__file__).resolve(strict=True).parents[1]
+    if (resolved != absolute or not absolute.is_dir()
+            or absolute == repo or repo in absolute.parents or absolute in repo.parents):
+        raise ValueError("workspace must be a canonical directory without symlinks")
+    return absolute
+
+
+def _validate_runtime_binds(binds: tuple[RuntimeBind, ...]) -> list[dict[str, str]]:
+    result: list[dict[str, str]] = []
+    for bind in binds:
+        source = Path(os.path.abspath(bind.source))
+        try:
+            info = source.lstat()
+            resolved = source.resolve(strict=True)
+        except OSError as exc:
+            raise ValueError("runtime bind source does not exist") from exc
+        if source != resolved or not (source.is_file() or source.is_dir()):
+            raise ValueError("runtime bind source must be canonical regular file or directory")
+        if source == Path("/") or source == Path.home():
+            raise ValueError("runtime bind cannot expose the filesystem or whole home tree")
+        repo = Path(__file__).resolve(strict=True).parents[1]
+        if source == repo or repo in source.parents or source in repo.parents:
+            raise ValueError("runtime bind cannot expose the repository tree")
+        home = Path.home()
+        if home in source.parents:
+            allowed_opencode = home / "local-llm-benchmark/envs/node-harnesses/opencode/node_modules/opencode-linux-x64"
+            if source != allowed_opencode and allowed_opencode not in source.parents:
+                raise ValueError("home-directory runtime binds are limited to the installed OpenCode runtime")
+        if not (os.path.isfile(source) or os.path.isdir(source)):
+            raise ValueError("runtime bind source is not mountable")
+        if not (info.st_mode & 0o444):
+            raise ValueError("runtime bind source is not readable")
+        result.append({"source": str(source), "target": str(bind.target)})
+    return result
+
+
+def _read_cgroup_file(cgroup_dir: Path, name: str) -> str:
+    path = cgroup_dir / name
+    if not path.is_file():
+        raise SandboxError(f"required cgroup evidence unavailable: {name}")
+    return path.read_text(encoding="ascii").strip()
+
+
+def _scope_evidence(unit: str, limits: ResourceLimits) -> tuple[dict[str, Any], Path]:
+    systemctl = shutil.which("systemctl")
+    if not systemctl:
+        raise SandboxError("systemctl is unavailable")
+    shown = subprocess.run(
+        [systemctl, "--user", "show", unit, "--property=ControlGroup", "--value"],
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        check=False, timeout=4, text=True, env=_host_command_env(),
+    )
+    cgroup = shown.stdout.strip()
+    if shown.returncode != 0 or not cgroup.startswith("/") or ".." in Path(cgroup).parts:
+        raise SandboxError("systemd did not expose a safe scope cgroup path")
+    root = Path("/sys/fs/cgroup").resolve(strict=True)
+    cgroup_dir = root.joinpath(*Path(cgroup).parts[1:])
+    try:
+        actual = cgroup_dir.resolve(strict=True)
+        actual.relative_to(root)
+    except (OSError, ValueError) as exc:
+        raise SandboxError("scope cgroup is outside the unified hierarchy") from exc
+    values = {
+        "memory.max": _read_cgroup_file(actual, "memory.max"),
+        "memory.swap.max": _read_cgroup_file(actual, "memory.swap.max"),
+        "pids.max": _read_cgroup_file(actual, "pids.max"),
+        "cpu.max": _read_cgroup_file(actual, "cpu.max"),
+        "memory.current": _read_cgroup_file(actual, "memory.current"),
+        "pids.current": _read_cgroup_file(actual, "pids.current"),
+    }
+    expected_cpu = f"{limits.cpu_quota_percent * 1000} 100000"
+    expected = {
+        "memory.max": str(limits.memory_bytes),
+        "memory.swap.max": str(limits.swap_bytes),
+        "pids.max": str(limits.pids),
+        "cpu.max": expected_cpu,
+    }
+    if any(values[key] != value for key, value in expected.items()):
+        raise SandboxError("transient cgroup limits do not match the requested bounds")
+    values["expected"] = expected
+    values["cgroup_path"] = cgroup
+    return values, actual
+
+
+def new_scope_unit(purpose: str = "sandbox") -> str:
+    if purpose not in {"sandbox", "trusted-grader"}:
+        raise ValueError("purpose must be sandbox or trusted-grader")
+    return f"safe-model-{purpose}-{uuid.uuid4().hex}.scope"
+
+
+def _validate_owned_unit(unit: str) -> None:
+    if not _OWNED_UNIT.fullmatch(unit):
+        raise ValueError("unit is not a uniquely named owned safe-model scope")
+
+
+def systemd_scope_command(argv: tuple[str, ...] | list[str], limits: ResourceLimits, *, unit: str) -> list[str]:
+    """Return the bounded transient-scope prefix followed by a trusted argv."""
+    _validate_owned_unit(unit)
+    if not argv or any(not isinstance(arg, str) or not arg or "\x00" in arg for arg in argv):
+        raise ValueError("scope argv must contain non-empty strings without NULs")
+    systemd_run = shutil.which("systemd-run")
+    if not systemd_run:
+        raise SandboxError("systemd-run is unavailable")
+    return [
+        systemd_run, "--user", "--scope", "--quiet", "--unit", unit,
+        "--property", f"MemoryMax={limits.memory_bytes}",
+        "--property", f"MemorySwapMax={limits.swap_bytes}",
+        "--property", f"TasksMax={limits.pids}",
+        "--property", f"CPUQuota={limits.cpu_quota_percent}%",
+        "--property", "KillMode=control-group",
+        "--property", f"TimeoutStopSec={limits.stop_grace_seconds}s",
+        "--", *argv,
+    ]
+
+
+def read_scope_resource_evidence(unit: str, limits: ResourceLimits) -> dict[str, Any]:
+    """Read and verify actual cgroup limits for one active transient scope."""
+    _validate_owned_unit(unit)
+    evidence, _path = _scope_evidence(unit, limits)
+    return evidence
+
+
+def stop_owned_scope(unit: str) -> bool:
+    """Kill all tasks in one exact UUID-named scope owned by this tool."""
+    _validate_owned_unit(unit)
+    systemctl = shutil.which("systemctl")
+    if not systemctl:
+        return False
+    try:
+        completed = subprocess.run(
+            [systemctl, "--user", "kill", "--kill-whom=all", "--signal=SIGKILL", unit],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            check=False, timeout=4, env=_host_command_env(),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return completed.returncode == 0
+
+
+def _host_command_env() -> dict[str, str]:
+    env = {"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C"}
+    if "XDG_RUNTIME_DIR" in os.environ:
+        env["XDG_RUNTIME_DIR"] = os.environ["XDG_RUNTIME_DIR"]
+    if "DBUS_SESSION_BUS_ADDRESS" in os.environ:
+        env["DBUS_SESSION_BUS_ADDRESS"] = os.environ["DBUS_SESSION_BUS_ADDRESS"]
+    return env
+
+
+def _drain_output(stream: Any, limit: int, result: dict[str, Any]) -> None:
+    stored = bytearray()
+    observed = 0
+    while True:
+        chunk = stream.read(8192)
+        if not chunk:
+            break
+        observed += len(chunk)
+        remaining = limit - len(stored)
+        if remaining > 0:
+            stored.extend(chunk[:remaining])
+        if len(chunk) > remaining:
+            result["limited"] = True
+    result["output"] = bytes(stored)
+    result["observed"] = observed
+
+
+def _required_sandbox_evidence(evidence: Mapping[str, Any], runtime_count: int) -> bool:
+    namespaces = evidence.get("namespace", {})
+    mounts = evidence.get("mounts", {})
+    caps = evidence.get("capabilities", {})
+    process = evidence.get("process", {})
+    network = evidence.get("network", {})
+    required_ns = {"user", "mnt", "pid", "net", "uts", "ipc"}
+    return (
+        set(namespaces.get("isolated", {})) == required_ns
+        and all(namespaces["isolated"].values())
+        and namespaces.get("uid_map_valid") is True
+        and mounts.get("root_read_only") is True
+        and mounts.get("workspace_writable") is True
+        and mounts.get("workspace_noexec") is True
+        and mounts.get("workspace_tmpfs_bounded") is True
+        and mounts.get("scratch_writable") is True
+        and mounts.get("runtime_read_only") is True
+        and len(mounts.get("mounts", {})) >= 3
+        and caps.get("effective_capabilities_dropped") is True
+        and caps.get("permitted_capabilities_dropped") is True
+        and caps.get("bounding_capabilities_dropped") is True
+        and caps.get("no_new_privileges") is True
+        and caps.get("dumpable_disabled") is True
+        and process.get("inherited_host_directory_fds") is False
+        and process.get("candidate_control_fds") is False
+        and network.get("only_loopback_interface") is True
+        and network.get("routes_only_loopback") is True
+        and network.get("external_egress_unavailable") is True
+        and len(evidence.get("runtime_targets", [])) == runtime_count
+    )
+
+
+def _stop_owned_scope(unit: str, systemctl: str | None) -> None:
+    if not systemctl:
+        return
+    try:
+        subprocess.run(
+            [systemctl, "--user", "kill", "--kill-whom=all", "--signal=SIGKILL", unit],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            check=False, timeout=4, env=_host_command_env(),
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def _cleanup_evidence(process: subprocess.Popen[bytes], cgroup_dir: Path | None) -> bool:
+    try:
+        if process.poll() is None:
+            return False
+        if cgroup_dir is None or not cgroup_dir.exists():
+            return True
+        populated = _read_cgroup_file(cgroup_dir, "cgroup.events")
+        values = dict(line.split() for line in populated.splitlines() if len(line.split()) == 2)
+        return values.get("populated") == "0" and _read_cgroup_file(cgroup_dir, "cgroup.procs") == ""
+    except (OSError, SandboxError, ValueError):
+        return False
+
+
+def _infrastructure_result(error: str, *, timed_out: bool = False, cleanup: bool = False,
+                           output: bytes = b"", output_limited: bool = False,
+                           resources: Mapping[str, Any] | None = None) -> RunResult:
+    return RunResult(
+        returncode=None,
+        timed_out=timed_out,
+        cleanup_verified=cleanup,
+        output_limited=output_limited,
+        output=output,
+        workspace_outputs=MappingProxyType({}),
+        namespace_evidence=MappingProxyType({}),
+        file_evidence=MappingProxyType({}),
+        network_evidence=MappingProxyType({}),
+        resource_evidence=MappingProxyType(dict(resources or {})),
+        infrastructure_error=error,
+    )
+
+
+class SandboxSupervisor:
+    """Starts one uniquely named, transient systemd user scope per invocation."""
+
+    def __init__(self, *, bootstrap_path: Path | None = None):
+        self.bootstrap_path = Path(bootstrap_path or Path(__file__).with_name("sandbox_bootstrap.py")).resolve(strict=True)
+
+    def run(self, spec: SandboxSpec) -> RunResult:
+        if not sys.platform.startswith("linux"):
+            return _infrastructure_result("linux_required")
+        try:
+            workspace = _canonical_workspace(spec.workspace)
+            runtime_binds = _validate_runtime_binds(spec.runtime_ro)
+            namespace_inodes = _namespace_inodes()
+        except (OSError, ValueError) as exc:
+            return _infrastructure_result(f"invalid_spec:{type(exc).__name__}")
+        systemd_run = shutil.which("systemd-run")
+        systemctl = shutil.which("systemctl")
+        unshare = shutil.which("unshare")
+        python = shutil.which("python3")
+        if not all((systemd_run, systemctl, unshare, python)):
+            return _infrastructure_result("required_rootless_linux_tools_unavailable")
+
+        unit = new_scope_unit("sandbox")
+        limits = spec.limits
+        temp_root = tempfile.mkdtemp(prefix="safe-model-sandbox-")
+        Path(temp_root, "root").mkdir(mode=0o700)
+        control_host, control_child = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+        broker_host: socket.socket | None = None
+        broker_child: socket.socket | None = None
+        if spec.broker is not None:
+            broker_host, broker_child = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+        broker_config = None
+        if spec.broker is not None:
+            broker_config = {
+                "upstream_port": spec.broker.upstream_port,
+                "model_allowlist": list(spec.broker.model_allowlist),
+                "output_token_cap": spec.broker.output_token_cap,
+                "frozen_generation": dict(spec.broker.frozen_generation),
+                "max_request_bytes": spec.broker.max_request_bytes,
+                "max_response_bytes": spec.broker.max_response_bytes,
+                "deadline_seconds": spec.broker.deadline_seconds,
+                "max_requests": spec.broker.max_requests,
+                "adapter_port": spec.broker.adapter_port,
+            }
+        config = {
+            "root": str(Path(temp_root) / "root"),
+            "workspace": str(workspace),
+            "runtime_binds": runtime_binds,
+            "argv": list(spec.argv),
+            "env": dict(spec.env),
+            "limits": asdict(limits),
+            "exports": list(spec.workspace_exports),
+            "expected_namespaces": namespace_inodes,
+            "host_uid": os.getuid(),
+            "evidence_fd": control_child.fileno(),
+            "broker_fd": broker_child.fileno() if broker_child is not None else -1,
+            "broker": broker_config,
+        }
+        encoded = json.dumps(config, separators=(",", ":"), allow_nan=False).encode("utf-8")
+        if len(encoded) > 1024 * 1024:
+            control_host.close()
+            control_child.close()
+            if broker_host:
+                broker_host.close()
+            if broker_child:
+                broker_child.close()
+            shutil.rmtree(temp_root)
+            return _infrastructure_result("sandbox_configuration_too_large")
+
+        command = systemd_scope_command(
+            (
+                unshare, "--user", "--map-root-user", "--mount", "--pid", "--net", "--ipc", "--uts",
+                "--fork", "--kill-child", python, "-I", str(self.bootstrap_path),
+            ),
+            limits,
+            unit=unit,
+        )
+        output_state: dict[str, Any] = {"output": b"", "limited": False}
+        process: subprocess.Popen[bytes] | None = None
+        broker: ModelBroker | None = ModelBroker(spec.broker) if spec.broker else None
+        broker_thread: threading.Thread | None = None
+        cgroup_dir: Path | None = None
+        resources: dict[str, Any] = {}
+        evidence: dict[str, Any] = {}
+        outputs: dict[str, bytes] = {}
+        timed_out = False
+        ready = False
+        infra_error: str | None = None
+        try:
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                close_fds=True,
+                pass_fds=tuple(
+                    fd for fd in (
+                        control_child.fileno(),
+                        broker_child.fileno() if broker_child is not None else -1,
+                    ) if fd >= 0
+                ),
+                env=_host_command_env(),
+                start_new_session=True,
+            )
+            output_thread = threading.Thread(
+                target=_drain_output, args=(process.stdout, limits.output_bytes, output_state), daemon=True,
+            )
+            output_thread.start()
+            assert process.stdin is not None
+            process.stdin.write(encoded)
+            process.stdin.close()
+            control_child.close()
+            if broker_child is not None:
+                broker_child.close()
+            control_host.settimeout(limits.startup_seconds)
+            message = _recv_message(control_host)
+            if message.get("type") != "READY" or not isinstance(message.get("evidence"), dict):
+                infra_error = "sandbox_setup_failed"
+                raise SandboxError(infra_error)
+            evidence = message["evidence"]
+            resources, cgroup_dir = _scope_evidence(unit, limits)
+            if not _required_sandbox_evidence(evidence, len(runtime_binds)):
+                infra_error = "sandbox_evidence_incomplete"
+                raise SandboxError(infra_error)
+            if broker is not None and broker_host is not None:
+                broker_thread = threading.Thread(target=broker.serve_socket, args=(broker_host,), daemon=True)
+                broker_thread.start()
+            _send_message(control_host, {"type": "GO"})
+            ready = True
+            control_host.settimeout(limits.wall_seconds)
+            start = time.monotonic()
+            while True:
+                remaining = limits.wall_seconds - (time.monotonic() - start)
+                if remaining <= 0:
+                    timed_out = True
+                    infra_error = "sandbox_wall_timeout"
+                    break
+                control_host.settimeout(remaining)
+                try:
+                    message = _recv_message(control_host, max_bytes=limits.export_total_bytes + 8192)
+                except socket.timeout:
+                    timed_out = True
+                    infra_error = "sandbox_wall_timeout"
+                    break
+                kind = message.get("type")
+                if kind == "ERROR":
+                    infra_error = "sandbox_bootstrap_error"
+                    break
+                if kind == "FILE":
+                    path = message.get("path")
+                    size = message.get("size")
+                    digest = message.get("sha256")
+                    if (path not in spec.workspace_exports or type(size) is not int or size < 0
+                            or size > limits.export_file_bytes or path in outputs
+                            or not isinstance(digest, str) or len(digest) != 64):
+                        infra_error = "invalid_workspace_export"
+                        break
+                    data = _recv_exact(control_host, size)
+                    if hashlib.sha256(data).hexdigest() != digest:
+                        infra_error = "workspace_export_digest_mismatch"
+                        break
+                    if sum(map(len, outputs.values())) + len(data) > limits.export_total_bytes:
+                        infra_error = "workspace_export_total_limit"
+                        break
+                    outputs[path] = data
+                    continue
+                if kind == "RESULT":
+                    returncode = message.get("returncode")
+                    if type(returncode) is not int:
+                        infra_error = "invalid_sandbox_result"
+                        break
+                    if message.get("descendants_clean") is not True or message.get("exports_valid") is not True:
+                        infra_error = "sandbox_cleanup_or_export_failed"
+                        break
+                    export_files = message.get("export_files")
+                    export_bytes = sum(map(len, outputs.values()))
+                    if (type(message.get("export_count")) is not int
+                            or type(message.get("export_bytes")) is not int
+                            or message["export_count"] != len(outputs)
+                            or message["export_bytes"] != export_bytes
+                            or not isinstance(export_files, list)
+                            or {item.get("path") for item in export_files if isinstance(item, dict)} != set(outputs)
+                            or len(export_files) != len(outputs)):
+                        infra_error = "workspace_export_manifest_mismatch"
+                        break
+                    manifest_ok = all(
+                        isinstance(item, dict)
+                        and item.get("size") == len(outputs[item["path"]])
+                        and item.get("sha256") == hashlib.sha256(outputs[item["path"]]).hexdigest()
+                        for item in export_files
+                    )
+                    if not manifest_ok:
+                        infra_error = "workspace_export_manifest_mismatch"
+                        break
+                    resources.update({
+                        "candidate_returncode": returncode,
+                        "descendants_clean": message["descendants_clean"],
+                        "exports_valid": message["exports_valid"],
+                        "export_count": message.get("export_count"),
+                        "export_bytes": export_bytes,
+                        "output_captured_bytes": len(output_state["output"]),
+                        "output_observed_bytes": output_state.get("observed", 0),
+                        "output_limit_bytes": limits.output_bytes,
+                    })
+                    _send_message(control_host, {"type": "FINISH"})
+                    try:
+                        process.wait(timeout=limits.stop_grace_seconds + 5)
+                    except subprocess.TimeoutExpired:
+                        infra_error = "sandbox_scope_exit_timeout"
+                    break
+                infra_error = "unexpected_sandbox_control_message"
+                break
+        except (OSError, EOFError, json.JSONDecodeError, SandboxError, subprocess.TimeoutExpired, socket.timeout) as exc:
+            if infra_error is None:
+                infra_error = f"sandbox_supervisor_error:{type(exc).__name__}"
+        finally:
+            if process is not None and (process.poll() is None or infra_error is not None):
+                _stop_owned_scope(unit, systemctl)
+                try:
+                    process.wait(timeout=limits.stop_grace_seconds + 5)
+                except subprocess.TimeoutExpired:
+                    try:
+                        process.kill()
+                        process.wait(timeout=2)
+                    except (OSError, subprocess.TimeoutExpired):
+                        pass
+            if broker_host is not None:
+                try:
+                    broker_host.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                broker_host.close()
+            if broker_thread is not None:
+                broker_thread.join(timeout=1.0)
+            if control_host.fileno() >= 0:
+                control_host.close()
+            if control_child.fileno() >= 0:
+                control_child.close()
+            if broker_child is not None and broker_child.fileno() >= 0:
+                broker_child.close()
+            if process is not None and process.stdout is not None:
+                if "output_thread" in locals():
+                    output_thread.join(timeout=2.0)
+                    if output_thread.is_alive():
+                        process.stdout.close()
+                        output_thread.join(timeout=1.0)
+                else:
+                    process.stdout.close()
+
+        cleanup = process is not None and _cleanup_evidence(process, cgroup_dir)
+        try:
+            shutil.rmtree(temp_root)
+        except OSError:
+            cleanup = False
+            infra_error = infra_error or "sandbox_temp_cleanup_failed"
+        if resources:
+            resources.update({
+                "cleanup_verified": cleanup,
+                "scope_unit": unit,
+                "memory_max": resources.get("memory.max"),
+                "memory_swap_max": resources.get("memory.swap.max"),
+                "pids_max": resources.get("pids.max"),
+                "cpu_max": resources.get("cpu.max"),
+                "output_captured_bytes": len(output_state["output"]),
+                "output_observed_bytes": output_state.get("observed", 0),
+                "output_limit_bytes": limits.output_bytes,
+            })
+        if not cleanup and infra_error is None:
+            infra_error = "sandbox_cleanup_unverified"
+        if not ready or infra_error is not None:
+            return RunResult(
+                returncode=None,
+                timed_out=timed_out,
+                cleanup_verified=cleanup,
+                output_limited=bool(output_state["limited"]),
+                output=output_state["output"],
+                workspace_outputs=MappingProxyType({}),
+                namespace_evidence=MappingProxyType(dict(evidence.get("namespace", {}))),
+                file_evidence=MappingProxyType(dict(evidence.get("mounts", {}))),
+                network_evidence=MappingProxyType(dict(evidence.get("network", {}))),
+                resource_evidence=MappingProxyType(resources),
+                broker_events=broker.events if broker else (),
+                infrastructure_error=infra_error or "sandbox_not_ready",
+            )
+        return RunResult(
+            returncode=resources.get("candidate_returncode"),
+            timed_out=timed_out,
+            cleanup_verified=cleanup,
+            output_limited=bool(output_state["limited"]),
+            output=output_state["output"],
+            workspace_outputs=MappingProxyType(outputs),
+            namespace_evidence=MappingProxyType(dict(evidence.get("namespace", {}))),
+            file_evidence=MappingProxyType(dict(evidence.get("files", {}))),
+            network_evidence=MappingProxyType(dict(evidence.get("network", {}))),
+            resource_evidence=MappingProxyType(resources),
+            broker_events=broker.events if broker else (),
+        )
