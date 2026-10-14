@@ -8,6 +8,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from benchmark.pristine_grading import (
+    GRADER_PROTOCOL_VERSION,
+    grade_pristine_workspace,
+)
+
 
 ALLOWED_CHANGES = {"src/calculator.py", "tests/test_calculator.py"}
 REQUIRED_TESTS = {
@@ -258,12 +263,12 @@ def run_baseline_tests(workspace: Path, baseline: Path) -> tuple[bool, str]:
         return False, str(exc)
 
 
-def grade_workspace(
+def _grade_workspace_direct(
     workspace: Path,
     baseline: Path,
     task: str = "calculator_division",
 ) -> dict[str, Any]:
-    """Run tests and behavior probes, then check task scope and preserved helpers."""
+    """Historical direct-workspace grader; only for trusted diagnostic replay."""
     if task == "whitespace_normalization":
         return _grade_whitespace_normalization(workspace, baseline)
     if task == "dotenv_line_parser":
@@ -351,6 +356,37 @@ def grade_workspace(
         "test_output": test_output,
         "behavioral_probe_stderr": behavioral_probe_stderr,
     }
+
+
+def grade_workspace_legacy(
+    workspace: Path,
+    baseline: Path,
+    task: str = "calculator_division",
+) -> dict[str, Any]:
+    """Reproduce the historical direct-workspace aggregate on trusted data only.
+
+    Active benchmark callers must use :func:`grade_workspace`, which replays
+    source changes into the fingerprinted fixture and never executes candidate
+    authored tests.
+    """
+    result = _grade_workspace_direct(workspace, baseline, task=task)
+    result.update({
+        "grader_protocol_version": "legacy-direct-workspace-v0",
+        "aggregate_semantics": "historical_mixed_candidate_tests_probe_scope_helpers_v0",
+        "comparable_with_legacy": True,
+        "comparable_with_pristine": False,
+    })
+    return result
+
+
+def grade_workspace(
+    workspace: Path,
+    baseline: Path,
+    task: str = "calculator_division",
+    artifact_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Central final grader for active runs; candidate tests are never executed."""
+    return grade_pristine_workspace(workspace, baseline, task=task, artifact_dir=artifact_dir)
 
 
 def _grade_whitespace_normalization(workspace: Path, baseline: Path) -> dict[str, Any]:

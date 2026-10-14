@@ -24,7 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from benchmark.harness_eval import grade_workspace  # noqa: E402
+from benchmark.harness_eval import GRADER_PROTOCOL_VERSION, grade_workspace  # noqa: E402
 from benchmark.harness_runner import (  # noqa: E402
     _isolated_environment,
     _prepare_run,
@@ -197,7 +197,7 @@ def run_single_trial(
     
     # Independent grade
     try:
-        grade = grade_workspace(workspace, fixture_rel, task=task)
+        grade = grade_workspace(workspace, fixture_rel, task=task, artifact_dir=run_dir / "grader-artifacts")
         quality_ok = bool(grade.get("success", False))
     except Exception as err:
         grade = {"success": False, "grader_error": f"{type(err).__name__}: {err}"}
@@ -311,6 +311,7 @@ def run_series(
 
     protocol = {
         "experiment": EXPERIMENT,
+        "grader_protocol_version": GRADER_PROTOCOL_VERSION,
         "runtime_revision": RUNTIME_REVISION,
         "model": MODEL_KEY,
         "tasks": list(TASKS),

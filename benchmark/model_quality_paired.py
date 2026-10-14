@@ -39,6 +39,7 @@ from benchmark.harness_runner import (  # noqa: E402  # Project-root bootstrap a
     summarize_usage,
 )
 from benchmark.provenance import git_provenance  # noqa: E402  # Project-root bootstrap above enables direct module execution.
+from benchmark.pristine_grading import GRADER_PROTOCOL_VERSION  # noqa: E402  # Project-root bootstrap above enables direct module execution.
 
 EXPERIMENT = "model-quality-paired-20261012-r1d"
 HARNESS = "opencode"
@@ -151,6 +152,7 @@ def frozen_protocol() -> dict[str, Any]:
     """Stable configuration payload written before any observations are collected."""
     return {
         "experiment": EXPERIMENT,
+        "grader_protocol_version": GRADER_PROTOCOL_VERSION,
         "round0_prerequisite": {
             "status": "failed",
             "measurement_eligible": False,
@@ -427,29 +429,24 @@ def pregrade_workspace_gate(
             "mode_changes": mode_changes}
 
 
-def _protected_files_preserved(workspace: Path, baseline: Path, task: str) -> dict[str, Any]:
-    allowed = TASK_ALLOWED_FILES[task]
-    # Caller must first pass pregrade_workspace_gate, which uses lstat and does not
-    # follow links. Recheck before reading in case the workspace changed meanwhile.
-    safety = pregrade_workspace_gate(workspace, _file_modes(baseline), allowed_files=allowed)
-    if not safety["passed"]:
-        return {**safety, "protected_content_changes": [], "protected_mode_changes": [],
-                "unscoped_added_files": [], "added_allowed_files": []}
-    base_modes = _file_modes(baseline)
-    current_modes = _file_modes(workspace)
-    base_files = {path.relative_to(baseline).as_posix(): path.read_bytes()
-                  for path in baseline.rglob("*") if path.is_file() and ".git" not in path.parts and "__pycache__" not in path.parts}
-    current_files = {path.relative_to(workspace).as_posix(): path.read_bytes()
-                     for path in workspace.rglob("*") if path.is_file() and ".git" not in path.parts and "__pycache__" not in path.parts}
-    paths = (base_files.keys() | current_files.keys()) - allowed
-    content_changes = sorted(path for path in paths if base_files.get(path) != current_files.get(path))
-    mode_changes = sorted(path for path in paths if base_modes.get(path) != current_modes.get(path))
-    added_allowed = sorted(path for path in current_files.keys() - base_files.keys() if path in allowed)
-    unscoped_added = sorted(current_files.keys() - base_files.keys() - allowed)
-    return {"passed": not content_changes and not mode_changes and not unscoped_added,
-            "symlinks": safety["symlinks"], "protected_content_changes": content_changes,
-            "protected_mode_changes": mode_changes, "unscoped_added_files": unscoped_added,
-            "added_allowed_files": added_allowed}
+def _protected_files_report(grade: dict[str, Any]) -> dict[str, Any]:
+    """Expose the central grader's safe inspection without rereading the workspace."""
+    integrity = grade.get("integrity_details", {})
+    scope = grade.get("scope_details", {})
+    content_changes = integrity.get("protected_content_changes", [])
+    mode_changes = integrity.get("mode_changes", [])
+    added_allowed = integrity.get("new_source_modes_not_replayed", [])
+    unscoped = scope.get("unlisted_files", [])
+    passed = (grade.get("integrity_pass") is True and grade.get("scope_pass") is True
+              and not content_changes and not mode_changes and not unscoped)
+    return {
+        "passed": passed,
+        "symlinks": grade.get("candidate_inspection", {}).get("problems", []),
+        "protected_content_changes": content_changes,
+        "protected_mode_changes": mode_changes,
+        "unscoped_added_files": unscoped,
+        "added_allowed_files": added_allowed,
+    }
 
 
 def _independent_grade(workspace: Path, baseline: Path, task: str, run_dir: Path) -> dict[str, Any]:
@@ -463,8 +460,10 @@ def _independent_grade(workspace: Path, baseline: Path, task: str, run_dir: Path
            "HOME": str(grade_home), "TMPDIR": str(grade_tmp)}
     code = ("import json,sys; from benchmark.harness_eval import grade_workspace; "
             "print(json.dumps(grade_workspace(__import__('pathlib').Path(sys.argv[1]), "
-            "__import__('pathlib').Path(sys.argv[2]), task=sys.argv[3])))")
-    proc = subprocess.Popen([sys.executable, "-c", code, str(workspace), str(baseline), task],
+            "__import__('pathlib').Path(sys.argv[2]), task=sys.argv[3], "
+            "artifact_dir=__import__('pathlib').Path(sys.argv[4]))))")
+    proc = subprocess.Popen([sys.executable, "-c", code, str(workspace), str(baseline), task,
+                             str(run_dir / "grader-artifacts")],
                             cwd=REPO_ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, start_new_session=True)
     try:
@@ -491,18 +490,15 @@ def _independent_grade(workspace: Path, baseline: Path, task: str, run_dir: Path
 
 def _grade_workspace_when_safe(workspace: Path, baseline: Path, task: str, run_dir: Path,
                                baseline_modes: dict[str, int]) -> tuple[dict[str, Any], dict[str, Any]]:
-    allowed = TASK_ALLOWED_FILES.get(task, set())
-    gate = pregrade_workspace_gate(workspace, baseline_modes, allowed_files=allowed)
-    if not gate["passed"]:
-        return ({"success": False, "grader_skipped": True,
-                 "grader_error": "workspace integrity gate failed before grader access"}, gate)
-    protected = _protected_files_preserved(workspace, baseline, task)
-    gate["protected_files"] = protected
-    if not protected["passed"]:
-        gate["passed"] = False
-        return ({"success": False, "grader_skipped": True,
-                 "grader_error": "protected-content gate failed before grader access"}, gate)
-    return _independent_grade(workspace, baseline, task, run_dir), gate
+    del baseline_modes  # Central grading owns the single safe workspace inspection.
+    grade = _independent_grade(workspace, baseline, task, run_dir)
+    gate = {
+        "passed": grade.get("integrity_pass") is True and grade.get("scope_pass") is True,
+        "integrity_pass": grade.get("integrity_pass"),
+        "scope_pass": grade.get("scope_pass"),
+        "grader_protocol_version": grade.get("grader_protocol_version"),
+    }
+    return grade, gate
 
 
 def build_profile(model: str) -> dict[str, Any]:
@@ -973,24 +969,13 @@ def _run_task(binary: Path, install_root: Path, model: str, task: str, stage: st
     wall = round(time.monotonic() - start, 3)
     events = _read_jsonl(event_path)
     try:
-        grade, safe_to_grade = _grade_workspace_when_safe(workspace, fixture_rel, task, run_dir, baseline_modes)
+        grade, _ = _grade_workspace_when_safe(workspace, fixture_rel, task, run_dir, baseline_modes)
     except Exception as error:
-        safe_to_grade = pregrade_workspace_gate(
-            workspace, baseline_modes, allowed_files=TASK_ALLOWED_FILES.get(task, set())
-        )
-        grade = {"success": False, "grader_error": f"{type(error).__name__}: {error}"}
-    if safe_to_grade["passed"]:
-        protected = _protected_files_preserved(workspace, fixture_rel, task)
-        current_workspace_modes = _file_modes(workspace)
-        base_modes_intact = all(
-            current_workspace_modes.get(p) == baseline_modes.get(p)
-            for p in baseline_modes
-        )
-        modes = base_modes_intact and not protected.get("protected_mode_changes")
-    else:
-        protected = {**safe_to_grade, "protected_content_changes": [], "protected_mode_changes": [],
-                     "unscoped_added_files": [], "added_allowed_files": []}
-        modes = False
+        grade = {"success": False, "grader_error": f"{type(error).__name__}: {error}",
+                 "grader_protocol_version": GRADER_PROTOCOL_VERSION}
+    protected = _protected_files_report(grade)
+    mode_changes = grade.get("integrity_details", {}).get("mode_changes")
+    modes = isinstance(mode_changes, list) and not mode_changes
     calls = [event for event in events if event.get("type") == "tool_use"]
     completed_calls = [event for event in calls if event.get("part", {}).get("state", {}).get("status") == "completed"]
     bash_calls = [event for event in completed_calls if str(event.get("part", {}).get("tool", "")).lower() in {"bash", "shell"}]
@@ -1021,6 +1006,7 @@ def _run_task(binary: Path, install_root: Path, model: str, task: str, stage: st
     usage = summarize_usage("opencode", events)
     return {
         "experiment": experiment_name, "stage": stage, "model": model, "model_alias": info["alias"],
+        "grader_protocol_version": GRADER_PROTOCOL_VERSION,
         "model_revision": info["revision"], "model_sha256": info["sha256"], "task": task, "repeat": repeat,
         "harness": HARNESS, "harness_version": HARNESS_VERSION, "runtime_revision": RUNTIME_REVISION,
         "context_tokens": CONTEXT, "kv_cache_kv": [KV_CACHE, KV_CACHE], "flash_attention": True,

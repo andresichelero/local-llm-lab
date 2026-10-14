@@ -21,7 +21,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from benchmark.provenance import git_provenance  # noqa: E402
-from benchmark.harness_eval import grade_workspace  # noqa: E402
+from benchmark.harness_eval import GRADER_PROTOCOL_VERSION, grade_workspace  # noqa: E402
 
 DEFAULT_ROOT = Path.home() / "local-llm-benchmark"
 DEFAULT_MODEL = "Qwen3.5-9B-Q4_K_M"
@@ -493,7 +493,7 @@ def run_one(
     wall_seconds = round(time.perf_counter() - start, 3)
 
     try:
-        quality = grade_workspace(workspace, fixture_path, task=task)
+        quality = grade_workspace(workspace, fixture_path, task=task, artifact_dir=run_dir / "grader-artifacts")
     except Exception as error:  # Preserve benchmark outcomes if independent grading itself fails.
         quality = {"success": False, "grader_error": f"{type(error).__name__}: {error}"}
     (run_dir / "quality.json").write_text(json.dumps(quality, indent=2) + "\n", encoding="utf-8")
@@ -516,6 +516,7 @@ def run_one(
     ).stdout.splitlines()
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "grader_protocol_version": GRADER_PROTOCOL_VERSION,
         "experiment": (
             "harness-coding-task-smoke" if task == "calculator_division" else f"harness-{task}"
         ),

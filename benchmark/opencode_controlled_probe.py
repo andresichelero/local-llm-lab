@@ -21,7 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from benchmark.harness_eval import grade_workspace  # noqa: E402
+from benchmark.harness_eval import GRADER_PROTOCOL_VERSION, grade_workspace  # noqa: E402
 from benchmark.provenance import git_provenance  # noqa: E402
 from benchmark.harness_runner import (  # noqa: E402
     DEFAULT_CONTEXT,
@@ -517,13 +517,14 @@ def _run_arm(
         gate_passed = read_only_smoke_gate(events, text_output, changed)
         success = return_code == 0 and not timed_out and gate_passed
     else:
-        quality = grade_workspace(workspace, fixture)
+        quality = grade_workspace(workspace, fixture, artifact_dir=run_dir / "grader-artifacts")
         gate_passed = workflow_gate(arm, bool(quality.get("success")), events)
         success = return_code == 0 and not timed_out and gate_passed
     children = child_task_calls(events)
     source_revision, source_tree_dirty = git_provenance(REPO_ROOT)
     record = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "grader_protocol_version": GRADER_PROTOCOL_VERSION,
         "arm": arm,
         "run_label": label or arm,
         "task": task,

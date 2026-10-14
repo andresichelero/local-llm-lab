@@ -72,7 +72,9 @@ class HarnessEvaluationTests(unittest.TestCase):
 
         result = grade_workspace(workspace, FIXTURE)
 
-        self.assertTrue(result["unit_tests_passed"])
+        self.assertIsNone(result["unit_tests_passed"])
+        self.assertTrue(result["regression_pass"])
+        self.assertTrue(result["functional_pass"])
         self.assertTrue(result["behavioral_probe_passed"])
         self.assertTrue(result["divide_tests_present"])
         self.assertTrue(result["unchanged_helpers"])
@@ -125,7 +127,9 @@ class HarnessEvaluationTests(unittest.TestCase):
 
             result = grade_workspace(workspace, WHITESPACE_FIXTURE, task="whitespace_normalization")
 
-        self.assertTrue(result["unit_tests_passed"])
+        self.assertIsNone(result["unit_tests_passed"])
+        self.assertTrue(result["regression_pass"])
+        self.assertTrue(result["functional_pass"])
         self.assertTrue(result["behavioral_probe_passed"])
         self.assertTrue(result["required_tests_present"])
         self.assertTrue(result["unchanged_helpers"])
@@ -141,7 +145,9 @@ class HarnessEvaluationTests(unittest.TestCase):
 
             result = grade_workspace(workspace, WHITESPACE_FIXTURE, task="whitespace_normalization")
 
-        self.assertTrue(result["unit_tests_passed"])
+        self.assertIsNone(result["unit_tests_passed"])
+        self.assertTrue(result["regression_pass"])
+        self.assertTrue(result["functional_pass"])
         self.assertTrue(result["behavioral_probe_passed"])
         self.assertFalse(result["required_tests_present"])
         self.assertFalse(result["success"])
@@ -183,7 +189,9 @@ class HarnessEvaluationTests(unittest.TestCase):
 
             result = grade_workspace(workspace, ENV_PARSER_FIXTURE, task="dotenv_line_parser")
 
-        self.assertTrue(result["unit_tests_passed"])
+        self.assertIsNone(result["unit_tests_passed"])
+        self.assertTrue(result["regression_pass"])
+        self.assertTrue(result["functional_pass"])
         self.assertTrue(result["behavioral_probe_passed"])
         self.assertTrue(result["required_tests_present"])
         self.assertTrue(result["unchanged_helpers"])
@@ -198,7 +206,9 @@ class HarnessEvaluationTests(unittest.TestCase):
 
             result = grade_workspace(workspace, ENV_PARSER_FIXTURE, task="dotenv_line_parser")
 
-        self.assertTrue(result["unit_tests_passed"])
+        self.assertIsNone(result["unit_tests_passed"])
+        self.assertTrue(result["regression_pass"])
+        self.assertTrue(result["functional_pass"])
         self.assertTrue(result["behavioral_probe_passed"])
         self.assertFalse(result["required_tests_present"])
         self.assertFalse(result["success"])
@@ -269,7 +279,7 @@ class HarnessEvaluationTests(unittest.TestCase):
             shutil.copytree(CONFIG_PRECEDENCE_FIXTURE, workspace)
             result = grade_workspace(workspace, CONFIG_PRECEDENCE_FIXTURE, task="config_precedence")
         self.assertFalse(result["success"])
-        self.assertFalse(result["unit_tests_passed"])
+        self.assertFalse(result["regression_pass"])
 
     def test_config_precedence_reference_passes(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -277,7 +287,8 @@ class HarnessEvaluationTests(unittest.TestCase):
             shutil.copytree(CONFIG_PRECEDENCE_FIXTURE, workspace)
             self.implement_config_precedence(workspace)
             result = grade_workspace(workspace, CONFIG_PRECEDENCE_FIXTURE, task="config_precedence")
-        self.assertTrue(result["unit_tests_passed"], f"Unit tests failed: {result['test_output']}")
+        self.assertTrue(result["regression_pass"], f"Trusted regression tests failed: {result['test_output']}")
+        self.assertIsNone(result["unit_tests_passed"])
         self.assertTrue(result["behavioral_probe_passed"], f"Probe failed: {result['behavioral_probe_stderr']}")
         self.assertTrue(result["required_tests_present"])
         self.assertTrue(result["unchanged_helpers"])
@@ -371,7 +382,7 @@ class HarnessEvaluationTests(unittest.TestCase):
             shutil.copytree(RETRY_POLICY_FIXTURE, workspace)
             result = grade_workspace(workspace, RETRY_POLICY_FIXTURE, task="retry_policy")
         self.assertFalse(result["success"])
-        self.assertFalse(result["unit_tests_passed"])
+        self.assertFalse(result["regression_pass"])
 
     def test_retry_policy_reference_passes(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -379,7 +390,8 @@ class HarnessEvaluationTests(unittest.TestCase):
             shutil.copytree(RETRY_POLICY_FIXTURE, workspace)
             self.implement_retry_policy(workspace)
             result = grade_workspace(workspace, RETRY_POLICY_FIXTURE, task="retry_policy")
-        self.assertTrue(result["unit_tests_passed"], f"Unit tests failed: {result['test_output']}")
+        self.assertTrue(result["regression_pass"], f"Trusted regression tests failed: {result['test_output']}")
+        self.assertIsNone(result["unit_tests_passed"])
         self.assertTrue(result["behavioral_probe_passed"], f"Probe failed: {result['behavioral_probe_stderr']}")
         self.assertTrue(result["required_tests_present"])
         self.assertTrue(result["unchanged_helpers"])
@@ -471,7 +483,7 @@ class HarnessEvaluationTests(unittest.TestCase):
             shutil.copytree(PACKAGE_REFACTOR_FIXTURE, workspace)
             result = grade_workspace(workspace, PACKAGE_REFACTOR_FIXTURE, task="package_refactor")
         self.assertFalse(result["success"])
-        self.assertFalse(result["unit_tests_passed"])
+        self.assertFalse(result["regression_pass"])
 
     def test_package_refactor_reference_passes(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -479,7 +491,8 @@ class HarnessEvaluationTests(unittest.TestCase):
             shutil.copytree(PACKAGE_REFACTOR_FIXTURE, workspace)
             self.implement_package_refactor(workspace)
             result = grade_workspace(workspace, PACKAGE_REFACTOR_FIXTURE, task="package_refactor")
-        self.assertTrue(result["unit_tests_passed"], f"Unit tests failed: {result['test_output']}")
+        self.assertTrue(result["regression_pass"], f"Trusted regression tests failed: {result['test_output']}")
+        self.assertIsNone(result["unit_tests_passed"])
         self.assertTrue(result["behavioral_probe_passed"], f"Probe failed: {result['behavioral_probe_stderr']}")
         self.assertTrue(result["required_tests_present"])
         self.assertTrue(result["unchanged_helpers"])
@@ -567,7 +580,9 @@ class HarnessEvaluationTests(unittest.TestCase):
             result = grade_workspace(workspace, FIXTURE)
             self.assertTrue(result["divide_tests_present"], f"Failed for variants: {variant_names}")
             self.assertTrue(result["required_tests_present"])
-            self.assertTrue(result["unit_tests_passed"])
+            self.assertIsNone(result["unit_tests_passed"])
+            self.assertTrue(result["regression_pass"])
+            self.assertTrue(result["functional_pass"])
             self.assertTrue(result["behavioral_probe_passed"])
             self.assertTrue(result["unchanged_helpers"])
             self.assertTrue(result["changes_scoped"])
@@ -598,7 +613,7 @@ class HarnessEvaluationTests(unittest.TestCase):
         self.assertFalse(passed)
         self.assertIn("No evaluation suite or inline probe found", stderr)
 
-    def test_tampered_workspace_tests_detected_by_held_out_probe(self) -> None:
+    def test_candidate_authored_tests_cannot_hide_a_functional_failure(self) -> None:
         temp, workspace = self.workspace()
         self.addCleanup(temp.cleanup)
         (workspace / "src" / "calculator.py").write_text(
@@ -622,12 +637,13 @@ class HarnessEvaluationTests(unittest.TestCase):
             encoding="utf-8",
         )
         result = grade_workspace(workspace, FIXTURE)
-        self.assertTrue(result["workspace_tests_passed"])
+        self.assertIsNone(result["workspace_tests_passed"])
         self.assertFalse(result["held_out_tests_passed"])
+        self.assertFalse(result["functional_pass"])
         self.assertFalse(result["behavioral_probe_passed"])
         self.assertFalse(result["success"])
 
-    def test_stripped_workspace_tests_regression_detected_by_baseline(self) -> None:
+    def test_trusted_regression_tests_detect_source_breakage_after_candidate_test_removal(self) -> None:
         temp, workspace = self.workspace()
         self.addCleanup(temp.cleanup)
         self.implement_divide(workspace)
@@ -654,9 +670,9 @@ class HarnessEvaluationTests(unittest.TestCase):
             encoding="utf-8",
         )
         result = grade_workspace(workspace, FIXTURE)
-        self.assertTrue(result["workspace_tests_passed"])
+        self.assertIsNone(result["workspace_tests_passed"])
         self.assertFalse(result["baseline_tests_passed"])
-        self.assertFalse(result["unit_tests_passed"])
+        self.assertIsNone(result["unit_tests_passed"])
         self.assertFalse(result["success"])
 
     def test_grade_workspace_granular_keys_presence(self) -> None:
@@ -665,9 +681,11 @@ class HarnessEvaluationTests(unittest.TestCase):
         self.implement_divide(workspace)
 
         result = grade_workspace(workspace, FIXTURE)
-        for key in ("workspace_tests_passed", "baseline_tests_passed", "held_out_tests_passed"):
+        for key in ("functional_pass", "regression_pass", "integrity_pass", "scope_pass", "workflow_pass"):
             self.assertIn(key, result)
-            self.assertIsInstance(result[key], bool)
+            self.assertIsInstance(result[key], (bool, type(None)))
+        self.assertEqual(result["grader_protocol_version"], "pristine-workspace-v1")
+        self.assertFalse(result["comparable_with_legacy"])
 
 
 if __name__ == "__main__":

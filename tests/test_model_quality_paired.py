@@ -224,17 +224,18 @@ class ModelQualityPairedTests(unittest.TestCase):
         self.assertFalse(gate["passed"])
         self.assertEqual(gate["mode_changes"], ["protected.py"])
 
-    def test_mode_change_skips_independent_grader(self) -> None:
+    def test_final_grader_owns_mode_change_detection(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             target = root / "protected.py"
             target.write_text("value = 1\n", encoding="utf-8")
             baseline = {"protected.py": target.stat().st_mode & 0o777}
             target.chmod((baseline["protected.py"] ^ 0o111) & 0o777)
-            with mock.patch.object(paired, "_independent_grade") as grader:
+            result = {"success": False, "integrity_pass": False, "scope_pass": False, "grader_skipped": True}
+            with mock.patch.object(paired, "_independent_grade", return_value=result) as grader:
                 grade, _ = paired._grade_workspace_when_safe(root, root, "calculator_division", root, baseline)
         self.assertTrue(grade["grader_skipped"])
-        grader.assert_not_called()
+        grader.assert_called_once()
 
     def test_pregrader_guard_allows_new_allowed_file_with_normal_mode(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -267,7 +268,10 @@ class ModelQualityPairedTests(unittest.TestCase):
             (workspace / "src" / "metrics.py").write_text("def summarize_metrics(): pass\n", encoding="utf-8")
             base_modes = paired._file_modes(baseline)
 
-            with mock.patch.object(paired, "_independent_grade", return_value={"success": True}) as grader:
+            with mock.patch.object(paired, "_independent_grade", return_value={
+                "success": True, "integrity_pass": True, "scope_pass": True,
+                "grader_protocol_version": "pristine-workspace-v1",
+            }) as grader:
                 grade, gate = paired._grade_workspace_when_safe(workspace, baseline, "package_refactor", root, base_modes)
         self.assertTrue(gate["passed"])
         self.assertFalse(grade.get("grader_skipped", False))
@@ -284,34 +288,27 @@ class ModelQualityPairedTests(unittest.TestCase):
             except (OSError, NotImplementedError) as error:
                 self.skipTest(f"symlink creation unavailable: {error}")
             gate = pregrade_workspace_gate(root, {})
-            with mock.patch.object(paired, "_independent_grade") as grader:
+            result = {"success": False, "integrity_pass": False, "scope_pass": False, "grader_skipped": True}
+            with mock.patch.object(paired, "_independent_grade", return_value=result) as grader:
                 grade, _ = paired._grade_workspace_when_safe(root, root, "calculator_division", root, {})
             outside.unlink()
         self.assertFalse(gate["passed"])
         self.assertEqual(gate["symlinks"], ["linked.py"])
         self.assertTrue(grade["grader_skipped"])
-        grader.assert_not_called()
+        grader.assert_called_once()
 
-    def test_protected_content_is_checked_before_any_grader_access(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            baseline = root / "baseline"
-            workspace = root / "workspace"
-            for directory in (baseline, workspace):
-                (directory / "src").mkdir(parents=True)
-                (directory / "tests").mkdir()
-                (directory / "src/calculator.py").write_text("def calculate(): return 1\n", encoding="utf-8")
-                (directory / "tests/test_calculator.py").write_text("assert True\n", encoding="utf-8")
-                (directory / "README.txt").write_text("protected\n", encoding="utf-8")
-            (workspace / "README.txt").write_text("changed before grader\n", encoding="utf-8")
-            modes = paired._file_modes(baseline)
-            with mock.patch.object(paired, "_independent_grade") as grader:
-                grade, gate = paired._grade_workspace_when_safe(workspace, baseline,
-                                                                 "calculator_division", root, modes)
-        self.assertFalse(gate["passed"])
-        self.assertEqual(gate["protected_files"]["protected_content_changes"], ["README.txt"])
-        self.assertTrue(grade["grader_skipped"])
-        grader.assert_not_called()
+    def test_paired_report_uses_only_central_grade_inspection(self) -> None:
+        grade = {
+            "integrity_pass": False,
+            "scope_pass": False,
+            "candidate_inspection": {"problems": []},
+            "integrity_details": {"protected_content_changes": ["README.txt"], "mode_changes": []},
+            "scope_details": {"unlisted_files": ["notes.txt"]},
+        }
+        report = paired._protected_files_report(grade)
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["protected_content_changes"], ["README.txt"])
+        self.assertEqual(report["unscoped_added_files"], ["notes.txt"])
 
     def test_workspace_root_symlink_is_rejected_before_grader_access(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -324,13 +321,13 @@ class ModelQualityPairedTests(unittest.TestCase):
                 os.symlink(outside, link, target_is_directory=True)
             except (OSError, NotImplementedError) as error:
                 self.skipTest(f"symlink creation unavailable: {error}")
-            with mock.patch.object(paired, "_independent_grade") as grader:
+            result = {"success": False, "integrity_pass": False, "scope_pass": False, "grader_skipped": True}
+            with mock.patch.object(paired, "_independent_grade", return_value=result) as grader:
                 grade, gate = paired._grade_workspace_when_safe(link, outside,
                                                                  "calculator_division", root, {})
         self.assertFalse(gate["passed"])
-        self.assertTrue(gate["root_symlink"])
         self.assertTrue(grade["grader_skipped"])
-        grader.assert_not_called()
+        grader.assert_called_once()
 
     def test_diagnostic_stops_end_calibration_but_quality_failure_does_not(self) -> None:
         self.assertFalse(fatal_diagnostic_stop({"strict_pass": False}))

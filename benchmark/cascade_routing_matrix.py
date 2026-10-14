@@ -29,7 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from benchmark.harness_eval import grade_workspace  # noqa: E402
+from benchmark.harness_eval import GRADER_PROTOCOL_VERSION, grade_workspace  # noqa: E402
 from benchmark.process_control import ProcessGroupStopError, stop_process_group  # noqa: E402
 from benchmark.run_observer import RunObserver, _is_secret  # noqa: E402
 from benchmark.harness_runner import (  # noqa: E402
@@ -313,6 +313,8 @@ def _observer_manifest(
             "benchmark/harness_runner.py",
             "benchmark/guarded_edit.py",
             "benchmark/harness_eval.py",
+            "benchmark/pristine_grading.py",
+            "benchmark/configs/grading/fixture-fingerprints-v1.json",
         )
     ]
     config_template = REPO_ROOT / "benchmark/configs/harnesses/opencode-subagents.json"
@@ -357,10 +359,11 @@ def _observer_manifest(
     return {
         "schema_version": "1",
         "protocol_id": OBSERVABILITY_PROTOCOL_ID,
+        "grader_protocol_version": GRADER_PROTOCOL_VERSION,
         "experiment": EXPERIMENT,
         "task_id": task,
         "fixture_id": fixture.relative_to(REPO_ROOT).as_posix(),
-        "grader_id": f"benchmark/harness_eval.py:{task}",
+        "grader_id": f"benchmark/pristine_grading.py:{GRADER_PROTOCOL_VERSION}:{task}",
         "scaffold_id": "opencode-build-agent-cascade",
         "generated_profiles": ["initial", "repair"],
         "harness": {"name": HARNESS, "version": HARNESS_VERSION, "status": "declared_only"},
@@ -398,7 +401,7 @@ def _observer_manifest(
         "capability_evidence_eligible": False,
         "filesystem_enforced": False,
         "network_enforced": False,
-        "pristine_regrade": False,
+        "pristine_regrade": True,
         "private_holdout": False,
         "hash_allowlist": hash_allowlist,
         "snapshot_hash_allowlist": snapshot_hash_allowlist,
@@ -803,7 +806,7 @@ def run_single_trial(
         grade_start = time.monotonic()
         try:
             # Exactly one private grade, after all agent and visible-test groups stop.
-            grade = grade_workspace(workspace, fixture_rel, task=task)
+            grade = grade_workspace(workspace, fixture_rel, task=task, artifact_dir=run_dir / "grader-artifacts")
             grade_success = bool(grade.get("success", False))
             grade_status = "passed" if grade_success else "failed"
         except Exception as exc:
@@ -899,6 +902,7 @@ def summarize_cascade_results(records: list[dict[str, Any]]) -> dict[str, Any]:
     git_sha, dirty = git_provenance(REPO_ROOT)
     return {
         "experiment": EXPERIMENT,
+        "grader_protocol_version": GRADER_PROTOCOL_VERSION,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "git_sha": git_sha,
         "source_dirty": dirty,
