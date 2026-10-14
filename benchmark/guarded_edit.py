@@ -2,10 +2,14 @@
 
 Implements deterministic safety gates for code modifications:
 1. File verification: rejects symlinks, checks file existence.
-2. Content integrity: verifies expected SHA-256 against on-disk state.
-3. Uniqueness enforcement: search block must occur exactly once in target file.
-4. Syntax leak guard: detects conversational markdown artifacts.
-5. AST helper preservation: blocks accidental unscoped deletion of existing helper functions.
+2. Path scope: confines targets and block inputs to a workspace root.
+3. Content integrity: verifies expected SHA-256 against on-disk state.
+4. Uniqueness enforcement: search block must occur exactly once in target file.
+5. Syntax leak guard: detects conversational markdown artifacts.
+6. AST helper preservation: blocks accidental unscoped deletion of existing helper functions.
+
+Path checks are an application guard, not an OS sandbox, and do not prevent
+path swaps by a hostile concurrent process.
 """
 from __future__ import annotations
 
@@ -18,7 +22,9 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import sys
+import tempfile
 
 SYNTAX_LEAK_PATTERNS = [
     re.compile(r"\(End of file.*\)", re.IGNORECASE),
@@ -37,6 +43,7 @@ class EditStatus(str, Enum):
     ZERO_OCCURRENCES = "zero_occurrences"
     MULTIPLE_OCCURRENCES = "multiple_occurrences"
     SYMLINK_REJECTED = "symlink_rejected"
+    PATH_OUTSIDE_WORKSPACE = "path_outside_workspace"
     SYNTAX_LEAK = "syntax_leak"
     HELPER_DELETION_VIOLATION = "helper_deletion_violation"
     INVALID_SYNTAX = "invalid_syntax"
@@ -58,6 +65,117 @@ class EditResult:
             "diff": self.diff,
             "error_message": self.error_message,
         }
+
+
+class _WorkspacePathError(ValueError):
+    def __init__(self, status: EditStatus, message: str) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+def _is_link_or_junction(path: Path) -> bool:
+    if path.is_symlink():
+        return True
+    is_junction = getattr(path, "is_junction", None)
+    return bool(is_junction and is_junction())
+
+
+def _resolve_workspace_path(path: Path, workspace_root: Path) -> Path:
+    """Resolve a candidate path while rejecting escapes and linked components."""
+    try:
+        root = Path(workspace_root).resolve(strict=True)
+    except (OSError, RuntimeError) as err:
+        raise _WorkspacePathError(
+            EditStatus.PATH_OUTSIDE_WORKSPACE,
+            f"Workspace root cannot be resolved: {workspace_root}",
+        ) from err
+    if not root.is_dir():
+        raise _WorkspacePathError(
+            EditStatus.PATH_OUTSIDE_WORKSPACE,
+            f"Workspace root is not a directory: {root}",
+        )
+
+    candidate = Path(path)
+    if candidate.is_absolute():
+        try:
+            relative = candidate.relative_to(root)
+        except ValueError as err:
+            raise _WorkspacePathError(
+                EditStatus.PATH_OUTSIDE_WORKSPACE,
+                f"Path is outside the workspace: {path}",
+            ) from err
+    else:
+        if candidate.drive or candidate.root:
+            raise _WorkspacePathError(
+                EditStatus.PATH_OUTSIDE_WORKSPACE,
+                f"Path is outside the workspace: {path}",
+            )
+        relative = candidate
+
+    current = root
+    for part in relative.parts:
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if current == root:
+                raise _WorkspacePathError(
+                    EditStatus.PATH_OUTSIDE_WORKSPACE,
+                    f"Path is outside the workspace: {path}",
+                )
+            current = current.parent
+            continue
+
+        current = current / part
+        try:
+            linked = _is_link_or_junction(current)
+        except OSError as err:
+            raise _WorkspacePathError(
+                EditStatus.PATH_OUTSIDE_WORKSPACE,
+                f"Path cannot be inspected safely: {path}",
+            ) from err
+        if linked:
+            raise _WorkspacePathError(
+                EditStatus.SYMLINK_REJECTED,
+                f"Modifications through symlinks are prohibited: {current}",
+            )
+        try:
+            current.relative_to(root)
+        except ValueError as err:
+            raise _WorkspacePathError(
+                EditStatus.PATH_OUTSIDE_WORKSPACE,
+                f"Path is outside the workspace: {path}",
+            ) from err
+
+    try:
+        resolved = current.resolve(strict=False)
+        resolved.relative_to(root)
+    except (OSError, RuntimeError, ValueError) as err:
+        raise _WorkspacePathError(
+            EditStatus.SYMLINK_REJECTED,
+            f"Path cannot be resolved within the workspace: {path}",
+        ) from err
+    return resolved
+
+
+def _emit_cli_error(
+    json_output: bool,
+    status: EditStatus,
+    message: str,
+    *,
+    include_edit_fields: bool = False,
+) -> None:
+    if json_output:
+        payload: dict[str, str | bool | None] = {
+            "success": False,
+            "status": status.value,
+            "error_message": message,
+        }
+        if include_edit_fields:
+            payload["new_sha256"] = None
+            payload["diff"] = None
+        print(json.dumps(payload, indent=2))
+    else:
+        sys.stderr.write(f"Operation failed ({status.value}): {message}\n")
 
 
 def check_syntax_leak(content: str) -> list[str]:
@@ -101,8 +219,19 @@ def apply_guarded_edit(
     replacement_block: str,
     *,
     allow_helper_deletion: bool = False,
+    workspace_root: Path | None = None,
 ) -> EditResult:
-    """Safely applies a unique search-and-replace edit with deterministic pre-checks."""
+    """Apply one unique edit; workspace_root defaults to cwd for trusted callers."""
+    try:
+        root = Path.cwd() if workspace_root is None else Path(workspace_root)
+        file_path = _resolve_workspace_path(file_path, root)
+    except _WorkspacePathError as err:
+        return EditResult(
+            success=False,
+            status=err.status,
+            error_message=str(err),
+        )
+
     if not search_block:
         return EditResult(
             success=False,
@@ -211,11 +340,30 @@ def apply_guarded_edit(
                     error_message=f"Unscoped deletion of existing helper functions/classes: {sorted(missing_helpers)}",
                 )
 
-    # Write atomically
+    # Write atomically through a unique, exclusively-created file beside the target.
     new_bytes = new_content.encode("utf-8")
-    temp_path = file_path.with_suffix(file_path.suffix + ".tmp")
-    temp_path.write_bytes(new_bytes)
-    os.replace(temp_path, file_path)
+    target_mode = stat.S_IMODE(file_path.stat().st_mode)
+    temp_fd, temp_name = tempfile.mkstemp(
+        dir=file_path.parent,
+        prefix=f".{file_path.name}.",
+        suffix=".tmp",
+    )
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(temp_fd, "wb") as temp_file:
+            temp_file.write(new_bytes)
+            temp_file.flush()
+            if hasattr(os, "fchmod"):
+                os.fchmod(temp_file.fileno(), target_mode)
+            else:
+                os.chmod(temp_path, target_mode)
+        os.replace(temp_path, file_path)
+    except BaseException:
+        try:
+            temp_path.unlink()
+        except FileNotFoundError:
+            pass
+        raise
 
     new_sha = hashlib.sha256(new_bytes).hexdigest()
     return EditResult(
@@ -264,12 +412,40 @@ def main(argv: list[str] | None = None) -> int:
     except SystemExit as exc:
         return 0 if exc.code == 0 else 1
 
+    workspace_root = Path.cwd().resolve()
+    try:
+        file_path = _resolve_workspace_path(parsed.file, workspace_root)
+        search_file = (
+            _resolve_workspace_path(parsed.search_file, workspace_root)
+            if parsed.subcommand == "apply" and parsed.search_file is not None
+            else None
+        )
+        replace_file = (
+            _resolve_workspace_path(parsed.replace_file, workspace_root)
+            if parsed.subcommand == "apply" and parsed.replace_file is not None
+            else None
+        )
+        content_file = (
+            _resolve_workspace_path(parsed.content_file, workspace_root)
+            if parsed.subcommand == "check" and parsed.content_file is not None
+            else None
+        )
+    except _WorkspacePathError as err:
+        _emit_cli_error(
+            parsed.json,
+            err.status,
+            str(err),
+            include_edit_fields=parsed.subcommand == "apply",
+        )
+        return 1
+
     if parsed.subcommand == "apply":
         if parsed.search is not None:
             search_block = parsed.search
         else:
             try:
-                search_block = parsed.search_file.read_text(encoding="utf-8")
+                assert search_file is not None
+                search_block = search_file.read_text(encoding="utf-8")
             except OSError as err:
                 if parsed.json:
                     print(
@@ -289,7 +465,8 @@ def main(argv: list[str] | None = None) -> int:
             replacement_block = parsed.replace
         else:
             try:
-                replacement_block = parsed.replace_file.read_text(encoding="utf-8")
+                assert replace_file is not None
+                replacement_block = replace_file.read_text(encoding="utf-8")
             except OSError as err:
                 if parsed.json:
                     print(
@@ -306,11 +483,12 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
 
         res = apply_guarded_edit(
-            parsed.file,
+            file_path,
             expected_sha256=parsed.expected_sha,
             search_block=search_block,
             replacement_block=replacement_block,
             allow_helper_deletion=parsed.allow_helper_deletion,
+            workspace_root=workspace_root,
         )
 
         if parsed.json:
@@ -323,14 +501,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if res.success else 1
 
     if parsed.subcommand == "check":
-        file_path: Path = parsed.file
         content_specified = parsed.content is not None or parsed.content_file is not None
 
         if parsed.content is not None:
             code_to_check = parsed.content
         elif parsed.content_file is not None:
             try:
-                code_to_check = parsed.content_file.read_text(encoding="utf-8")
+                assert content_file is not None
+                code_to_check = content_file.read_text(encoding="utf-8")
             except OSError as err:
                 if parsed.json:
                     print(

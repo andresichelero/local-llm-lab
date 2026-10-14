@@ -25,6 +25,11 @@ from benchmark.guarded_edit import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _use_temporary_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+
 def test_empty_search_block(tmp_path: Path) -> None:
     target = tmp_path / "target.py"
     target.write_text("def hello(): pass\n", encoding="utf-8")
