@@ -133,3 +133,9 @@ This document records a design contract and current code state, not proof that a
 - [Research ledger](../../research/evaluation-v3-sources-20261013.md)
 - [Implementation plan](../plans/2026-10-13-evaluation-v3-plan.md)
 - External extraction/source hashes: D:/Usuario/Downloads/LLM/audit-session-20261013/evidence/evidence-manifest.json
+
+## 2026-10-14: pristine grading diagnostic checkpoint
+
+`pristine-workspace-v1` replays allowlisted candidate source into a fingerprinted fixture and does not execute candidate-authored tests as the trusted suite. Its 29 expected control cases are useful ordinary behavior and structure checks. The runner-forgery proof nevertheless demonstrated a wrong implementation passing all five gates and aggregate `success` after candidate code patched `unittest`; runtime result authentication remains open. Keep `runtime_result_authenticated=false`, `aggregate_is_security_proof=false`, `private_holdout=false`, and `capability_evidence_eligible=false`. This checkpoint is not a capability result and is not comparable with historical direct-workspace grades.
+
+At source commit `489c0d57ca5f58ca742117759f4abf99fc4b7a6a`, the full suite passed (298 tests and 19 subtests), as did Ruff 0.15.17, Python 3.12.3 compileall, and `bash -n` on 41 files in a Git-aware WSL ext4 clone. The 29-control matrix passed with zero assertion failures after correcting one stale field name in a copied external driver; the initial schema-mismatch run remains preserved and is not reclassified. These checks do not close the runner-forgery finding. See the [pristine grading protocol](pristine-grading-protocol.md), [validation report](../../results/reports/pristine-grading-validation-20261013.md), and [metadata-only evidence index](../../results/reports/pristine-grading-validation-evidence-index-20261014.json).
