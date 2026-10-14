@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from benchmark.pristine_grading import (
-    GRADER_PROTOCOL_VERSION,
+    GRADER_PROTOCOL_VERSION as GRADER_PROTOCOL_VERSION,
     grade_pristine_workspace,
 )
 
