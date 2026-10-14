@@ -4,16 +4,19 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 try:
     from benchmark.harness_eval import (
         _verify_required_tests,
         grade_workspace,
+        grade_workspace_legacy,
         run_baseline_tests,
         run_held_out_tests,
     )
 except ImportError:
     grade_workspace = None  # type: ignore[assignment]
+    grade_workspace_legacy = None  # type: ignore[assignment]
     _verify_required_tests = None  # type: ignore[assignment]
     run_held_out_tests = None  # type: ignore[assignment]
     run_baseline_tests = None  # type: ignore[assignment]
@@ -603,6 +606,37 @@ class HarnessEvaluationTests(unittest.TestCase):
         passed, stdout, stderr = run_held_out_tests(workspace, "calculator_division")
         self.assertTrue(passed, f"Held-out probe failed: {stderr}")
 
+    def test_held_out_compatibility_runner_rejects_native_candidate_imports(self) -> None:
+        temp, workspace = self.workspace()
+        self.addCleanup(temp.cleanup)
+        marker = Path(temp.name) / "candidate-import-ran.txt"
+        (workspace / "src" / "calculator.py").write_text(
+            "from pathlib import Path\n"
+            f"Path({str(marker)!r}).write_text('candidate import ran')\n"
+            "def add(a, b): return a + b\n"
+            "def multiply(a, b): return a * b\n"
+            "def divide(a, b): return a / b\n",
+            encoding="utf-8",
+        )
+
+        passed, _stdout, stderr = run_held_out_tests(workspace, "calculator_division")
+
+        self.assertFalse(passed, stderr)
+        self.assertFalse(marker.exists())
+
+    def test_legacy_grader_name_reports_historical_unavailable_without_execution(self) -> None:
+        from benchmark import harness_eval
+
+        with patch.object(harness_eval, "grade_pristine_workspace") as current_grader:
+            result = grade_workspace_legacy(Path("unused-workspace"), FIXTURE)
+
+        current_grader.assert_not_called()
+        self.assertFalse(result["success"])
+        self.assertEqual(result["evaluation_status"], "historical_only_unavailable")
+        self.assertEqual(result["legacy_reference_commit"], "1808da3")
+        self.assertFalse(result["legacy_execution_available"])
+        self.assertIsNone(result["functional_pass"])
+
     def test_held_out_tests_runner_missing_suite_fallback_and_unknown(self) -> None:
         self.assertIsNotNone(run_held_out_tests)
         temp, workspace = self.workspace()
@@ -684,7 +718,7 @@ class HarnessEvaluationTests(unittest.TestCase):
         for key in ("functional_pass", "regression_pass", "integrity_pass", "scope_pass", "workflow_pass"):
             self.assertIn(key, result)
             self.assertIsInstance(result[key], (bool, type(None)))
-        self.assertEqual(result["grader_protocol_version"], "pristine-workspace-v1")
+        self.assertEqual(result["grader_protocol_version"], "restricted-python-workspace-v2")
         self.assertFalse(result["comparable_with_legacy"])
 
 

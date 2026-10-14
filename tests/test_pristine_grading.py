@@ -5,10 +5,12 @@ import json
 import marshal
 import shutil
 import struct
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from benchmark import pristine_grading
 from benchmark.harness_eval import grade_workspace
@@ -19,7 +21,113 @@ FIXTURE = ROOT / "benchmark" / "fixtures" / "harness_task"
 
 
 class PristineGradingRegressionTests(unittest.TestCase):
-    def test_temporary_cleanup_failure_reports_retained_root_and_allows_manual_cleanup(self) -> None:
+    def test_scoped_candidate_imports_restore_preexisting_sys_modules_bindings(self) -> None:
+        previous_src_names = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == "src" or name.startswith("src.")
+        }
+        prior_package = types.ModuleType("src")
+        prior_package.__path__ = []  # type: ignore[attr-defined]
+        prior_calculator = types.ModuleType("src.calculator")
+        prior_package.calculator = prior_calculator
+        sys.modules["src"] = prior_package
+        sys.modules["src.calculator"] = prior_calculator
+        try:
+            with tempfile.TemporaryDirectory() as temporary:
+                workspace = Path(temporary) / "workspace"
+                shutil.copytree(FIXTURE, workspace)
+                result = grade_workspace(workspace, FIXTURE)
+
+            self.assertTrue(result["regression_pass"], result)
+            restored_src_names = {
+                name: module
+                for name, module in sys.modules.items()
+                if name == "src" or name.startswith("src.")
+            }
+            self.assertEqual(restored_src_names, {**previous_src_names, "src": prior_package,
+                                                  "src.calculator": prior_calculator})
+            self.assertIs(sys.modules["src"], prior_package)
+            self.assertIs(sys.modules["src.calculator"], prior_calculator)
+        finally:
+            for name in tuple(sys.modules):
+                if name == "src" or name.startswith("src."):
+                    sys.modules.pop(name, None)
+            sys.modules.update(previous_src_names)
+
+    def test_runner_forgery_is_rejected_before_any_trusted_test_executes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = root / "workspace"
+            marker = root / "candidate-test-ran.txt"
+            shutil.copytree(FIXTURE, workspace)
+            (workspace / "src" / "calculator.py").write_text(
+                "import unittest\n"
+                "unittest.TestResult.wasSuccessful = lambda self: True\n\n"
+                "def add(a: float, b: float) -> float:\n    return a + b\n\n"
+                "def multiply(a: float, b: float) -> float:\n    return a * b\n\n"
+                "def divide(a: float, b: float) -> float:\n    return 0.0\n",
+                encoding="utf-8",
+            )
+            (workspace / "tests" / "test_calculator.py").write_text(
+                "from pathlib import Path\n"
+                f"Path({str(marker)!r}).write_text('candidate tests ran')\n"
+                "class CandidateTests:\n"
+                "    def test_divide_positive(self): pass\n"
+                "    def test_divide_negative(self): pass\n"
+                "    def test_divide_by_zero(self): pass\n",
+                encoding="utf-8",
+            )
+
+            result = grade_workspace(workspace, FIXTURE)
+
+            self.assertFalse(result["success"], result)
+            self.assertEqual(result.get("candidate_language_contract"), "restricted-python-workspace-v2")
+            self.assertEqual(result.get("evaluation_status"), "unsupported_syntax")
+            self.assertEqual(result.get("regression_details", {}).get("test_count"), 0)
+            self.assertFalse(result["runtime_result_authenticated"], result)
+            self.assertFalse(result["candidate_tests_executed"], result)
+            self.assertFalse(marker.exists())
+
+    def test_alternative_native_import_side_effect_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = root / "workspace"
+            marker = root / "candidate-import-ran.txt"
+            shutil.copytree(FIXTURE, workspace)
+            (workspace / "src" / "calculator.py").write_text(
+                "from pathlib import Path\n"
+                f"Path({str(marker)!r}).write_text('candidate import ran')\n"
+                "def add(a: float, b: float) -> float:\n    return a + b\n\n"
+                "def multiply(a: float, b: float) -> float:\n    return a * b\n\n"
+                "def divide(a, b): return a / b\n",
+                encoding="utf-8",
+            )
+
+            result = grade_workspace(workspace, FIXTURE)
+
+            self.assertEqual(result.get("evaluation_status"), "unsupported_syntax")
+            self.assertFalse(result["runtime_result_authenticated"], result)
+            self.assertFalse(marker.exists())
+
+    def test_interpreter_budget_exhaustion_is_not_reported_as_a_functional_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary) / "workspace"
+            shutil.copytree(FIXTURE, workspace)
+            (workspace / "src" / "calculator.py").write_text(
+                "def add(a: float, b: float) -> float:\n    return a + b\n\n"
+                "def multiply(a: float, b: float) -> float:\n    return a * b\n\n"
+                "def divide(a, b):\n    while True:\n        pass\n",
+                encoding="utf-8",
+            )
+
+            result = grade_workspace(workspace, FIXTURE)
+
+            self.assertEqual(result["functional_details"]["status"], "execution_limit", result)
+            self.assertEqual(result["evaluation_status"], "execution_limit", result)
+            self.assertTrue(result["runtime_result_authenticated"], result)
+
+    def test_temporary_cleanup_failure_reports_empty_retained_root_and_allows_manual_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary) / "workspace"
             shutil.copytree(FIXTURE, workspace)
@@ -37,7 +145,7 @@ class PristineGradingRegressionTests(unittest.TestCase):
                 self.assertEqual(result["artifact_retention"], "failed", result)
                 self.assertEqual(result["artifact_cleanup_error"], "OSError", result)
                 self.assertFalse(result["artifacts_retained"], result)
-                self.assertTrue(result["partial_artifacts_retained"], result)
+                self.assertFalse(result["partial_artifacts_retained"], result)
                 self.assertEqual(Path(result["artifact_path"]), cleanup_roots[0])
                 self.assertTrue(cleanup_roots[0].is_dir())
             finally:
@@ -56,81 +164,28 @@ class PristineGradingRegressionTests(unittest.TestCase):
             preflight_failure = grade_workspace(workspace, copied_fixture)
 
         for result in (normal, preflight_failure):
-            self.assertFalse(result["runtime_result_authenticated"], result)
+            self.assertEqual(result["candidate_language_contract"], "restricted-python-workspace-v2")
             self.assertFalse(result["adversarial_evaluation_validated"], result)
             self.assertFalse(result["aggregate_is_security_proof"], result)
-            self.assertIn("false_positives_possible", result["aggregate_interpretation"])
-            self.assertEqual(
-                result["result_authentication_semantics"],
-                "not_authenticated_against_hostile_candidate_source",
-            )
             self.assertEqual(
                 result["integrity_semantics"],
                 "static_workspace_structure_and_protected_files_only",
             )
+        self.assertTrue(normal["runtime_result_authenticated"], normal)
+        self.assertFalse(preflight_failure["runtime_result_authenticated"], preflight_failure)
+        self.assertIn("not a security proof", normal["aggregate_interpretation"])
 
-    def test_trusted_suite_does_not_accept_candidate_printed_unittest_banner(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            tests = root / "tests"
-            tests.mkdir()
-            (tests / "test_fake.py").write_text(
-                "print('Ran 4 tests in 0.001s\\n\\nOK')\n"
-                "raise SystemExit(0)\n",
-                encoding="utf-8",
-            )
-            grade_root = root / "grade"
-            grade_root.mkdir()
-            command = pristine_grading._trusted_unittest_command(tests, "test*.py")
-
-            result = pristine_grading._run_trusted_suite(
-                command,
-                cwd=root,
-                environment=pristine_grading._isolated_environment(grade_root, root),
-                timeout_seconds=5,
-            )
-
-            self.assertFalse(result["passed"], result)
-            self.assertFalse(result["runner_success"], result)
-            self.assertGreater(result["test_count"], 0, result)
-
-    def test_runner_io_error_still_stops_spawned_process_group(self) -> None:
-        process = Mock()
-        process.communicate.side_effect = OSError("pipe read failed")
-        process.returncode = 0
-        with patch.object(pristine_grading.subprocess, "Popen", return_value=process), patch.object(
-            pristine_grading, "stop_process_group", return_value=0
-        ) as stop_group:
-            result = pristine_grading._run_trusted_suite(
-                ["python", "-c", "pass"],
-                cwd=Path.cwd(),
-                environment={},
-                timeout_seconds=1,
-            )
-
-        stop_group.assert_called_once_with(process, grace_seconds=0.5)
-        self.assertTrue(result["cleanup_verified"], result)
-        self.assertFalse(result["passed"], result)
-
-    def test_unverified_regression_cleanup_skips_final_behavior_probe(self) -> None:
+    def test_missing_fingerprinted_probe_is_an_infrastructure_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary) / "workspace"
             shutil.copytree(FIXTURE, workspace)
-            fake_regression = {
-                "passed": False,
-                "reason": "process_group_cleanup_unverified",
-                "output": "",
-                "test_count": None,
-                "cleanup_verified": False,
-            }
-            with patch.object(
-                pristine_grading, "_run_trusted_suite", return_value=fake_regression
-            ) as run_suite:
+            with patch.object(pristine_grading, "_verify_probe", side_effect=OSError("missing probe")):
                 result = grade_workspace(workspace, FIXTURE)
 
-            run_suite.assert_called_once()
-            self.assertIsNone(result["functional_pass"], result)
-            self.assertTrue(result["grader_skipped"], result)
+            self.assertTrue(result["regression_pass"], result)
+            self.assertFalse(result["functional_pass"], result)
+            self.assertEqual(result["functional_details"]["status"], "infrastructure_failure")
+            self.assertFalse(result["runtime_result_authenticated"], result)
 
     def test_timestamp_valid_cached_implementation_cannot_replace_candidate_source(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -321,12 +376,13 @@ class PristineGradingRegressionTests(unittest.TestCase):
             self.assertIn("src/calculator.py", (artifact_root / "source-only.patch").read_text(encoding="utf-8"))
             self.assertNotIn("tests/test_calculator.py", (artifact_root / "source-only.patch").read_text(encoding="utf-8"))
             manifest = json.loads((artifact_root / "replay-manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["grader_protocol_version"], "pristine-workspace-v1")
+            self.assertEqual(manifest["grader_protocol_version"], "restricted-python-workspace-v2")
             self.assertFalse(manifest["candidate_tests_executed"])
-            self.assertFalse(manifest["runtime_result_authenticated"])
+            self.assertTrue(manifest["runtime_result_authenticated"])
             self.assertFalse(manifest["adversarial_evaluation_validated"])
             self.assertFalse(manifest["aggregate_is_security_proof"])
-            self.assertIn("false_positives_possible", manifest["aggregate_interpretation"])
+            self.assertIn("not a security proof", manifest["aggregate_interpretation"])
+            self.assertEqual(manifest["candidate_language_contract"], "restricted-python-workspace-v2")
             self.assertEqual(
                 manifest["integrity_semantics"],
                 "static_workspace_structure_and_protected_files_only",

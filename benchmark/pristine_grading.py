@@ -1,36 +1,36 @@
-"""Source-only final grading against fingerprinted task fixtures.
+"""Grade candidate source with fingerprinted checks in a restricted interpreter.
 
-This module does not provide OS or network isolation. Candidate tests are parsed
-for workflow evidence but are never imported or executed. Candidate source still
-shares an interpreter with the test runner, so runtime results are not
-authenticated against hostile candidate code. The ``success`` aggregate is a
-compatibility diagnostic only; false positives remain possible until a separate
-evaluator authority boundary exists.
+Candidate tests are inspected for workflow evidence but never imported or run.
+Only fingerprinted fixture and probe files are compiled as native Python in a
+scoped import environment; candidate modules are interpreted by the restricted
+Python runtime. This does not claim general CPython behavior or OS isolation.
 """
 from __future__ import annotations
 
 import ast
 import difflib
 import hashlib
+import io
 import json
 import os
 import shutil
 import stat
-import subprocess
 import sys
 import tempfile
+import threading
+import types
+import unittest
 import uuid
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
-from benchmark.process_control import stop_process_group
+from benchmark.restricted_python import ExecutionLimitError, UnsupportedSyntaxError, load_modules
 from benchmark.run_observer import _is_secret
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-GRADER_PROTOCOL_VERSION = "pristine-workspace-v1"
-FINGERPRINT_MANIFEST = REPO_ROOT / "benchmark/configs/grading/fixture-fingerprints-v1.json"
-EVAL_SUITES_DIR = REPO_ROOT / "benchmark/eval_suites"
+GRADER_PROTOCOL_VERSION = "restricted-python-workspace-v2"
+FINGERPRINT_MANIFEST = REPO_ROOT / "benchmark/configs/grading/fixture-fingerprints-v2.json"
 MAX_CANDIDATE_FILE_BYTES = 4 * 1024 * 1024
 OUTPUT_LIMIT = 4000
 
@@ -215,11 +215,25 @@ def _load_manifest() -> dict[str, Any]:
         raise ValueError(f"fixture_fingerprint_manifest_unavailable:{type(error).__name__}") from error
     if not isinstance(manifest, dict):
         raise ValueError("fixture fingerprint manifest is not an object")
-    if manifest.get("schema_version") != 1 or manifest.get("grader_protocol_version") != GRADER_PROTOCOL_VERSION:
+    if manifest.get("schema_version") != 2 or manifest.get("grader_protocol_version") != GRADER_PROTOCOL_VERSION:
         raise ValueError("unsupported fixture fingerprint manifest")
     tasks = manifest.get("tasks")
     if not isinstance(tasks, dict) or set(tasks) != set(TASK_POLICIES):
         raise ValueError("fixture fingerprint task set does not match grader policy")
+    for task, policy in TASK_POLICIES.items():
+        record = tasks[task].get("probe") if isinstance(tasks[task], dict) else None
+        expected_file = f"benchmark/eval_suites/{policy['suite']}/test_probe.py"
+        if (
+            not isinstance(record, dict)
+            or set(record) != {"file", "size_bytes", "sha256"}
+            or record.get("file") != expected_file
+            or not isinstance(record.get("size_bytes"), int)
+            or isinstance(record.get("size_bytes"), bool)
+            or record.get("size_bytes", 0) <= 0
+            or not isinstance(record.get("sha256"), str)
+            or len(record["sha256"]) != 64
+        ):
+            raise ValueError(f"fixture probe fingerprint entry is invalid:{task}")
     return manifest
 
 
@@ -271,6 +285,20 @@ def _verify_fixture(task: str, baseline: Path, manifest: dict[str, Any]) -> tupl
         contents[relative] = raw
         modes[relative] = stat.S_IMODE(metadata.st_mode)
     return contents, modes
+
+
+def _verify_probe(task: str, manifest: dict[str, Any]) -> bytes:
+    record = manifest["tasks"][task]["probe"]
+    expected_relative = f"benchmark/eval_suites/{TASK_POLICIES[task]['suite']}/test_probe.py"
+    if record["file"] != expected_relative:
+        raise ValueError("trusted_probe_path_mismatch_in_manifest")
+    probe_path = REPO_ROOT / expected_relative
+    raw, metadata = _read_regular_file(probe_path, max_bytes=MAX_CANDIDATE_FILE_BYTES)
+    if not stat.S_ISREG(metadata.st_mode) or not raw.strip():
+        raise ValueError("empty_or_invalid_trusted_probe")
+    if len(raw) != record["size_bytes"] or _sha256(raw) != record["sha256"]:
+        raise ValueError("trusted_probe_fingerprint_mismatch")
+    return raw
 
 
 def _scan_candidate(workspace: Path) -> dict[str, Any]:
@@ -484,13 +512,15 @@ def _write_replay_artifacts(
     (artifact_root / "source-only.patch").write_text("".join(source_patches), encoding="utf-8")
     manifest = {
         "grader_protocol_version": GRADER_PROTOCOL_VERSION,
+        "candidate_language_contract": GRADER_PROTOCOL_VERSION,
         "task": task,
         "fixture": TASK_POLICIES[task]["fixture"],
-        "runtime_result_authenticated": False,
+        "runtime_result_authenticated": bool(result.get("runtime_result_authenticated")),
+        "evaluation_status": result.get("evaluation_status"),
         "adversarial_evaluation_validated": False,
         "aggregate_is_security_proof": False,
-        "aggregate_interpretation": "diagnostic_only_false_positives_possible_until_separate_authority_boundary",
-        "result_authentication_semantics": "not_authenticated_against_hostile_candidate_source",
+        "aggregate_interpretation": result.get("aggregate_interpretation"),
+        "result_authentication_semantics": result.get("result_authentication_semantics"),
         "integrity_semantics": "static_workspace_structure_and_protected_files_only",
         "candidate_tests_executed": False,
         "candidate_git_metadata_audited": False,
@@ -530,166 +560,176 @@ def _make_grade_root(artifact_dir: Path | None, workspace: Path, baseline: Path)
     return grade_root, False
 
 
-def _isolated_environment(grade_root: Path, replay: Path) -> dict[str, str]:
-    home = grade_root / "grader-home"
-    temporary = grade_root / "grader-tmp"
-    home.mkdir(exist_ok=False)
-    temporary.mkdir(exist_ok=False)
+_MODULE_IMPORT_LOCK = threading.RLock()
+
+
+class _TrustedTestResult(unittest.TextTestResult):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.interpreter_outcomes: set[str] = set()
+
+    def addError(self, test: unittest.case.TestCase, err: tuple[type[BaseException], BaseException, Any]) -> None:
+        error_type = err[0]
+        if isinstance(error_type, type) and issubclass(error_type, UnsupportedSyntaxError):
+            self.interpreter_outcomes.add("unsupported_syntax")
+        elif isinstance(error_type, type) and issubclass(error_type, ExecutionLimitError):
+            self.interpreter_outcomes.add("execution_limit")
+        super().addError(test, err)
+
+
+def _unrun_tests(status: str, reason: str) -> dict[str, Any]:
     return {
-        "PATH": os.defpath,
-        "PYTHONPATH": str(replay),
-        "PYTHONNOUSERSITE": "1",
-        "PYTHONDONTWRITEBYTECODE": "1",
-        "PYTHONUTF8": "1",
-        "HOME": str(home),
-        "TMPDIR": str(temporary),
-        "TEMP": str(temporary),
-        "TMP": str(temporary),
+        "passed": False,
+        "status": status,
+        "reason": reason,
+        "output": "",
+        "test_count": 0,
+        "result_authenticated": False,
     }
 
 
-def _test_count(output: str) -> int | None:
-    prefix = "PRISTINE_UNITTEST_RESULT="
-    for line in reversed(output.splitlines()):
-        if not line.startswith(prefix):
-            continue
-        try:
-            summary = json.loads(line[len(prefix):])
-        except (TypeError, json.JSONDecodeError):
-            return None
-        count = summary.get("actual_tests_run") if isinstance(summary, dict) else None
-        if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
-            return count
-        return None
-    return None
-
-
-_UNITTEST_RUNNER_BOOTSTRAP = r'''import json, sys, unittest
-marker = "PRISTINE_UNITTEST_RESULT="
-start_dir, pattern = sys.argv[1], sys.argv[2]
-loader = unittest.TestLoader()
-try:
-    suite = loader.discover(start_dir=start_dir, pattern=pattern, top_level_dir=start_dir)
-except BaseException as error:
-    print(marker + json.dumps({"actual_tests_run": 0, "success": False,
-                               "runner_error": type(error).__name__}, sort_keys=True))
-    raise SystemExit(1)
-result = unittest.TestResult()
-runner_error = None
-try:
-    suite.run(result)
-except BaseException as error:
-    runner_error = type(error).__name__
-success = (result.testsRun > 0 and result.wasSuccessful() and
-           not loader.errors and runner_error is None)
-print(marker + json.dumps({"actual_tests_run": result.testsRun, "success": success,
-                           "runner_error": runner_error,
-                           "loader_error_count": len(loader.errors)}, sort_keys=True))
-raise SystemExit(0 if success else 1)
-'''
-
-
-def _trusted_unittest_command(start_dir: Path, pattern: str) -> list[str]:
-    return [sys.executable, "-S", "-B", "-c", _UNITTEST_RUNNER_BOOTSTRAP, str(start_dir), pattern]
-
-
-def _run_trusted_suite(
-    command: list[str],
-    *,
-    cwd: Path,
-    environment: dict[str, str],
-    timeout_seconds: int,
-) -> dict[str, Any]:
-    """Run the fixed suite in a child process and return unauthenticated diagnostics.
-
-    Candidate source is imported into this child's interpreter. It can mutate
-    ``unittest``, forge the result marker, or terminate the process, so the
-    returned test count and pass state are not an authority boundary.
-    """
+def _run_fingerprinted_test_module(task: str, label: str, raw: bytes) -> dict[str, Any]:
+    module_name = f"_codex_trusted_{task}_{label}"
+    module = types.ModuleType(module_name)
+    module.__file__ = f"<fingerprinted:{task}:{label}>"
+    module.__package__ = ""
     try:
-        process = subprocess.Popen(
-            command,
-            cwd=cwd,
-            env=environment,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            start_new_session=True,
-        )
-    except OSError as error:
-        return {"passed": False, "reason": f"launch_failed:{type(error).__name__}",
-                "output": "", "test_count": None, "cleanup_verified": True}
+        source = raw.decode("utf-8")
+        # Only fixture and probe bytes already verified against the v2 manifest
+        # are passed to CPython's compiler. Candidate source never reaches here.
+        code = compile(source, module.__file__, "exec", dont_inherit=True)
+    except (SyntaxError, UnicodeError, ValueError) as error:
+        return _unrun_tests("infrastructure_failure", f"trusted_test_compile_failed:{type(error).__name__}")
 
-    timed_out = False
-    output = ""
-    failure_reason: str | None = None
-    cleanup_verified = True
+    sys.modules[module_name] = module
     try:
-        stdout, stderr = process.communicate(timeout=timeout_seconds)
-        output = f"{stdout}{stderr}"
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        failure_reason = "timed_out"
-    except OSError as error:
-        failure_reason = f"runner_io_failed:{type(error).__name__}"
-    finally:
-        try:
-            stop_process_group(process, grace_seconds=0.5)
-        except Exception as error:
-            cleanup_verified = False
-            failure_reason = f"process_group_cleanup_unverified:{type(error).__name__}"
-            try:
-                process.kill()
-                process.wait(timeout=2)
-            except (OSError, subprocess.TimeoutExpired):
-                pass
+        exec(code, module.__dict__)
+    except (ImportError, AttributeError) as error:
+        return {
+            "passed": False,
+            "status": "functional_failure",
+            "reason": f"candidate_import_failed:{type(error).__name__}",
+            "output": "",
+            "test_count": 0,
+            "result_authenticated": True,
+        }
+    except Exception as error:
+        return _unrun_tests("infrastructure_failure", f"trusted_test_load_failed:{type(error).__name__}")
 
-    if cleanup_verified:
-        try:
-            stdout, stderr = process.communicate(timeout=2)
-            output = f"{stdout}{stderr}"
-        except (OSError, subprocess.TimeoutExpired) as error:
-            failure_reason = f"runner_output_failed:{type(error).__name__}"
+    loader = unittest.TestLoader()
+    try:
+        suite = loader.loadTestsFromModule(module)
+        expected_count = suite.countTestCases()
+        if loader.errors or expected_count <= 0:
+            return _unrun_tests("infrastructure_failure", "trusted_test_suite_invalid")
+        output = io.StringIO()
+        runner = unittest.TextTestRunner(stream=output, verbosity=2, resultclass=_TrustedTestResult)
+        result = runner.run(suite)
+    except Exception as error:
+        return _unrun_tests("infrastructure_failure", f"trusted_test_run_failed:{type(error).__name__}")
+
+    if result.interpreter_outcomes:
+        status = sorted(result.interpreter_outcomes)[0]
+    elif result.testsRun != expected_count:
+        status = "infrastructure_failure"
+    elif result.wasSuccessful():
+        status = "passed"
     else:
-        output = ""
-
-    count = _test_count(output)
-    summary_success = False
-    runner_error: str | None = None
-    for line in reversed(output.splitlines()):
-        if line.startswith("PRISTINE_UNITTEST_RESULT="):
-            try:
-                summary = json.loads(line.split("=", 1)[1])
-                summary_success = isinstance(summary, dict) and summary.get("success") is True
-                if isinstance(summary, dict):
-                    runner_error = summary.get("runner_error")
-            except (TypeError, json.JSONDecodeError):
-                pass
-            break
-    passed = (
-        failure_reason is None
-        and cleanup_verified
-        and not timed_out
-        and process.returncode == 0
-        and count is not None
-        and count > 0
-        and summary_success
-    )
-    if failure_reason is None and process.returncode != 0:
-        failure_reason = f"tests_failed_exit_{process.returncode}"
-    elif failure_reason is None and (count is None or count == 0):
-        failure_reason = "empty_or_unreported_test_suite"
-    return {"passed": passed, "reason": failure_reason, "output": output[-OUTPUT_LIMIT:],
-            "test_count": count, "runner_success": summary_success,
-            "runner_error": runner_error, "cleanup_verified": cleanup_verified}
+        status = "functional_failure"
+    return {
+        "passed": status == "passed",
+        "status": status,
+        "reason": None if status == "passed" else "trusted_tests_failed",
+        "output": output.getvalue()[-OUTPUT_LIMIT:],
+        "test_count": result.testsRun,
+        "failure_count": len(result.failures),
+        "error_count": len(result.errors),
+        "result_authenticated": result.testsRun > 0,
+    }
 
 
-def _write_trusted_fixture(replay: Path, trusted_files: dict[str, bytes]) -> None:
-    replay.mkdir(parents=True, exist_ok=False)
-    for relative, raw in sorted(trusted_files.items()):
-        target = replay / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(raw)
+def _install_interpreted_modules(modules: dict[str, types.ModuleType]) -> None:
+    packages: dict[str, types.ModuleType] = {}
+    root = types.ModuleType("src")
+    root.__package__ = "src"
+    root.__path__ = []  # type: ignore[attr-defined]
+    packages["src"] = root
+    for name, module in sorted(modules.items()):
+        if not name.startswith("src."):
+            raise ValueError("candidate module outside src package")
+        parts = name.split(".")
+        for length in range(1, len(parts)):
+            package_name = ".".join(parts[:length])
+            if package_name not in packages:
+                package = types.ModuleType(package_name)
+                package.__package__ = package_name
+                package.__path__ = []  # type: ignore[attr-defined]
+                packages[package_name] = package
+        sys.modules[name] = module
+        parent = packages[".".join(parts[:-1])]
+        setattr(parent, parts[-1], module)
+        packages[name] = module
+    for name, module in packages.items():
+        sys.modules[name] = module
+    for name, module in packages.items():
+        if name == "src":
+            continue
+        parts = name.split(".")
+        setattr(packages[".".join(parts[:-1])], parts[-1], module)
+
+
+def _run_trusted_evaluation(
+    task: str,
+    candidate_sources: dict[str, str],
+    fixture_tests: bytes,
+    probe_tests: bytes | None,
+    probe_error: str | None,
+    candidate_source_error: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    module_sources = {
+        relative[:-3].replace("/", "."): source
+        for relative, source in candidate_sources.items()
+        if relative.startswith("src/") and relative.endswith(".py")
+    }
+    if candidate_source_error is not None:
+        detail = _unrun_tests("unsupported_syntax", candidate_source_error)
+        return detail, dict(detail)
+    try:
+        modules = load_modules(module_sources)
+    except UnsupportedSyntaxError as error:
+        detail = _unrun_tests("unsupported_syntax", f"candidate_source_rejected:{type(error).__name__}")
+        return detail, dict(detail)
+    except ExecutionLimitError as error:
+        detail = _unrun_tests("execution_limit", f"candidate_source_limited:{type(error).__name__}")
+        return detail, dict(detail)
+    except Exception as error:
+        detail = _unrun_tests("functional_failure", f"candidate_module_initialization_failed:{type(error).__name__}")
+        return detail, dict(detail)
+
+    test_names = (f"_codex_trusted_{task}_fixture", f"_codex_trusted_{task}_probe")
+    with _MODULE_IMPORT_LOCK:
+        previous = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == "src" or name.startswith("src.") or name in test_names
+        }
+        try:
+            _install_interpreted_modules(modules)
+            regression = _run_fingerprinted_test_module(task, "fixture", fixture_tests)
+            functional = (
+                _unrun_tests("infrastructure_failure", probe_error)
+                if probe_error is not None or probe_tests is None
+                else _run_fingerprinted_test_module(task, "probe", probe_tests)
+            )
+        except Exception as error:
+            infrastructure = _unrun_tests("infrastructure_failure", f"trusted_import_scope_failed:{type(error).__name__}")
+            return infrastructure, dict(infrastructure)
+        finally:
+            for name in tuple(sys.modules):
+                if name == "src" or name.startswith("src.") or name in test_names:
+                    sys.modules.pop(name, None)
+            sys.modules.update(previous)
+    return regression, functional
 
 
 def _has_retained_files(root: Path) -> bool | None:
@@ -726,9 +766,10 @@ def _grade_in_root(
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "grader_protocol_version": GRADER_PROTOCOL_VERSION,
+        "candidate_language_contract": GRADER_PROTOCOL_VERSION,
         "task": task,
         "success": False,
-        "aggregate_semantics": "all_five_gates_pristine_v1",
+        "aggregate_semantics": "all_five_gates_restricted_python_v2",
         "comparable_with_legacy": False,
         "functional_pass": None,
         "regression_pass": None,
@@ -742,6 +783,8 @@ def _grade_in_root(
         "network_isolation_verified": False,
         "git_metadata_audited": False,
         "candidate_tests_executed": False,
+        "runtime_result_authenticated": False,
+        "evaluation_status": "not_evaluated",
         "grader_skipped": True,
         "skip_reasons": [],
         "test_output": "",
@@ -750,6 +793,7 @@ def _grade_in_root(
     replay_sources: dict[str, bytes] = {}
 
     def finalize() -> dict[str, Any]:
+        _finish_result(result)
         if keep_artifacts:
             result["artifact_path"] = str(grade_root)
             try:
@@ -769,7 +813,7 @@ def _grade_in_root(
             result["artifacts_written"] = False
             result["partial_artifacts_retained"] = False
             result["artifact_retention"] = "not_requested"
-        return _finish_result(result)
+        return result
 
     candidate = _scan_candidate(workspace)
     result["candidate_inspection"] = {
@@ -851,56 +895,50 @@ def _grade_in_root(
         result["skip_reasons"].append("scope_gate_failed")
         return finalize()
 
-    replay = grade_root / "workspace"
-    _write_trusted_fixture(replay, trusted_files)
+    candidate_sources: dict[str, str] = {}
+    candidate_source_error: str | None = None
     for relative in policy["source_files"]:
-        source_bytes = candidate_bytes.get(relative)
-        target = replay / relative
-        if source_bytes is None:
-            if target.exists():
-                target.unlink()
+        raw = candidate_bytes.get(relative)
+        if raw is None:
             continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(source_bytes)
+        try:
+            candidate_sources[relative] = raw.decode("utf-8")
+        except UnicodeError as error:
+            candidate_source_error = f"candidate_source_encoding_unsupported:{type(error).__name__}"
+            break
 
-    environment = _isolated_environment(grade_root, replay)
-    baseline_command = _trusted_unittest_command(replay / "tests", "test*.py")
-    regression = _run_trusted_suite(
-        baseline_command,
-        cwd=replay,
-        environment=environment,
-        timeout_seconds=45,
+    probe_bytes: bytes | None = None
+    probe_error: str | None = None
+    try:
+        probe_bytes = _verify_probe(task, _load_manifest())
+    except (OSError, UnsafeWorkspaceError, ValueError) as error:
+        probe_error = f"trusted_probe_unavailable:{type(error).__name__}"
+
+    regression, functional = _run_trusted_evaluation(
+        task,
+        candidate_sources,
+        trusted_files[policy["test_files"][0]],
+        probe_bytes,
+        probe_error,
+        candidate_source_error,
     )
     result["regression_pass"] = regression["passed"]
+    result["functional_pass"] = functional["passed"]
     result["regression_details"] = {key: value for key, value in regression.items() if key != "output"}
+    result["functional_details"] = {key: value for key, value in functional.items() if key != "output"}
     result["test_output"] = regression["output"]
-    if not regression["cleanup_verified"]:
-        result["functional_pass"] = None
-        result["skip_reasons"].append("functional_probe_skipped_after_unverified_regression_cleanup")
-        result["grader_skipped"] = True
-        return finalize()
-
-    suite = EVAL_SUITES_DIR / policy["suite"]
-    probe_path = suite / "test_probe.py"
-    try:
-        probe_bytes, probe_metadata = _read_regular_file(probe_path, max_bytes=MAX_CANDIDATE_FILE_BYTES)
-        if not probe_bytes.strip() or not stat.S_ISREG(probe_metadata.st_mode):
-            raise ValueError("empty_or_invalid_trusted_probe")
-    except (OSError, UnsafeWorkspaceError, ValueError) as error:
-        result["functional_pass"] = False
-        result["functional_details"] = {"reason": f"trusted_probe_unavailable:{type(error).__name__}", "test_count": None}
-        result["skip_reasons"].append("functional_probe_unavailable")
-    else:
-        probe_command = _trusted_unittest_command(suite, "test_probe.py")
-        functional = _run_trusted_suite(
-            probe_command,
-            cwd=replay,
-            environment=environment,
-            timeout_seconds=30,
-        )
-        result["functional_pass"] = functional["passed"]
-        result["functional_details"] = {key: value for key, value in functional.items() if key != "output"}
-        result["behavioral_probe_stderr"] = "" if functional["passed"] else functional["output"]
+    result["behavioral_probe_stderr"] = "" if functional["passed"] else functional["output"]
+    result["runtime_result_authenticated"] = bool(
+        regression.get("result_authenticated") and functional.get("result_authenticated")
+    )
+    statuses = (regression["status"], functional["status"])
+    result["evaluation_status"] = next(
+        (status for status in ("unsupported_syntax", "execution_limit", "infrastructure_failure", "functional_failure")
+         if status in statuses),
+        "passed",
+    )
+    if result["evaluation_status"] in {"unsupported_syntax", "execution_limit", "infrastructure_failure"}:
+        result["skip_reasons"].append(f"trusted_evaluation_{result['evaluation_status']}")
 
     result["grader_skipped"] = False
     if result.get("workflow_metrics") is not None:
@@ -922,18 +960,26 @@ def _grade_in_root(
 def _finish_result(result: dict[str, Any]) -> dict[str, Any]:
     gates = ("functional_pass", "regression_pass", "integrity_pass", "scope_pass", "workflow_pass")
     result["success"] = all(result.get(gate) is True for gate in gates)
-    result["aggregate_semantics"] = "all_five_gates_pristine_v1"
+    result["candidate_language_contract"] = GRADER_PROTOCOL_VERSION
+    result["aggregate_semantics"] = "all_five_gates_restricted_python_v2"
     result["comparable_with_legacy"] = False
     result["test_quality"] = "unmeasured"
     result["private_holdout"] = False
     result["capability_evidence_eligible"] = False
     result["filesystem_isolation_verified"] = False
     result["network_isolation_verified"] = False
-    result["runtime_result_authenticated"] = False
+    result.setdefault("runtime_result_authenticated", False)
+    result.setdefault("evaluation_status", "infrastructure_failure")
     result["adversarial_evaluation_validated"] = False
     result["aggregate_is_security_proof"] = False
-    result["aggregate_interpretation"] = "diagnostic_only_false_positives_possible_until_separate_authority_boundary"
-    result["result_authentication_semantics"] = "not_authenticated_against_hostile_candidate_source"
+    result["aggregate_interpretation"] = (
+        "trusted task behavior checks under a bounded restricted interpreter; not a security proof or general CPython capability claim"
+    )
+    result["result_authentication_semantics"] = (
+        "fingerprinted fixture and probe results in scoped restricted-python evaluation"
+        if result["runtime_result_authenticated"]
+        else "no complete authenticated fixture and probe result"
+    )
     result["integrity_semantics"] = "static_workspace_structure_and_protected_files_only"
     result["candidate_tests_executed"] = False
     result["git_metadata_audited"] = False
