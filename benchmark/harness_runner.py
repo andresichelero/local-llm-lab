@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import statistics
 import subprocess
@@ -298,8 +299,9 @@ def _isolated_environment(
     bin_dir = run_dir / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
     guarded_edit = bin_dir / "guarded-edit"
+    guarded_edit_script = shlex.quote(str(REPO_ROOT / "benchmark/guarded_edit.py"))
     guarded_edit.write_text(
-        "#!/usr/bin/env bash\nexec python3 -m benchmark.guarded_edit \"$@\"\n",
+        f'#!/usr/bin/env bash\nexec python3 {guarded_edit_script} "$@"\n',
         encoding="utf-8",
     )
     guarded_edit.chmod(0o755)

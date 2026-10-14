@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 from pathlib import Path
 import tempfile
 import unittest
@@ -166,9 +167,10 @@ class ControlledProbeTests(unittest.TestCase):
             env = _isolated_environment("opencode", run_dir, install_root, workspace)
             script = run_dir / "bin" / "guarded-edit"
             self.assertTrue(script.is_file())
+            guarded_edit_path = Path(__file__).resolve().parents[1] / "benchmark/guarded_edit.py"
             self.assertEqual(
                 script.read_text(encoding="utf-8"),
-                '#!/usr/bin/env bash\nexec python3 -m benchmark.guarded_edit "$@"\n',
+                f'#!/usr/bin/env bash\nexec python3 {shlex.quote(str(guarded_edit_path))} "$@"\n',
             )
             if os.name != "nt":
                 self.assertEqual(script.stat().st_mode & 0o777, 0o755)
