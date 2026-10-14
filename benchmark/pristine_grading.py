@@ -692,6 +692,15 @@ def _write_trusted_fixture(replay: Path, trusted_files: dict[str, bytes]) -> Non
         target.write_bytes(raw)
 
 
+def _has_retained_files(root: Path) -> bool | None:
+    if not root.exists():
+        return False
+    try:
+        return any(path.is_file() for path in root.rglob("*"))
+    except OSError:
+        return None
+
+
 def _grade_in_root(
     workspace: Path,
     baseline: Path,
@@ -728,20 +737,23 @@ def _grade_in_root(
 
     def finalize() -> dict[str, Any]:
         if keep_artifacts:
+            result["artifact_path"] = str(grade_root)
             try:
                 _write_replay_artifacts(grade_root, task, trusted_files, replay_sources, result)
-                result["artifact_path"] = str(grade_root)
                 result["artifacts_retained"] = True
                 result["artifacts_written"] = True
+                result["partial_artifacts_retained"] = False
                 result["artifact_retention"] = "retained"
             except Exception as error:
                 result["artifacts_retained"] = False
                 result["artifacts_written"] = False
+                result["partial_artifacts_retained"] = _has_retained_files(grade_root)
                 result["artifact_error"] = type(error).__name__
                 result["artifact_retention"] = "failed"
         else:
             result["artifacts_retained"] = False
             result["artifacts_written"] = False
+            result["partial_artifacts_retained"] = False
             result["artifact_retention"] = "not_requested"
         return _finish_result(result)
 
@@ -921,6 +933,7 @@ def _finish_result(result: dict[str, Any]) -> dict[str, Any]:
     result.setdefault("changes_scoped", result.get("scope_pass"))
     result.setdefault("unchanged_helpers", None)
     result.setdefault("changed_files", [])
+    result.setdefault("partial_artifacts_retained", False)
     return result
 
 
@@ -985,6 +998,9 @@ def grade_pristine_workspace(
             "skip_reasons": [f"grader_failed_closed:{type(error).__name__}:{str(error)[:160]}"],
             "artifact_retention": "failed" if artifact_dir is not None else "not_requested",
         })
+        if not temporary and grade_root.exists():
+            result["artifact_path"] = str(grade_root)
+            result["partial_artifacts_retained"] = _has_retained_files(grade_root)
         return _finish_result(result)
     finally:
         if temporary:

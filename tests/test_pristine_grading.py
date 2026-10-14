@@ -309,10 +309,56 @@ class PristineGradingRegressionTests(unittest.TestCase):
             self.assertEqual(source_path.read_bytes(), candidate_source)
             second = grade_workspace(workspace, FIXTURE, artifact_dir=artifact_parent)
             self.assertNotEqual(second["artifact_path"], result["artifact_path"])
-            with patch.object(pristine_grading, "_write_replay_artifacts", side_effect=OSError("disk error")):
+
+            def write_partial_then_fail(artifact_root: Path, *_args: object) -> None:
+                (artifact_root / "partial.txt").write_text("partial", encoding="utf-8")
+                raise OSError("disk error")
+
+            with patch.object(pristine_grading, "_write_replay_artifacts", side_effect=write_partial_then_fail):
                 failed_write = grade_workspace(workspace, FIXTURE, artifact_dir=artifact_parent)
             self.assertEqual(failed_write["artifact_retention"], "failed", failed_write)
             self.assertFalse(failed_write["artifacts_retained"], failed_write)
+            self.assertFalse(failed_write["artifacts_written"], failed_write)
+            self.assertTrue(failed_write["partial_artifacts_retained"], failed_write)
+            failed_root = Path(failed_write["artifact_path"])
+            self.assertTrue((failed_root / "partial.txt").is_file())
+            self.assertNotIn(failed_write["artifact_path"], {result["artifact_path"], second["artifact_path"]})
+
+            with patch.object(pristine_grading, "_grade_in_root", side_effect=OSError("replay failed")):
+                empty_failure = grade_workspace(workspace, FIXTURE, artifact_dir=artifact_parent)
+            self.assertEqual(empty_failure["artifact_retention"], "failed", empty_failure)
+            self.assertFalse(empty_failure["artifacts_retained"], empty_failure)
+            self.assertFalse(empty_failure["artifacts_written"], empty_failure)
+            self.assertFalse(empty_failure["partial_artifacts_retained"], empty_failure)
+            empty_root = Path(empty_failure["artifact_path"])
+            self.assertTrue(empty_root.is_dir())
+
+            def fail_after_partial_replay(
+                _workspace: Path,
+                _baseline: Path,
+                _task: str,
+                grade_root: Path,
+                *_args: object,
+            ) -> None:
+                (grade_root / "partial-replay.txt").write_text("partial", encoding="utf-8")
+                raise OSError("replay failed after writing")
+
+            with patch.object(pristine_grading, "_grade_in_root", side_effect=fail_after_partial_replay):
+                failed_replay = grade_workspace(workspace, FIXTURE, artifact_dir=artifact_parent)
+            self.assertEqual(failed_replay["artifact_retention"], "failed", failed_replay)
+            self.assertFalse(failed_replay["artifacts_retained"], failed_replay)
+            self.assertFalse(failed_replay["artifacts_written"], failed_replay)
+            self.assertTrue(failed_replay["partial_artifacts_retained"], failed_replay)
+            replay_root = Path(failed_replay["artifact_path"])
+            self.assertTrue((replay_root / "partial-replay.txt").is_file())
+            self.assertEqual(
+                len({
+                    result["artifact_path"], second["artifact_path"],
+                    failed_write["artifact_path"], empty_failure["artifact_path"],
+                    failed_replay["artifact_path"],
+                }),
+                5,
+            )
 
 
 if __name__ == "__main__":
