@@ -693,10 +693,24 @@ def _write_trusted_fixture(replay: Path, trusted_files: dict[str, bytes]) -> Non
 
 
 def _has_retained_files(root: Path) -> bool | None:
-    if not root.exists():
-        return False
     try:
-        return any(path.is_file() for path in root.rglob("*"))
+        pending = [root]
+        root_scanned = False
+        while pending:
+            directory = pending.pop()
+            try:
+                with os.scandir(directory) as entries:
+                    root_scanned = True
+                    for entry in entries:
+                        if entry.is_file(follow_symlinks=False):
+                            return True
+                        if entry.is_dir(follow_symlinks=False):
+                            pending.append(Path(entry.path))
+            except FileNotFoundError:
+                if not root_scanned:
+                    return False
+                raise
+        return False
     except OSError:
         return None
 
@@ -980,7 +994,7 @@ def grade_pristine_workspace(
         return _finish_result(result)
 
     try:
-        return _grade_in_root(
+        result = _grade_in_root(
             workspace_abs,
             _expected_fixture(canonical, baseline),
             canonical,
@@ -1001,7 +1015,14 @@ def grade_pristine_workspace(
         if not temporary and grade_root.exists():
             result["artifact_path"] = str(grade_root)
             result["partial_artifacts_retained"] = _has_retained_files(grade_root)
-        return _finish_result(result)
+        _finish_result(result)
     finally:
         if temporary:
-            shutil.rmtree(grade_root, ignore_errors=True)
+            try:
+                shutil.rmtree(grade_root)
+            except OSError as error:
+                result["artifact_path"] = str(grade_root)
+                result["artifact_retention"] = "failed"
+                result["artifact_cleanup_error"] = type(error).__name__
+                result["partial_artifacts_retained"] = _has_retained_files(grade_root)
+    return result

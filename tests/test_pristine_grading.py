@@ -19,6 +19,31 @@ FIXTURE = ROOT / "benchmark" / "fixtures" / "harness_task"
 
 
 class PristineGradingRegressionTests(unittest.TestCase):
+    def test_temporary_cleanup_failure_reports_retained_root_and_allows_manual_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary) / "workspace"
+            shutil.copytree(FIXTURE, workspace)
+            cleanup_roots: list[Path] = []
+            real_rmtree = shutil.rmtree
+
+            def fail_cleanup(path: Path, *_args: object, **_kwargs: object) -> None:
+                cleanup_roots.append(Path(path))
+                raise OSError("cleanup denied")
+
+            try:
+                with patch.object(pristine_grading.shutil, "rmtree", side_effect=fail_cleanup):
+                    result = grade_workspace(workspace, FIXTURE)
+
+                self.assertEqual(result["artifact_retention"], "failed", result)
+                self.assertEqual(result["artifact_cleanup_error"], "OSError", result)
+                self.assertFalse(result["artifacts_retained"], result)
+                self.assertTrue(result["partial_artifacts_retained"], result)
+                self.assertEqual(Path(result["artifact_path"]), cleanup_roots[0])
+                self.assertTrue(cleanup_roots[0].is_dir())
+            finally:
+                if cleanup_roots and cleanup_roots[0].exists():
+                    real_rmtree(cleanup_roots[0])
+
     def test_results_state_authentication_and_integrity_limits_even_on_preflight_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
