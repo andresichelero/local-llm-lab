@@ -2,6 +2,11 @@
 from __future__ import annotations
 
 import subprocess
+import os
+import json
+import shutil
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -136,6 +141,9 @@ def _run_fake_trial(
     initially_visible_passes: bool,
     agent_outcomes: list[dict[str, object]] | None = None,
     preexisting_output: bool = False,
+    sampler_start_error: bool = False,
+    sampler_stop_error: bool = False,
+    agent_spawn_error: bool = False,
 ) -> tuple[dict[str, object], list[str], list[str], list[dict[str, object]]]:
     timeline: list[str] = []
     prompts: list[str] = []
@@ -171,6 +179,7 @@ def _run_fake_trial(
             self.command = command
             self.stdout = kwargs.get("stdout")
             self.sampler = sampler
+            self.stop_error = sampler and sampler_stop_error
             self.timed_out = False
             self.finished = False
             self.killed = False
@@ -186,6 +195,8 @@ def _run_fake_trial(
 
         def wait(self, timeout=None):
             if self.sampler:
+                if self.stop_error:
+                    raise OSError("synthetic sampler stop failure")
                 return 0
             if self.outcome.get("timed_out") and not self.timed_out:
                 self.timed_out = True
@@ -210,6 +221,19 @@ def _run_fake_trial(
 
     def fake_popen(command, **kwargs):
         sampler = any("resource_sampler.py" in str(part) for part in command)
+        if sampler:
+            timeline.append(
+                "sampler_start:"
+                f"{command[command.index('--phase-id') + 1]}:"
+                f"{command[command.index('--agent-id') + 1]}:"
+                f"{command[command.index('--run-id') + 1]}"
+            )
+            if sampler_start_error:
+                raise OSError("synthetic sampler startup failure")
+        elif str(command[0]) == fake_binary and agent_spawn_error and not any(
+            item.startswith("agent_start:") for item in timeline
+        ):
+            raise FileNotFoundError("synthetic agent startup failure")
         if sampler or str(command[0]) == fake_binary:
             return FakeProcess(command, kwargs, sampler=sampler)
         return real_popen(command, **kwargs)
@@ -287,6 +311,10 @@ def test_cascade_repair_and_routing_ignore_private_grade(
     assert len(private_grades) == 1
     assert timeline.index("visible_feedback") < timeline.index("server:qwen3.5-9b")
     assert timeline[-1] == "private_final_grade"
+    sampler_stages = [item for item in timeline if item.startswith("sampler_start:")]
+    assert len(sampler_stages) == 2
+    assert sampler_stages[0].startswith("sampler_start:initial_agent:initial-agent:")
+    assert sampler_stages[1].startswith("sampler_start:repair_agent:repair-agent:")
 
 
 def test_cascade_does_not_repair_after_visible_success_and_grades_once(
@@ -354,4 +382,203 @@ def test_existing_run_output_is_preserved_and_rejected(
         )
 
     assert (run_dir / "marker.txt").read_text(encoding="utf-8") == "preserve this run"
+
+
+def test_sampler_start_failure_keeps_agent_and_grade_result_but_marks_evidence_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    result, timeline, _, private_grades = _run_fake_trial(
+        monkeypatch, tmp_path, private_success=True, initially_visible_passes=True,
+        sampler_start_error=True,
+    )
+
+    assert any(item.startswith("agent_start:") for item in timeline)
+    assert len(private_grades) == 1
+    assert result["strict_pass"] is True
+    assert result["benchmark_valid"] is True
+    assert result["evidence_status"] == "incomplete"
+
+
+def test_agent_spawn_failure_stops_sampler_and_preserves_one_final_grade(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    result, timeline, _, private_grades = _run_fake_trial(
+        monkeypatch, tmp_path, private_success=True, initially_visible_passes=True,
+        agent_spawn_error=True,
+    )
+
+    assert any(item.startswith("sampler_start:initial_agent") for item in timeline)
+    assert not any(item.startswith("agent_start:") for item in timeline)
+    assert len(private_grades) == 1
+    assert result["strict_pass"] is False
+    assert result["evidence_status"] == "incomplete"
+
+
+def test_sampler_stop_failure_does_not_replace_final_grade(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    result, _, _, private_grades = _run_fake_trial(
+        monkeypatch, tmp_path, private_success=True, initially_visible_passes=True,
+        sampler_stop_error=True,
+    )
+
+    assert len(private_grades) == 1
+    assert result["strict_pass"] is True
+    assert result["benchmark_valid"] is True
+    assert result["evidence_status"] == "incomplete"
+
+
+def test_observer_write_failure_after_launch_does_not_replace_benchmark_result(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    original_record = cascade.RunObserver.record
+    did_fail = False
+
+    def failing_record(self, event_type, *args, **kwargs):
+        nonlocal did_fail
+        if event_type == "agent_exit" and not did_fail:
+            did_fail = True
+            raise OSError("synthetic observer write failure")
+        return original_record(self, event_type, *args, **kwargs)
+
+    monkeypatch.setattr(cascade.RunObserver, "record", failing_record)
+    result, _, _, private_grades = _run_fake_trial(
+        monkeypatch, tmp_path, private_success=True, initially_visible_passes=True,
+    )
+
+    assert did_fail
+    assert len(private_grades) == 1
+    assert result["strict_pass"] is True
+    assert result["benchmark_valid"] is True
+    assert result["evidence_status"] == "incomplete"
+
+
+def test_manifest_failure_is_fail_closed_before_any_agent_capture(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fail_observer(*args, **kwargs):
+        del args, kwargs
+        raise OSError("synthetic manifest creation failure")
+
+    monkeypatch.setattr(cascade, "RunObserver", fail_observer)
+    with pytest.raises(OSError):
+        _run_fake_trial(
+            monkeypatch, tmp_path, private_success=True, initially_visible_passes=True,
+        )
+
+    run_dir = tmp_path / "output/runs/trial_01_dynamic-cascade_calculator_division_r1"
+    assert not (run_dir / "events.jsonl").exists()
+    assert not (run_dir / "stderr.log").exists()
+    assert not (run_dir / "resources.jsonl").exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the lifecycle test validates POSIX process groups")
+def test_timeout_stops_agent_descendants_before_final_grading(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    binary = tmp_path / "fake-opencode"
+    ready = tmp_path / "descendant-ready"
+    child_marker = tmp_path / "child-wrote-after-timeout"
+    grandchild_marker = tmp_path / "grandchild-wrote-after-timeout"
+    grandchild_code = (
+        "import sys,time\nfrom pathlib import Path\n"
+        "time.sleep(1.2)\nPath(sys.argv[1]).write_text('late')\n"
+    )
+    child_code = (
+        "import subprocess,sys,time\nfrom pathlib import Path\n"
+        f"subprocess.Popen([sys.executable, '-c', {grandchild_code!r}, sys.argv[1]])\n"
+        "Path(sys.argv[2]).write_text('ready')\n"
+        "time.sleep(30)\n"
+        "Path(sys.argv[3]).write_text('late')\n"
+    )
+    agent_code = (
+        "import subprocess,sys,time\nfrom pathlib import Path\n"
+        "print('FAKE_AGENT_STDOUT_SENTINEL', flush=True)\n"
+        "print('FAKE_AGENT_STDERR_SENTINEL', file=sys.stderr, flush=True)\n"
+        f"subprocess.Popen([sys.executable, '-c', {child_code!r}, {str(grandchild_marker)!r}, "
+        f"{str(ready)!r}, {str(child_marker)!r}])\n"
+        f"deadline=time.monotonic()+3\nwhile not Path({str(ready)!r}).exists() and time.monotonic()<deadline:\n"
+        " time.sleep(0.01)\n"
+        "time.sleep(30)\n"
+    )
+    binary.write_text(f"#!{sys.executable}\n{agent_code}", encoding="utf-8")
+    binary.chmod(0o755)
+
+    def prepare_synthetic_run(harness, run_dir, install_root, prompt, model, server_url, context, fixture):
+        del harness, install_root, model, server_url, context
+        workspace = run_dir / "workspace"
+        for relative in ("TASK.md", "src/calculator.py", "tests/test_calculator.py"):
+            source = fixture / relative
+            destination = workspace / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
+        (run_dir / "home/.config/opencode").mkdir(parents=True)
+        (run_dir / "home").mkdir(exist_ok=True)
+        (run_dir / "output").mkdir()
+        prompt_file = run_dir / "TASK_PROMPT.md"
+        prompt_file.write_text(prompt + "\n", encoding="utf-8")
+        return prompt_file
+
+    monkeypatch.setattr(cascade, "_prepare_run", prepare_synthetic_run)
+    monkeypatch.setattr(cascade, "TASK_LIMIT_SECONDS", 0.8)
+    grade_calls: list[str] = []
+
+    def final_grade(*args, **kwargs):
+        del args, kwargs
+        grade_calls.append("called")
+        time.sleep(1.8)
+        assert not child_marker.exists(), "an agent child wrote during final grading"
+        assert not grandchild_marker.exists(), "an agent grandchild wrote during final grading"
+        return {"success": False}
+
+    monkeypatch.setattr(cascade, "grade_workspace", final_grade)
+
+    result = cascade.run_single_trial(
+        binary=binary,
+        install_root=tmp_path / "install",
+        server_mgr=type("Server", (), {"ensure_model": lambda self, _model: 0.0})(),
+        trial_info={"trial": 1, "policy": "always-4b", "task": "calculator_division", "repeat": 1},
+        output_root=tmp_path / "output",
+        round_deadline=0.0,
+    )
+
+    assert len(grade_calls) == 1
+    assert result["agent_attempts"][0]["timed_out"] is True
+    assert not child_marker.exists()
+    assert not grandchild_marker.exists()
+    run_dir = tmp_path / "output/runs/trial_01_always-4b_calculator_division_r1"
+    assert (run_dir / "observer-manifest.json").is_file()
+    assert (run_dir / "observer-events.jsonl").is_file()
+    assert (run_dir / "workspace-snapshots.jsonl").is_file()
+    assert "FAKE_AGENT_STDOUT_SENTINEL" in (run_dir / "events.jsonl").read_text(encoding="utf-8")
+    assert "FAKE_AGENT_STDERR_SENTINEL" in (run_dir / "stderr.log").read_text(encoding="utf-8")
+
+    artifact_root = os.environ.get("CASCADE_OBSERVER_E2E_DIR")
+    if artifact_root:
+        root = Path(artifact_root)
+        root.mkdir(parents=True, exist_ok=True)
+        destination = root / f"synthetic-no-model-{time.time_ns()}"
+        destination.mkdir()
+        for name in (
+            "observer-manifest.json", "observer-events.jsonl", "workspace-snapshots.jsonl",
+            "resources.jsonl", "events.jsonl", "stderr.log",
+        ):
+            shutil.copy2(run_dir / name, destination / name)
+        (destination / "synthetic-validation.json").write_text(
+            json.dumps({
+                "validation_scope": "synthetic_fake_agent_no_model",
+                "model_execution": False,
+                "grader": "synthetic_test_stub",
+                "performance_claim": "none",
+                "agent_exit_code": result["agent_attempts"][0]["exit_code"],
+                "observer_total_seconds": result["observer_total_seconds"],
+            }, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
 

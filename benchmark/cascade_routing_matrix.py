@@ -15,6 +15,7 @@ import argparse
 import json
 import os
 import signal
+import shutil
 import statistics
 import subprocess
 import sys
@@ -29,6 +30,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from benchmark.harness_eval import grade_workspace  # noqa: E402
+from benchmark.process_control import ProcessGroupStopError, stop_process_group  # noqa: E402
+from benchmark.run_observer import RunObserver  # noqa: E402
 from benchmark.harness_runner import (  # noqa: E402
     _isolated_environment,
     _prepare_run,
@@ -38,7 +41,6 @@ from benchmark.harness_runner import (  # noqa: E402
 )
 from benchmark.provenance import git_provenance  # noqa: E402
 from benchmark.visible_feedback import (  # noqa: E402
-    VisibleDevelopmentFeedback,
     collect_visible_feedback,
     is_visible_development_feedback,
 )
@@ -53,6 +55,7 @@ CONTEXT = 16384
 MAX_PRIMARY_STEPS = 20
 TASK_LIMIT_SECONDS = 180
 ROUND_LIMIT_SECONDS = 120 * 60
+OBSERVABILITY_PROTOCOL_ID = "cascade-observer-v1-2026-10-13"
 
 POLICIES = ("always-4b", "always-9b", "dynamic-cascade")
 
@@ -266,6 +269,139 @@ def build_repair_prompt(feedback: object) -> str:
     return f"The previous attempt needs repair. Review these visible development results:\n{diagnostic}"
 
 
+def _fixture_file_paths(root: Path) -> list[Path]:
+    """Enumerate only ordinary files under the selected, fixed task fixture."""
+    result: list[Path] = []
+    for directory, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames[:] = sorted(
+            name for name in dirnames
+            if not (Path(directory) / name).is_symlink()
+            and name not in {".git", "node_modules", "__pycache__"}
+        )
+        for name in sorted(filenames):
+            path = Path(directory) / name
+            try:
+                if path.is_symlink() or not path.is_file():
+                    continue
+            except OSError:
+                continue
+            lowered = name.lower()
+            if (
+                lowered == ".env" or lowered.startswith(".env.")
+                or any(part in lowered for part in ("secret", "token", "credential", "password"))
+                or lowered.endswith((".pem", ".key", ".p12", ".pfx", ".crt", ".cer"))
+            ):
+                continue
+            result.append(path)
+    return sorted(result)
+
+
+def _observer_manifest(
+    *,
+    task: str,
+    fixture: Path,
+    prompt_source: Path,
+    prompt_copy: Path,
+    run_dir: Path,
+    profiles: dict[str, Path],
+) -> dict[str, Any]:
+    """Build provenance from a small explicit source/task/grader/scaffold list."""
+    eval_suite = REPO_ROOT / "benchmark/eval_suites" / task
+    source_paths = [
+        REPO_ROOT / relative for relative in (
+            "benchmark/cascade_routing_matrix.py",
+            "benchmark/process_control.py",
+            "benchmark/resource_sampler.py",
+            "benchmark/run_observer.py",
+            "benchmark/visible_feedback.py",
+            "benchmark/harness_runner.py",
+            "benchmark/guarded_edit.py",
+            "benchmark/harness_eval.py",
+        )
+    ]
+    config_template = REPO_ROOT / "benchmark/configs/harnesses/opencode-subagents.json"
+    paths: list[tuple[str, Path]] = []
+    paths.extend(("source", path) for path in source_paths)
+    paths.extend(("task_fixture", path) for path in _fixture_file_paths(fixture))
+    paths.append(("task", prompt_source))
+    paths.append(("grader_suite", REPO_ROOT / "benchmark/eval_suites/__init__.py"))
+    if eval_suite.is_dir():
+        paths.extend(("grader_suite", path) for path in _fixture_file_paths(eval_suite))
+    paths.extend(("scaffold", path) for path in [config_template, prompt_copy, *profiles.values()])
+
+    hash_allowlist = []
+    for category, path in paths:
+        try:
+            relative = path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+        except ValueError:
+            relative = f"run-artifacts/{path.name}"
+        if path.is_relative_to(run_dir):
+            relative = "run-artifacts/" + path.relative_to(run_dir).as_posix()
+        hash_allowlist.append({"category": category, "path": relative, "file": path})
+
+    snapshot_hash_allowlist = [path.relative_to(fixture).as_posix() for path in _fixture_file_paths(fixture)]
+    declared_models = {
+        key: {
+            "identity": {"value": MODELS[key]["alias"], "status": "declared_only"},
+            "artifact_sha256": {
+                "value": None, "status": "unavailable", "reason": "not_hashed_by_observer_v1",
+            },
+            "quantization": {"value": "Q4_K_M", "status": "declared_only"},
+        }
+        for key in ("qwen3.5-4b", "qwen3.5-9b")
+    }
+    return {
+        "schema_version": "1",
+        "protocol_id": OBSERVABILITY_PROTOCOL_ID,
+        "experiment": EXPERIMENT,
+        "task_id": task,
+        "fixture_id": fixture.relative_to(REPO_ROOT).as_posix(),
+        "grader_id": f"benchmark/harness_eval.py:{task}",
+        "scaffold_id": "opencode-build-agent-cascade",
+        "generated_profiles": ["initial", "repair"],
+        "harness": {"name": HARNESS, "version": HARNESS_VERSION, "status": "declared_only"},
+        "source_revision": {
+            "value": None, "status": "unavailable", "reason": "not_read_by_observer",
+        },
+        "runtime": {
+            "python_version": sys.version.split()[0], "status": "verified",
+            "agent_runtime": {"value": None, "status": "unavailable"},
+            "llama_runtime_revision": {"value": RUNTIME_REVISION, "status": "declared_only"},
+        },
+        "hardware": {"identity": None, "status": "unavailable"},
+        "models": declared_models,
+        "declared_configuration": {
+            "context_tokens": {"value": CONTEXT, "status": "declared_only"},
+            "temperature": {"value": 0, "status": "declared_only"},
+            "seed": {"value": 1234, "status": "declared_only"},
+            "max_primary_steps": {"value": MAX_PRIMARY_STEPS, "status": "declared_only"},
+            "model_endpoint": {"value": "127.0.0.1:8080/v1", "status": "declared_only"},
+            "network_policy": {"value": None, "status": "unavailable"},
+        },
+        "coverage": {
+            "resource_scope": "system_wide",
+            "resource_phases": ["initial_agent", "repair_agent"],
+            "uncovered_phases": ["model_transition", "grading"],
+            "process_tree": "not_collected",
+            "network": "not_collected",
+            "sandbox_boundary": "unavailable",
+            "observer_file_isolation": "unavailable_same_user_process",
+            "native_tool_call_coverage": "incomplete_raw_streams_only",
+            "general_workspace_content_diff": "not_collected",
+            "training_exposure": "unavailable",
+            "observer_overhead": "not_measured",
+        },
+        "suite_role": "regression",
+        "capability_evidence_eligible": False,
+        "filesystem_enforced": False,
+        "network_enforced": False,
+        "pristine_regrade": False,
+        "private_holdout": False,
+        "hash_allowlist": hash_allowlist,
+        "snapshot_hash_allowlist": snapshot_hash_allowlist,
+    }
+
+
 def run_single_trial(
     binary: Path,
     install_root: Path,
@@ -278,7 +414,7 @@ def run_single_trial(
     task = trial_info["task"]
     repeat = trial_info["repeat"]
     trial_num = trial_info["trial"]
-
+    total_start = time.monotonic()
     output_root = output_root.resolve()
     run_dir = (output_root / "runs" / f"trial_{trial_num:02d}_{policy}_{task}_r{repeat}").resolve()
     if run_dir.exists():
@@ -286,152 +422,398 @@ def run_single_trial(
     run_dir.mkdir(parents=True, exist_ok=False)
     (run_dir / "tmp").mkdir()
 
-    fixture_rel, prompt_rel = __import__("benchmark.harness_runner", fromlist=["resolve_task"]).resolve_task(task)
+    from benchmark.harness_runner import resolve_task
+
+    fixture_rel, prompt_rel = resolve_task(task)
     prompt = prompt_rel.read_text(encoding="utf-8").strip()
-
     initial_model = "qwen3.5-4b" if policy in ("always-4b", "dynamic-cascade") else "qwen3.5-9b"
-    swap_duration = server_mgr.ensure_model(initial_model)
-
-    model_alias = MODELS[initial_model]["alias"]
-    _prepare_run("opencode", run_dir, install_root, prompt, model_alias, SERVER_URL, CONTEXT, fixture=fixture_rel)
-
-    profile = build_profile(initial_model)
-    profile_path = run_dir / "home/.config/opencode/opencode.json"
-    profile_path.write_text(json.dumps(profile, indent=2) + "\n", encoding="utf-8")
-
+    final_model = initial_model
     workspace = (run_dir / "workspace").resolve()
-    env = _isolated_environment("opencode", run_dir, install_root, workspace)
-    env["OPENCODE_DISABLE_AUTOUPDATE"] = "1"
-
     event_path = run_dir / "events.jsonl"
     stderr_path = run_dir / "stderr.log"
     resource_path = run_dir / "resources.jsonl"
+    profiles_dir = run_dir / "observer-scaffold"
+    profiles_dir.mkdir()
+    profiles = {
+        "initial": profiles_dir / "initial-profile.json",
+        "repair": profiles_dir / "repair-profile.json",
+    }
+    for key, model in (("initial", initial_model), ("repair", "qwen3.5-9b")):
+        profiles[key].write_text(json.dumps(build_profile(model), indent=2) + "\n", encoding="utf-8")
 
-    command = [
+    _prepare_run(
+        HARNESS, run_dir, install_root, prompt, MODELS[initial_model]["alias"], SERVER_URL,
+        CONTEXT, fixture=fixture_rel,
+    )
+    prompt_copy = run_dir / "TASK_PROMPT.md"
+    profile_path = run_dir / "home/.config/opencode/opencode.json"
+    shutil.copyfile(profiles["initial"], profile_path)
+    env = _isolated_environment(HARNESS, run_dir, install_root, workspace)
+    env["OPENCODE_DISABLE_AUTOUPDATE"] = "1"
+
+    # Construction and manifest creation are fail-closed: nothing agent-controlled has started.
+    observer = RunObserver(
+        run_dir,
+        _observer_manifest(
+            task=task,
+            fixture=fixture_rel,
+            prompt_source=prompt_rel,
+            prompt_copy=prompt_copy,
+            run_dir=run_dir,
+            profiles=profiles,
+        ),
+    )
+    evidence_complete = [True]
+    evidence_errors: list[dict[str, str]] = []
+    phase_durations: dict[str, float] = {}
+
+    def observe(method: str, *args: Any, component: str, phase_id: str | None = None,
+                required: bool = False, **kwargs: Any) -> Any:
+        try:
+            return getattr(observer, method)(*args, **kwargs)
+        except Exception as exc:
+            evidence_complete[0] = False
+            error_type = type(exc).__name__[:80]
+            evidence_errors.append({"component": component, "error_type": error_type})
+            try:
+                observer.record(
+                    "evidence_error", phase_id, source="observer",
+                    details={"component": component, "error_type": error_type},
+                )
+            except Exception:
+                pass
+            if required:
+                raise RuntimeError("pre-launch observer evidence could not be recorded") from exc
+            return None
+
+    setup_phase = observe(
+        "start_phase", "setup", source="cascade", component="observer", required=True,
+    )
+    setup_start = time.monotonic()
+    try:
+        swap_duration = server_mgr.ensure_model(initial_model)
+        shutil.copyfile(profiles["initial"], profile_path)
+        observe(
+            "end_phase", setup_phase, "completed", source="cascade", component="observer",
+            required=True, details={"duration_ns": int((time.monotonic() - setup_start) * 1e9)},
+        )
+    except Exception as exc:
+        observe(
+            "end_phase", setup_phase, "failed", source="cascade", component="observer",
+        )
+        observe("finalize", "error", "incomplete", source="cascade", component="observer",
+                error=type(exc).__name__)
+        raise
+    phase_durations["setup"] = time.monotonic() - setup_start
+
+    def snapshot(label: str, agent_id: str, *, required: bool = False) -> bool:
+        result = observe(
+            "snapshot", label, workspace, agent_id=agent_id, parent_agent_id="cascade-runner",
+            source="cascade",
+            component="snapshot", phase_id="initial_agent" if "initial_agent" in label else "repair_agent",
+            required=required,
+        )
+        complete = isinstance(result, dict) and result.get("status") == "complete"
+        if not complete:
+            evidence_complete[0] = False
+            if required:
+                raise RuntimeError("pre-launch workspace snapshot is incomplete")
+        return complete
+
+    def stop_owned(process: subprocess.Popen[Any], *, timed_out: bool) -> tuple[int | None, bool]:
+        try:
+            if hasattr(process, "pid"):
+                code = stop_process_group(process)
+            elif timed_out:
+                process.kill()
+                code = process.wait()
+            else:
+                code = process.wait()
+            return code, True
+        except ProcessGroupStopError as exc:
+            evidence_complete[0] = False
+            evidence_errors.append({"component": "process_group", "error_type": type(exc).__name__})
+            return getattr(process, "returncode", None), False
+        except Exception as exc:
+            evidence_complete[0] = False
+            evidence_errors.append({"component": "process_group", "error_type": type(exc).__name__[:80]})
+            return getattr(process, "returncode", None), False
+
+    def run_agent_stage(
+        *, agent_id: str, model: str, command: list[str], stream_mode: str,
+    ) -> dict[str, Any]:
+        phase_id = "initial_agent" if agent_id == "initial-agent" else "repair_agent"
+        started = time.monotonic()
+        phase_id_value = observe(
+            "start_phase", phase_id, agent_id=agent_id, source="cascade",
+            component="observer", required=(agent_id == "initial-agent"),
+        )
+        if phase_id_value is None:
+            evidence_complete[0] = False
+        before_ok = snapshot(f"before_{phase_id}", agent_id, required=(agent_id == "initial-agent"))
+        if not before_ok and agent_id == "initial-agent":
+            raise RuntimeError("initial workspace snapshot is incomplete")
+
+        sampler: subprocess.Popen[Any] | None = None
+        sampler_stopped = True
+        sampler_command = [
+            sys.executable, str(REPO_ROOT / "benchmark/resource_sampler.py"),
+            "--output", str(resource_path), "--interval", "0.5",
+            "--run-id", observer.run_id, "--phase-id", phase_id, "--agent-id", agent_id,
+            "--parent-agent-id", "cascade-runner",
+        ]
+        try:
+            sampler = subprocess.Popen(
+                sampler_command, cwd=workspace, stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=(os.name == "posix"),
+            )
+            observe("record", "sampler_start", phase_id, agent_id=agent_id, source="sampler",
+                    component="observer", details={"status": "started"})
+        except OSError as exc:
+            evidence_complete[0] = False
+            evidence_errors.append({"component": "sampler_start", "error_type": type(exc).__name__[:80]})
+            observe("record", "evidence_error", phase_id, agent_id=agent_id, source="sampler",
+                    component="observer", details={"component": "sampler", "error_type": type(exc).__name__[:80]})
+
+        agent: subprocess.Popen[Any] | None = None
+        exit_code: int | None = None
+        timed_out = False
+        group_stopped = True
+        spawn_error: str | None = None
+        try:
+            with event_path.open(stream_mode, encoding="utf-8") as stdout_file, stderr_path.open(
+                stream_mode, encoding="utf-8"
+            ) as stderr_file:
+                observe(
+                    "record", "agent_spawn", phase_id, agent_id=agent_id, source="agent_process",
+                    component="observer", details={"status": "starting"},
+                )
+                try:
+                    agent = subprocess.Popen(
+                        command, cwd=workspace, env=env, stdin=subprocess.DEVNULL,
+                        stdout=stdout_file, stderr=stderr_file,
+                        start_new_session=(os.name == "posix"),
+                    )
+                    try:
+                        exit_code = agent.wait(timeout=TASK_LIMIT_SECONDS)
+                    except subprocess.TimeoutExpired:
+                        timed_out = True
+                except OSError as exc:
+                    spawn_error = type(exc).__name__
+                if agent is not None:
+                    exit_code, group_stopped = stop_owned(agent, timed_out=timed_out)
+                stdout_file.flush()
+                stderr_file.flush()
+        except OSError as exc:
+            spawn_error = type(exc).__name__
+        finally:
+            if sampler is not None:
+                _, sampler_stopped = stop_owned(sampler, timed_out=False)
+                observe(
+                    "record", "sampler_end", phase_id, agent_id=agent_id, source="sampler",
+                    component="observer", details={"status": "completed" if sampler_stopped else "failed"},
+                )
+                if not sampler_stopped:
+                    evidence_complete[0] = False
+                    evidence_errors.append({"component": "sampler_stop", "error_type": "cleanup_failed"})
+
+        if spawn_error:
+            evidence_complete[0] = False
+            evidence_errors.append({"component": "agent_spawn", "error_type": spawn_error})
+        status = "timed_out" if timed_out else "failed" if spawn_error or exit_code not in (0, None) else "completed"
+        stage_wall = time.monotonic() - started
+        phase_durations[phase_id] = phase_durations.get(phase_id, 0.0) + stage_wall
+        observe(
+            "record", "agent_exit", phase_id, agent_id=agent_id, source="agent_process",
+            component="observer", details={
+                "status": status, "exit_code": exit_code, "timed_out": timed_out,
+                "duration_ns": int(stage_wall * 1e9),
+            },
+        )
+        if group_stopped:
+            snapshot(f"after_{phase_id}", agent_id)
+        else:
+            evidence_complete[0] = False
+        if phase_id_value is not None:
+            observe(
+                "end_phase", phase_id_value, status, agent_id=agent_id, source="cascade",
+                component="observer", details={"duration_ns": int(stage_wall * 1e9)},
+            )
+        return {
+            "model": model, "exit_code": exit_code, "timed_out": timed_out,
+            "process_group_stopped": group_stopped,
+            "sampler_stopped": sampler_stopped,
+            "spawned": agent is not None,
+        }
+
+    initial_alias = MODELS[initial_model]["alias"]
+    initial_command = [
         str(binary), "run", "--format", "json", "--agent", "build", "--model",
-        f"local/{model_alias}", "--dir", str(workspace), prompt
+        f"local/{initial_alias}", "--dir", str(workspace), prompt,
+    ]
+    initial_attempt = run_agent_stage(
+        agent_id="initial-agent", model=initial_model, command=initial_command, stream_mode="w",
+    )
+    agent_attempts: list[dict[str, Any]] = [
+        {key: initial_attempt[key] for key in ("model", "exit_code", "timed_out")}
     ]
 
-    task_start = time.monotonic()
-    sampler_cmd = [
-        sys.executable,
-        str(REPO_ROOT / "benchmark/resource_sampler.py"),
-        "--output", str(resource_path),
-        "--interval", "0.5",
-    ]
-    sampler = subprocess.Popen(sampler_cmd, cwd=workspace, start_new_session=True)
+    def visible_results() -> Any:
+        start = time.monotonic()
+        phase = observe(
+            "start_phase", "visible_feedback", agent_id="visible-tests", source="cascade",
+            component="observer",
+        )
+        result = collect_visible_feedback(workspace, env=env)
+        wall = time.monotonic() - start
+        phase_durations["visible_feedback"] = phase_durations.get("visible_feedback", 0.0) + wall
+        if phase is not None:
+            observe(
+                "end_phase", phase,
+                "timed_out" if result["timed_out"] else "completed" if result["passed"] else "failed",
+                agent_id="visible-tests", source="cascade", component="observer",
+                details={
+                    "exit_code": result["exit_code"], "timed_out": result["timed_out"],
+                    "passed": result["passed"], "duration_ns": int(wall * 1e9),
+                },
+            )
+        return result
 
-    agent_proc = subprocess.Popen(
-        command,
-        cwd=workspace,
-        env=env,
-        stdin=subprocess.DEVNULL,
-        stdout=event_path.open("w", encoding="utf-8"),
-        stderr=stderr_path.open("w", encoding="utf-8"),
-        start_new_session=True,
+    cleanup_ok = bool(initial_attempt["process_group_stopped"])
+    visible_feedback = None
+    if cleanup_ok:
+        visible_feedback = visible_results()
+        cleanup_ok = bool(visible_feedback.get("process_group_stopped", True))
+    if not cleanup_ok:
+        evidence_complete[0] = False
+    if visible_feedback is None:
+        visible_feedback = {
+            "phase": "visible_development", "passed": False, "output": "",
+            "exit_code": None, "timed_out": False, "process_group_stopped": False,
+        }
+    initial_pass = (
+        visible_feedback["passed"] and not visible_feedback["timed_out"]
+        and visible_feedback["exit_code"] == 0
+        and not initial_attempt["timed_out"] and initial_attempt["exit_code"] == 0
     )
 
-    agent_timed_out = False
-    try:
-        agent_exit_code = agent_proc.wait(timeout=TASK_LIMIT_SECONDS)
-    except subprocess.TimeoutExpired:
-        agent_timed_out = True
-        agent_proc.kill()
-        agent_exit_code = agent_proc.wait()
+    escalation_requested = decide_escalation(policy=policy, initial_pass=initial_pass)
+    escalated = False
+    escalation_swap = 0.0
+    if escalation_requested and cleanup_ok:
+        transition = observe("start_phase", "model_transition", source="cascade", component="observer")
+        transition_start = time.monotonic()
+        try:
+            escalation_swap = server_mgr.ensure_model("qwen3.5-9b")
+            shutil.copyfile(profiles["repair"], profile_path)
+            final_model = "qwen3.5-9b"
+            transition_status = "completed"
+        except Exception as exc:
+            evidence_complete[0] = False
+            evidence_errors.append({"component": "model_transition", "error_type": type(exc).__name__[:80]})
+            transition_status = "failed"
+        transition_wall = time.monotonic() - transition_start
+        phase_durations["model_transition"] = transition_wall
+        if transition is not None:
+            observe(
+                "end_phase", transition, transition_status, source="cascade", component="observer",
+                details={"duration_ns": int(transition_wall * 1e9)},
+            )
+        if transition_status == "completed":
+            escalated = True
+            repair_prompt = build_repair_prompt(visible_feedback)
+            repair_command = [
+                str(binary), "run", "--format", "json", "--agent", "build", "--model",
+                f"local/{MODELS[final_model]['alias']}", "--dir", str(workspace), repair_prompt,
+            ]
+            repair_attempt = run_agent_stage(
+                agent_id="repair-agent", model=final_model, command=repair_command, stream_mode="a",
+            )
+            agent_attempts.append({
+                key: repair_attempt[key] for key in ("model", "exit_code", "timed_out")
+            })
+            cleanup_ok = cleanup_ok and bool(repair_attempt["process_group_stopped"])
+            if not cleanup_ok:
+                evidence_complete[0] = False
+            if cleanup_ok:
+                visible_feedback = visible_results()
+                cleanup_ok = bool(visible_feedback.get("process_group_stopped", True))
+    else:
+        skipped = observe(
+            "start_phase", "repair_agent", agent_id="repair-agent", source="cascade",
+            component="observer",
+        )
+        if skipped is not None:
+            observe(
+                "end_phase", skipped, "skipped", agent_id="repair-agent", source="cascade",
+                component="observer", details={
+                    "reason": "routing_did_not_escalate" if not escalation_requested
+                    else "previous_process_group_unstopped",
+                },
+            )
+    if escalation_requested and cleanup_ok and not escalated:
+        skipped = observe(
+            "start_phase", "repair_agent", agent_id="repair-agent", source="cascade",
+            component="observer",
+        )
+        if skipped is not None:
+            observe(
+                "end_phase", skipped, "skipped", agent_id="repair-agent", source="cascade",
+                component="observer", details={"reason": "model_transition_failed"},
+            )
 
-    try:
-        sampler.terminate()
-        sampler.wait(timeout=2.0)
-    except Exception:
-        sampler.kill()
-
-    task_wall = time.monotonic() - task_start
     events = _read_jsonl(event_path)
     res_rows = _read_jsonl(resource_path)
     res_summary = summarize_resources(res_rows)
-    usage = summarize_usage("opencode", events)
-    agent_attempts: list[dict[str, Any]] = [{
-        "model": initial_model,
-        "exit_code": agent_exit_code,
-        "timed_out": agent_timed_out,
-    }]
-    visible_feedback: VisibleDevelopmentFeedback = collect_visible_feedback(
-        workspace,
-        env=env,
-    )
-    initial_pass = (
-        visible_feedback["passed"]
-        and not visible_feedback["timed_out"]
-        and visible_feedback["exit_code"] == 0
-        and not agent_timed_out
-        and agent_exit_code == 0
-    )
-
-    escalated = False
-    escalation_swap = 0.0
-    final_model = initial_model
-
-    # Dynamic cascade escalation logic
-    if decide_escalation(policy=policy, initial_pass=initial_pass):
-        escalated = True
-        final_model = "qwen3.5-9b"
-        escalation_swap = server_mgr.ensure_model(final_model)
-        m9_alias = MODELS[final_model]["alias"]
-
-        # Update profile for 9B
-        profile_9b = build_profile(final_model)
-        profile_path.write_text(json.dumps(profile_9b, indent=2) + "\n", encoding="utf-8")
-
-        # Run repair turn on 9B
-        repair_prompt = build_repair_prompt(visible_feedback)
-        repair_command = [
-            str(binary), "run", "--format", "json", "--agent", "build", "--model",
-            f"local/{m9_alias}", "--dir", str(workspace), repair_prompt
-        ]
-        repair_start = time.monotonic()
-        repair_proc = subprocess.Popen(
-            repair_command,
-            cwd=workspace,
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=event_path.open("a", encoding="utf-8"),
-            stderr=stderr_path.open("a", encoding="utf-8"),
-            start_new_session=True,
-        )
-        repair_timed_out = False
-        try:
-            repair_exit_code = repair_proc.wait(timeout=TASK_LIMIT_SECONDS)
-        except subprocess.TimeoutExpired:
-            repair_timed_out = True
-            repair_proc.kill()
-            repair_exit_code = repair_proc.wait()
-
-        agent_attempts.append({
-            "model": final_model,
-            "exit_code": repair_exit_code,
-            "timed_out": repair_timed_out,
-        })
-
-        repair_wall = time.monotonic() - repair_start
-        task_wall += repair_wall + escalation_swap
-
-        visible_feedback = collect_visible_feedback(
-            workspace,
-            env=env,
-        )
-
-    # The private evaluator runs once, after the final agent action and all routing decisions.
-    grade = grade_workspace(workspace, fixture_rel, task=task)
+    usage = summarize_usage(HARNESS, events)
     final_attempt = agent_attempts[-1]
+    grade_success = False
+    grade: dict[str, Any]
+    if cleanup_ok:
+        grade_phase = observe(
+            "start_phase", "grading", agent_id="final-grader", source="cascade", component="observer",
+        )
+        grade_start = time.monotonic()
+        try:
+            # Exactly one private grade, after all agent and visible-test groups stop.
+            grade = grade_workspace(workspace, fixture_rel, task=task)
+            grade_success = bool(grade.get("success", False))
+            grade_status = "passed" if grade_success else "failed"
+        except Exception as exc:
+            grade = {"success": False, "status": "grader_error", "error_type": type(exc).__name__[:80]}
+            grade_status = "failed"
+        grade_wall = time.monotonic() - grade_start
+        phase_durations["grading"] = grade_wall
+        observe(
+            "record", "grader_result", "grading", agent_id="final-grader", source="final_grader",
+            component="observer", details={"status": grade_status},
+        )
+        if grade_phase is not None:
+            observe(
+                "end_phase", grade_phase, "completed", agent_id="final-grader", source="final_grader",
+                component="observer", details={"duration_ns": int(grade_wall * 1e9)},
+            )
+    else:
+        grade = {"success": False, "status": "skipped_unstopped_process_group"}
+    benchmark_valid = bool(
+        cleanup_ok and all(attempt["exit_code"] is not None for attempt in agent_attempts)
+    )
     strict_pass = bool(
-        grade.get("success", False)
-        and visible_feedback["passed"]
-        and visible_feedback["exit_code"] == 0
-        and not visible_feedback["timed_out"]
-        and final_attempt["exit_code"] == 0
+        benchmark_valid and grade_success and visible_feedback["passed"] and visible_feedback["exit_code"] == 0
+        and not visible_feedback["timed_out"] and final_attempt["exit_code"] == 0
         and not final_attempt["timed_out"]
     )
-
+    evidence_status = "complete" if evidence_complete[0] else "incomplete"
+    observe(
+        "finalize", "pass" if strict_pass else "fail" if cleanup_ok else "incomplete", evidence_status,
+        source="cascade", component="observer",
+    )
+    task_wall = (
+        phase_durations.get("initial_agent", 0.0)
+        + phase_durations.get("repair_agent", 0.0)
+        + escalation_swap
+    )
     return {
         "trial": trial_num,
         "policy": policy,
@@ -443,7 +825,19 @@ def run_single_trial(
         "agent_attempts": agent_attempts,
         "swap_duration_seconds": round(escalation_swap if escalated else swap_duration, 3),
         "strict_pass": strict_pass,
+        "grader_pass": grade_success if cleanup_ok else None,
+        "benchmark_valid": benchmark_valid,
+        "evidence_status": evidence_status,
+        "suite_role": "regression",
+        "capability_evidence_eligible": False,
+        "filesystem_enforced": False,
+        "network_enforced": False,
+        "pristine_regrade": False,
+        "private_holdout": False,
+        "evidence_errors": evidence_errors,
         "task_wall_seconds": round(task_wall, 3),
+        "observer_total_seconds": round(time.monotonic() - total_start, 3),
+        "phase_durations_seconds": {key: round(value, 3) for key, value in phase_durations.items()},
         "steps": usage.get("turns", 0),
         "prompt_tokens": usage.get("prompt_tokens", 0),
         "completion_tokens": usage.get("completion_tokens", 0),
