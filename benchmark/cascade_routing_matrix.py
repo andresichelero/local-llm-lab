@@ -350,6 +350,14 @@ def _observer_manifest(
         }
         for key in ("qwen3.5-4b", "qwen3.5-9b")
     }
+    try:
+        git_sha, source_tree_dirty = git_provenance(REPO_ROOT)
+        source_revision = {"value": git_sha, "status": "measured"}
+        source_dirty = {"value": source_tree_dirty, "status": "measured"}
+    except Exception:
+        source_revision = {"value": None, "status": "unavailable", "reason": "git_provenance_failed"}
+        source_dirty = {"value": None, "status": "unavailable", "reason": "git_provenance_failed"}
+
     return {
         "schema_version": "1",
         "protocol_id": OBSERVABILITY_PROTOCOL_ID,
@@ -360,9 +368,8 @@ def _observer_manifest(
         "scaffold_id": "opencode-build-agent-cascade",
         "generated_profiles": ["initial", "repair"],
         "harness": {"name": HARNESS, "version": HARNESS_VERSION, "status": "declared_only"},
-        "source_revision": {
-            "value": None, "status": "unavailable", "reason": "not_read_by_observer",
-        },
+        "source_revision": source_revision,
+        "source_tree_dirty": source_dirty,
         "runtime": {
             "python_version": sys.version.split()[0], "status": "verified",
             "agent_runtime": {"value": None, "status": "unavailable"},

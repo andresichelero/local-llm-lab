@@ -38,6 +38,67 @@ def test_build_schedule_structure() -> None:
             assert len(task_trials) == 2
 
 
+def _observer_manifest_for_test(tmp_path: Path) -> dict[str, object]:
+    from benchmark.harness_runner import resolve_task
+
+    fixture, prompt_source = resolve_task("calculator_division")
+    run_dir = tmp_path / "run"
+    profiles_dir = run_dir / "profiles"
+    profiles_dir.mkdir(parents=True)
+    prompt_copy = run_dir / "TASK_PROMPT.md"
+    prompt_copy.write_text("synthetic task prompt\n", encoding="utf-8")
+    profiles = {}
+    for name in ("initial", "repair"):
+        profiles[name] = profiles_dir / f"{name}.json"
+        profiles[name].write_text("{}\n", encoding="utf-8")
+    return cascade._observer_manifest(
+        task="calculator_division", fixture=fixture, prompt_source=prompt_source,
+        prompt_copy=prompt_copy, run_dir=run_dir, profiles=profiles,
+    )
+
+
+def test_observer_manifest_records_mocked_git_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    expected_sha = "a" * 40
+    monkeypatch.setattr(cascade, "git_provenance", lambda _root: (expected_sha, True))
+
+    manifest = _observer_manifest_for_test(tmp_path)
+
+    assert manifest["source_revision"] == {"value": expected_sha, "status": "measured"}
+    assert manifest["source_tree_dirty"] == {"value": True, "status": "measured"}
+
+
+def test_observer_manifest_records_actual_repository_head(tmp_path: Path) -> None:
+    expected_sha = subprocess.run(
+        ["git", "-C", str(cascade.REPO_ROOT), "rev-parse", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    manifest = _observer_manifest_for_test(tmp_path)
+
+    assert manifest["source_revision"] == {"value": expected_sha, "status": "measured"}
+    assert manifest["source_tree_dirty"]["status"] == "measured"
+    assert type(manifest["source_tree_dirty"]["value"]) is bool
+
+
+def test_observer_manifest_marks_git_provenance_unavailable_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fail_git_provenance(_root: Path) -> tuple[str, bool]:
+        raise OSError("synthetic git failure")
+
+    monkeypatch.setattr(cascade, "git_provenance", fail_git_provenance)
+
+    manifest = _observer_manifest_for_test(tmp_path)
+
+    expected = {"value": None, "status": "unavailable", "reason": "git_provenance_failed"}
+    assert manifest["source_revision"] == expected
+    assert manifest["source_tree_dirty"] == expected
+
+
 def test_server_command_configurations() -> None:
     server_bin = Path("/usr/local/bin/llama-server")
     m4b_path = Path("/models/qwen3.5-4b.gguf")
