@@ -216,6 +216,8 @@ def main() -> int:
     with args.output.open("a", encoding="utf-8") as output:
         while running:
             time.sleep(args.interval)
+            if not running:
+                break
             metrics, legacy, previous_ticks = sample_metrics(previous_ticks)
             sample_seq += 1
             record = {

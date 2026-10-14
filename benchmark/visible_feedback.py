@@ -18,6 +18,7 @@ class VisibleDevelopmentFeedback(TypedDict):
     exit_code: int | None
     timed_out: bool
     process_group_stopped: NotRequired[bool]
+    execution_error: NotRequired[bool]
 
 
 def is_visible_development_feedback(value: object) -> TypeGuard[VisibleDevelopmentFeedback]:
@@ -76,6 +77,19 @@ def collect_visible_feedback(
             text=True,
             start_new_session=(os.name == "posix"),
         )
+    except OSError as exc:
+        return {
+            "phase": "visible_development",
+            "passed": False,
+            "output": f"Visible workspace tests could not run: {type(exc).__name__}",
+            "exit_code": None,
+            "timed_out": False,
+            "process_group_stopped": True,
+            "execution_error": True,
+        }
+
+    execution_error = False
+    try:
         try:
             stdout, stderr = process.communicate(timeout=timeout_seconds)
             output = f"{stdout}{stderr}"[-12000:]
@@ -85,6 +99,10 @@ def collect_visible_feedback(
             stdout = exc.stdout.decode(errors="replace") if isinstance(exc.stdout, bytes) else exc.stdout or ""
             stderr = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else exc.stderr or ""
             output = f"{stdout}{stderr}\nVisible workspace tests timed out."[-12000:]
+        except OSError as exc:
+            execution_error = True
+            output = f"Visible workspace test output could not be collected: {type(exc).__name__}"
+    finally:
         try:
             stop_process_group(process)
         except Exception:
@@ -93,25 +111,20 @@ def collect_visible_feedback(
             for capture in (process.stdout, process.stderr):
                 if capture is not None:
                     capture.close()
-        if not timed_out:
-            exit_code = process.returncode
-    except OSError as exc:
-        return {
-            "phase": "visible_development",
-            "passed": False,
-            "output": f"Visible workspace tests could not run: {exc}"[-12000:],
-            "exit_code": None,
-            "timed_out": False,
-            "process_group_stopped": process is None,
-        }
+    if not timed_out and not execution_error:
+        exit_code = process.returncode
 
     count_match = re.search(r"Ran (\d+) tests?", output)
     test_count = int(count_match.group(1)) if count_match else 0
     return {
         "phase": "visible_development",
-        "passed": exit_code == 0 and test_count > 0 and process_group_stopped and not timed_out,
+        "passed": (
+            exit_code == 0 and test_count > 0 and process_group_stopped
+            and not timed_out and not execution_error
+        ),
         "output": output,
         "exit_code": exit_code,
         "timed_out": timed_out,
         "process_group_stopped": process_group_stopped,
+        "execution_error": execution_error,
     }

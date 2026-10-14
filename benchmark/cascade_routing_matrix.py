@@ -31,7 +31,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from benchmark.harness_eval import grade_workspace  # noqa: E402
 from benchmark.process_control import ProcessGroupStopError, stop_process_group  # noqa: E402
-from benchmark.run_observer import RunObserver  # noqa: E402
+from benchmark.run_observer import RunObserver, _is_secret  # noqa: E402
 from benchmark.harness_runner import (  # noqa: E402
     _isolated_environment,
     _prepare_run,
@@ -277,6 +277,7 @@ def _fixture_file_paths(root: Path) -> list[Path]:
             name for name in dirnames
             if not (Path(directory) / name).is_symlink()
             and name not in {".git", "node_modules", "__pycache__"}
+            and not _is_secret(name)
         )
         for name in sorted(filenames):
             path = Path(directory) / name
@@ -285,12 +286,7 @@ def _fixture_file_paths(root: Path) -> list[Path]:
                     continue
             except OSError:
                 continue
-            lowered = name.lower()
-            if (
-                lowered == ".env" or lowered.startswith(".env.")
-                or any(part in lowered for part in ("secret", "token", "credential", "password"))
-                or lowered.endswith((".pem", ".key", ".p12", ".pfx", ".crt", ".cer"))
-            ):
+            if _is_secret(name):
                 continue
             result.append(path)
     return sorted(result)
@@ -527,10 +523,12 @@ def run_single_trial(
                 raise RuntimeError("pre-launch workspace snapshot is incomplete")
         return complete
 
-    def stop_owned(process: subprocess.Popen[Any], *, timed_out: bool) -> tuple[int | None, bool]:
+    def stop_owned(
+        process: subprocess.Popen[Any], *, timed_out: bool, grace_seconds: float = 0.5,
+    ) -> tuple[int | None, bool]:
         try:
             if hasattr(process, "pid"):
-                code = stop_process_group(process)
+                code = stop_process_group(process, grace_seconds=grace_seconds)
             elif timed_out:
                 process.kill()
                 code = process.wait()
@@ -616,14 +614,31 @@ def run_single_trial(
             spawn_error = type(exc).__name__
         finally:
             if sampler is not None:
-                _, sampler_stopped = stop_owned(sampler, timed_out=False)
+                sampler_exit_code, sampler_stopped = stop_owned(
+                    sampler, timed_out=False, grace_seconds=2.0,
+                )
+                sampler_failed = not sampler_stopped or sampler_exit_code != 0
+                sampler_reason = (
+                    "cleanup_failed" if not sampler_stopped
+                    else "nonzero_exit" if sampler_exit_code != 0
+                    else None
+                )
+                sampler_details: dict[str, Any] = {
+                    "status": "failed" if sampler_failed else "completed",
+                    "exit_code": sampler_exit_code,
+                }
+                if sampler_reason is not None:
+                    sampler_details["reason"] = sampler_reason
                 observe(
                     "record", "sampler_end", phase_id, agent_id=agent_id, source="sampler",
-                    component="observer", details={"status": "completed" if sampler_stopped else "failed"},
+                    component="observer", details=sampler_details,
                 )
-                if not sampler_stopped:
+                if sampler_failed:
                     evidence_complete[0] = False
-                    evidence_errors.append({"component": "sampler_stop", "error_type": "cleanup_failed"})
+                    evidence_errors.append({
+                        "component": "sampler_stop" if not sampler_stopped else "sampler_exit",
+                        "error_type": sampler_reason or "unexpected_exit",
+                    })
 
         if spawn_error:
             evidence_complete[0] = False
@@ -691,7 +706,9 @@ def run_single_trial(
     visible_feedback = None
     if cleanup_ok:
         visible_feedback = visible_results()
-        cleanup_ok = bool(visible_feedback.get("process_group_stopped", True))
+        cleanup_ok = bool(visible_feedback.get("process_group_stopped", True)) and not bool(
+            visible_feedback.get("execution_error", False)
+        )
     if not cleanup_ok:
         evidence_complete[0] = False
     if visible_feedback is None:
@@ -745,7 +762,9 @@ def run_single_trial(
                 evidence_complete[0] = False
             if cleanup_ok:
                 visible_feedback = visible_results()
-                cleanup_ok = bool(visible_feedback.get("process_group_stopped", True))
+                cleanup_ok = bool(visible_feedback.get("process_group_stopped", True)) and not bool(
+                    visible_feedback.get("execution_error", False)
+                )
     else:
         skipped = observe(
             "start_phase", "repair_agent", agent_id="repair-agent", source="cascade",

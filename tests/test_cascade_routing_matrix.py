@@ -99,6 +99,55 @@ def test_observer_manifest_marks_git_provenance_unavailable_on_failure(
     assert manifest["source_tree_dirty"] == expected
 
 
+def test_fixture_hash_allowlist_skips_secret_directories_and_never_opens_them(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from benchmark import run_observer
+
+    fixture = tmp_path / "fixture"
+    safe_file = fixture / "src/calculator.py"
+    secret_file = fixture / "secret-store/config.json"
+    safe_file.parent.mkdir(parents=True)
+    secret_file.parent.mkdir(parents=True)
+    safe_file.write_text("SAFE_FIXTURE", encoding="utf-8")
+    secret_file.write_text("SYNTHETIC_SECRET_SENTINEL", encoding="utf-8")
+    allowed_paths = cascade._fixture_file_paths(fixture)
+
+    opened: list[Path] = []
+    real_hash_file = run_observer._hash_file
+
+    def track_hash(path: Path) -> tuple[int, str]:
+        opened.append(Path(path))
+        return real_hash_file(path)
+
+    monkeypatch.setattr(run_observer, "_hash_file", track_hash)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    run_observer.RunObserver(
+        run_dir,
+        {
+            "hash_allowlist": [
+                {
+                    "category": "task_fixture",
+                    "path": path.relative_to(fixture).as_posix(),
+                    "file": path,
+                }
+                for path in allowed_paths
+            ],
+            "snapshot_hash_allowlist": [],
+        },
+    )
+
+    manifest_text = (run_dir / "observer-manifest.json").read_text(encoding="utf-8")
+    manifest = json.loads(manifest_text)
+    hash_paths = {item["path"] for item in manifest["hashes"]}
+    assert safe_file in opened
+    assert secret_file not in opened
+    assert "secret-store/config.json" not in hash_paths
+    assert "SYNTHETIC_SECRET_SENTINEL" not in manifest_text
+
+
 def test_server_command_configurations() -> None:
     server_bin = Path("/usr/local/bin/llama-server")
     m4b_path = Path("/models/qwen3.5-4b.gguf")
@@ -204,7 +253,9 @@ def _run_fake_trial(
     preexisting_output: bool = False,
     sampler_start_error: bool = False,
     sampler_stop_error: bool = False,
+    sampler_exit_code: int = 0,
     agent_spawn_error: bool = False,
+    visible_execution_error: bool = False,
 ) -> tuple[dict[str, object], list[str], list[str], list[dict[str, object]]]:
     timeline: list[str] = []
     prompts: list[str] = []
@@ -246,7 +297,7 @@ def _run_fake_trial(
             self.killed = False
             if sampler:
                 self.model = "sampler"
-                self.outcome: dict[str, object] = {"exit_code": 0}
+                self.outcome: dict[str, object] = {"exit_code": sampler_exit_code}
                 return
             self.model = str(command[command.index("--model") + 1])
             prompts.append(str(command[-1]))
@@ -258,7 +309,7 @@ def _run_fake_trial(
             if self.sampler:
                 if self.stop_error:
                     raise OSError("synthetic sampler stop failure")
-                return 0
+                return int(self.outcome["exit_code"])
             if self.outcome.get("timed_out") and not self.timed_out:
                 self.timed_out = True
                 raise subprocess.TimeoutExpired(self.command, timeout)
@@ -304,6 +355,12 @@ def _run_fake_trial(
 
     def visible_feedback(*args, **kwargs):
         timeline.append("visible_feedback")
+        if visible_execution_error:
+            return {
+                "phase": "visible_development", "passed": False, "output": "",
+                "exit_code": None, "timed_out": False,
+                "process_group_stopped": True, "execution_error": True,
+            }
         if original_feedback is None:
             raise AssertionError("cascade did not use visible workspace feedback")
         return original_feedback(*args, **kwargs)
@@ -492,6 +549,46 @@ def test_sampler_stop_failure_does_not_replace_final_grade(
     assert result["evidence_status"] == "incomplete"
 
 
+def test_sampler_early_nonzero_exit_marks_evidence_incomplete_without_changing_grade(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    result, _, _, private_grades = _run_fake_trial(
+        monkeypatch, tmp_path, private_success=True, initially_visible_passes=True,
+        sampler_exit_code=1,
+    )
+
+    run_dir = tmp_path / "output/runs/trial_01_dynamic-cascade_calculator_division_r1"
+    observer_events = [
+        json.loads(line)
+        for line in (run_dir / "observer-events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    sampler_end = [event for event in observer_events if event["event_type"] == "sampler_end"]
+    assert len(private_grades) == 1
+    assert result["grader_pass"] is True
+    assert result["benchmark_valid"] is True
+    assert result["evidence_status"] == "incomplete"
+    assert sampler_end[0]["details"]["status"] == "failed"
+    assert sampler_end[0]["details"]["reason"] == "nonzero_exit"
+    assert sampler_end[0]["details"]["exit_code"] == 1
+
+
+def test_visible_feedback_execution_error_skips_final_private_grade(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    result, timeline, _, private_grades = _run_fake_trial(
+        monkeypatch, tmp_path, private_success=True, initially_visible_passes=True,
+        visible_execution_error=True,
+    )
+
+    assert "visible_feedback" in timeline
+    assert not private_grades
+    assert "private_final_grade" not in timeline
+    assert result["grader_pass"] is None
+    assert result["benchmark_valid"] is False
+
+
 def test_observer_write_failure_after_launch_does_not_replace_benchmark_result(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -619,6 +716,13 @@ def test_timeout_stops_agent_descendants_before_final_grading(
     assert (run_dir / "workspace-snapshots.jsonl").is_file()
     assert "FAKE_AGENT_STDOUT_SENTINEL" in (run_dir / "events.jsonl").read_text(encoding="utf-8")
     assert "FAKE_AGENT_STDERR_SENTINEL" in (run_dir / "stderr.log").read_text(encoding="utf-8")
+    observer_events = [
+        json.loads(line)
+        for line in (run_dir / "observer-events.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    sampler_end = [event for event in observer_events if event["event_type"] == "sampler_end"]
+    assert len(sampler_end) == 1
+    assert sampler_end[0]["details"] == {"status": "completed", "exit_code": 0}
 
     artifact_root = os.environ.get("CASCADE_OBSERVER_E2E_DIR")
     if artifact_root:
