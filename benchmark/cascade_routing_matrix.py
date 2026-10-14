@@ -861,7 +861,7 @@ def run_single_trial(
         "capability_evidence_eligible": False,
         "filesystem_enforced": False,
         "network_enforced": False,
-        "pristine_regrade": False,
+        "pristine_regrade": bool(cleanup_ok),
         "private_holdout": False,
         "evidence_errors": evidence_errors,
         "task_wall_seconds": round(task_wall, 3),

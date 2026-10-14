@@ -102,6 +102,14 @@ V2_TASKS = (
 )
 V2_ROUND_LIMIT_SECONDS = 120 * 60
 V2_REPEATS = 2
+PROTOCOL_SOURCE_PATHS = (
+    Path(__file__),
+    REPO_ROOT / "benchmark/harness_runner.py",
+    REPO_ROOT / "benchmark/harness_eval.py",
+    REPO_ROOT / "benchmark/opencode_controlled_probe.py",
+    REPO_ROOT / "benchmark/pristine_grading.py",
+    REPO_ROOT / "benchmark/configs/grading/fixture-fingerprints-v1.json",
+)
 
 
 def build_pilot_schedule() -> list[dict[str, Any]]:
@@ -1198,8 +1206,7 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
     protocol["llama_cpp_version"] = version_text
     protocol["source_file_sha256"] = {
         str(path.relative_to(REPO_ROOT).as_posix()): _sha256(path)
-        for path in (Path(__file__), REPO_ROOT / "benchmark/harness_runner.py",
-                     REPO_ROOT / "benchmark/harness_eval.py", REPO_ROOT / "benchmark/opencode_controlled_probe.py")
+        for path in PROTOCOL_SOURCE_PATHS
     }
     protocol["started_at_utc"] = datetime.now(timezone.utc).isoformat()
     (output_root / "protocol.json").write_text(json.dumps(protocol, indent=2) + "\n", encoding="utf-8")

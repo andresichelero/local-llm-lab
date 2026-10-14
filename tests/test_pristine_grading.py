@@ -19,6 +19,31 @@ FIXTURE = ROOT / "benchmark" / "fixtures" / "harness_task"
 
 
 class PristineGradingRegressionTests(unittest.TestCase):
+    def test_results_state_authentication_and_integrity_limits_even_on_preflight_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workspace = root / "workspace"
+            copied_fixture = root / "fixture-copy"
+            shutil.copytree(FIXTURE, workspace)
+            shutil.copytree(FIXTURE, copied_fixture)
+
+            normal = grade_workspace(workspace, FIXTURE)
+            preflight_failure = grade_workspace(workspace, copied_fixture)
+
+        for result in (normal, preflight_failure):
+            self.assertFalse(result["runtime_result_authenticated"], result)
+            self.assertFalse(result["adversarial_evaluation_validated"], result)
+            self.assertFalse(result["aggregate_is_security_proof"], result)
+            self.assertIn("false_positives_possible", result["aggregate_interpretation"])
+            self.assertEqual(
+                result["result_authentication_semantics"],
+                "not_authenticated_against_hostile_candidate_source",
+            )
+            self.assertEqual(
+                result["integrity_semantics"],
+                "static_workspace_structure_and_protected_files_only",
+            )
+
     def test_trusted_suite_does_not_accept_candidate_printed_unittest_banner(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -168,6 +193,7 @@ class PristineGradingRegressionTests(unittest.TestCase):
             self.assertTrue(result["workflow_pass"], result)
             self.assertFalse(result["candidate_tests_executed"], result)
             self.assertIsNone(result["workspace_tests_passed"], result)
+            self.assertEqual(result["artifact_retention"], "not_requested", result)
             self.assertFalse(marker.exists())
 
     def test_secret_named_addition_fails_scope_without_opening_its_contents(self) -> None:
@@ -220,14 +246,16 @@ class PristineGradingRegressionTests(unittest.TestCase):
 
     def test_copied_fixture_path_is_not_accepted_as_a_trusted_baseline(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            workspace = Path(temporary) / "workspace"
-            copied_fixture = Path(temporary) / "fixture-copy"
+            root = Path(temporary)
+            workspace = root / "workspace"
+            copied_fixture = root / "fixture-copy"
             shutil.copytree(FIXTURE, workspace)
             shutil.copytree(FIXTURE, copied_fixture)
 
-            result = grade_workspace(workspace, copied_fixture)
+            result = grade_workspace(workspace, copied_fixture, artifact_dir=root / "artifacts")
 
             self.assertFalse(result["success"], result)
+            self.assertEqual(result["artifact_retention"], "failed", result)
             self.assertTrue(any("baseline_path_does_not_match" in reason for reason in result["skip_reasons"]))
 
     def test_artifact_sink_keeps_non_overwriting_source_only_replay_evidence(self) -> None:
@@ -262,6 +290,7 @@ class PristineGradingRegressionTests(unittest.TestCase):
             result = grade_workspace(workspace, FIXTURE, artifact_dir=artifact_parent)
 
             self.assertTrue(result["success"], result)
+            self.assertEqual(result["artifact_retention"], "retained", result)
             artifact_root = Path(result["artifact_path"])
             self.assertTrue((artifact_root / "replay-manifest.json").is_file())
             self.assertIn("src/calculator.py", (artifact_root / "source-only.patch").read_text(encoding="utf-8"))
@@ -269,9 +298,21 @@ class PristineGradingRegressionTests(unittest.TestCase):
             manifest = json.loads((artifact_root / "replay-manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["grader_protocol_version"], "pristine-workspace-v1")
             self.assertFalse(manifest["candidate_tests_executed"])
+            self.assertFalse(manifest["runtime_result_authenticated"])
+            self.assertFalse(manifest["adversarial_evaluation_validated"])
+            self.assertFalse(manifest["aggregate_is_security_proof"])
+            self.assertIn("false_positives_possible", manifest["aggregate_interpretation"])
+            self.assertEqual(
+                manifest["integrity_semantics"],
+                "static_workspace_structure_and_protected_files_only",
+            )
             self.assertEqual(source_path.read_bytes(), candidate_source)
             second = grade_workspace(workspace, FIXTURE, artifact_dir=artifact_parent)
             self.assertNotEqual(second["artifact_path"], result["artifact_path"])
+            with patch.object(pristine_grading, "_write_replay_artifacts", side_effect=OSError("disk error")):
+                failed_write = grade_workspace(workspace, FIXTURE, artifact_dir=artifact_parent)
+            self.assertEqual(failed_write["artifact_retention"], "failed", failed_write)
+            self.assertFalse(failed_write["artifacts_retained"], failed_write)
 
 
 if __name__ == "__main__":

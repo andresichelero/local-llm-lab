@@ -90,6 +90,14 @@ class ModelQualityPairedTests(unittest.TestCase):
         self.assertTrue(protocol["round0_prerequisite"]["not_a_single_agent_prerequisite"])
         self.assertEqual(protocol["single_agent_prerequisite"]["status"], "pending")
 
+    def test_protocol_source_hash_allowlist_includes_grader_and_fixture_fingerprints(self) -> None:
+        source_paths = {
+            path.relative_to(paired.REPO_ROOT).as_posix()
+            for path in paired.PROTOCOL_SOURCE_PATHS
+        }
+        self.assertIn("benchmark/pristine_grading.py", source_paths)
+        self.assertIn("benchmark/configs/grading/fixture-fingerprints-v1.json", source_paths)
+
     def test_profile_is_single_agent_local_no_update_and_explicitly_scoped(self) -> None:
         profile = build_profile("qwen3.5-4b")
         self.assertFalse(profile["autoupdate"])

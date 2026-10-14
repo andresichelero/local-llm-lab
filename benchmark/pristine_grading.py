@@ -1,7 +1,11 @@
 """Source-only final grading against fingerprinted task fixtures.
 
 This module does not provide OS or network isolation. Candidate tests are parsed
-for workflow evidence but are never imported or executed.
+for workflow evidence but are never imported or executed. Candidate source still
+shares an interpreter with the test runner, so runtime results are not
+authenticated against hostile candidate code. The ``success`` aggregate is a
+compatibility diagnostic only; false positives remain possible until a separate
+evaluator authority boundary exists.
 """
 from __future__ import annotations
 
@@ -482,6 +486,12 @@ def _write_replay_artifacts(
         "grader_protocol_version": GRADER_PROTOCOL_VERSION,
         "task": task,
         "fixture": TASK_POLICIES[task]["fixture"],
+        "runtime_result_authenticated": False,
+        "adversarial_evaluation_validated": False,
+        "aggregate_is_security_proof": False,
+        "aggregate_interpretation": "diagnostic_only_false_positives_possible_until_separate_authority_boundary",
+        "result_authentication_semantics": "not_authenticated_against_hostile_candidate_source",
+        "integrity_semantics": "static_workspace_structure_and_protected_files_only",
         "candidate_tests_executed": False,
         "candidate_git_metadata_audited": False,
         "candidate_bytecode_replayed": False,
@@ -554,7 +564,7 @@ def _test_count(output: str) -> int | None:
     return None
 
 
-_TRUSTED_UNITTEST_RUNNER = r'''import json, sys, unittest
+_UNITTEST_RUNNER_BOOTSTRAP = r'''import json, sys, unittest
 marker = "PRISTINE_UNITTEST_RESULT="
 start_dir, pattern = sys.argv[1], sys.argv[2]
 loader = unittest.TestLoader()
@@ -580,7 +590,7 @@ raise SystemExit(0 if success else 1)
 
 
 def _trusted_unittest_command(start_dir: Path, pattern: str) -> list[str]:
-    return [sys.executable, "-S", "-B", "-c", _TRUSTED_UNITTEST_RUNNER, str(start_dir), pattern]
+    return [sys.executable, "-S", "-B", "-c", _UNITTEST_RUNNER_BOOTSTRAP, str(start_dir), pattern]
 
 
 def _run_trusted_suite(
@@ -590,6 +600,12 @@ def _run_trusted_suite(
     environment: dict[str, str],
     timeout_seconds: int,
 ) -> dict[str, Any]:
+    """Run the fixed suite in a child process and return unauthenticated diagnostics.
+
+    Candidate source is imported into this child's interpreter. It can mutate
+    ``unittest``, forge the result marker, or terminate the process, so the
+    returned test count and pass state are not an authority boundary.
+    """
     try:
         process = subprocess.Popen(
             command,
@@ -717,10 +733,12 @@ def _grade_in_root(
                 result["artifact_path"] = str(grade_root)
                 result["artifacts_retained"] = True
                 result["artifacts_written"] = True
-            except OSError as error:
+                result["artifact_retention"] = "retained"
+            except Exception as error:
                 result["artifacts_retained"] = False
                 result["artifacts_written"] = False
                 result["artifact_error"] = type(error).__name__
+                result["artifact_retention"] = "failed"
         else:
             result["artifacts_retained"] = False
             result["artifacts_written"] = False
@@ -885,6 +903,12 @@ def _finish_result(result: dict[str, Any]) -> dict[str, Any]:
     result["capability_evidence_eligible"] = False
     result["filesystem_isolation_verified"] = False
     result["network_isolation_verified"] = False
+    result["runtime_result_authenticated"] = False
+    result["adversarial_evaluation_validated"] = False
+    result["aggregate_is_security_proof"] = False
+    result["aggregate_interpretation"] = "diagnostic_only_false_positives_possible_until_separate_authority_boundary"
+    result["result_authentication_semantics"] = "not_authenticated_against_hostile_candidate_source"
+    result["integrity_semantics"] = "static_workspace_structure_and_protected_files_only"
     result["candidate_tests_executed"] = False
     result["git_metadata_audited"] = False
     result.setdefault("workspace_tests_passed", None)
@@ -924,7 +948,7 @@ def grade_pristine_workspace(
         "skip_reasons": [],
         "artifacts_retained": False,
         "artifacts_written": False,
-        "artifact_retention": "pending" if artifact_dir is not None else "not_requested",
+        "artifact_retention": "failed" if artifact_dir is not None else "not_requested",
     }
     try:
         manifest = _load_manifest()
@@ -938,7 +962,7 @@ def grade_pristine_workspace(
             "workflow_pass": None,
             "grader_skipped": True,
             "skip_reasons": [f"preflight_failed:{type(error).__name__}:{str(error)[:160]}"],
-            "artifact_retention": "preflight_failed" if artifact_dir is not None else "not_requested",
+            "artifact_retention": "failed" if artifact_dir is not None else "not_requested",
         })
         return _finish_result(result)
 
@@ -959,7 +983,7 @@ def grade_pristine_workspace(
             "workflow_pass": None,
             "grader_skipped": True,
             "skip_reasons": [f"grader_failed_closed:{type(error).__name__}:{str(error)[:160]}"],
-            "artifact_retention": "grader_failed" if artifact_dir is not None else "not_requested",
+            "artifact_retention": "failed" if artifact_dir is not None else "not_requested",
         })
         return _finish_result(result)
     finally:

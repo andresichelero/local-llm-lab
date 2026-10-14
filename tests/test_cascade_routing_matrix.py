@@ -423,6 +423,7 @@ def test_cascade_repair_and_routing_ignore_private_grade(
 
     assert result["escalated"] is True
     assert result["strict_pass"] is private_success
+    assert result["pristine_regrade"] is True
     assert len(prompts) == 2
     assert "VISIBLE_WORKSPACE_FAILURE_SENTINEL" in prompts[1]
     assert all("PRIVATE_ORACLE_" not in prompt for prompt in prompts)
@@ -586,6 +587,7 @@ def test_visible_feedback_execution_error_skips_final_private_grade(
     assert not private_grades
     assert "private_final_grade" not in timeline
     assert result["grader_pass"] is None
+    assert result["pristine_regrade"] is False
     assert result["benchmark_valid"] is False
 
 
