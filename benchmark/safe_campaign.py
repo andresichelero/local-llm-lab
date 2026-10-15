@@ -15,11 +15,13 @@ import socket
 import stat
 import subprocess
 import sys
+import tempfile
 import time
+from contextlib import contextmanager
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -272,6 +274,21 @@ def _task_prompt_hash_record(task_file: Path) -> dict[str, Any]:
             "file": path}
 
 
+@contextmanager
+def _temporary_profile_copy(profile_path: Path) -> Iterator[Path]:
+    """Expose a private generated profile without widening the approved home binds."""
+    with tempfile.TemporaryDirectory(prefix="safe-campaign-profile-") as temporary:
+        root = Path(temporary).resolve(strict=True)
+        home = Path.home().resolve(strict=True)
+        repo = REPO_ROOT.resolve(strict=True)
+        if (root == home or home in root.parents or root == repo or repo in root.parents):
+            raise RuntimeError("generated OpenCode profile temp must be outside home and repository")
+        profile_copy = root / "opencode.json"
+        profile_copy.write_bytes(profile_path.read_bytes())
+        profile_copy.chmod(0o600)
+        yield profile_copy.resolve(strict=True)
+
+
 def _safe_runtime_binds(binary: Path, benchmark_root: Path) -> tuple[Any, ...]:
     return campaign_readiness._runtime_binds(benchmark_root=benchmark_root,
                                               opencode_binary=binary,
@@ -435,13 +452,6 @@ def _execute_task(row: dict[str, Any], *, install_root: Path, binary: Path,
         broker=broker,
         broker_transcript_dir=_private_directory(run_dir / "broker-transcript"),
     )
-    # The profile is an explicit read-only file bind outside the writable task tree.
-    spec = SandboxSpec(
-        argv=spec.argv, workspace=spec.workspace, workspace_exports=spec.workspace_exports,
-        runtime_ro=spec.runtime_ro + (RuntimeBind(profile_path.resolve(strict=True), "/opt/opencode.json"),),
-        env=spec.env, limits=spec.limits, broker=spec.broker,
-        broker_transcript_dir=spec.broker_transcript_dir,
-    )
     agent_monitor, agent_resource = _resource_monitor_start(
         run_dir / "resources-agent", run_id=observer.run_id,
         phase_id="initial_agent", agent_id="opencode")
@@ -454,7 +464,14 @@ def _execute_task(row: dict[str, Any], *, install_root: Path, binary: Path,
     sandbox_evidence_path = run_dir / "sandbox-evidence.json"
     try:
         try:
-            result = SandboxSupervisor().run(spec)
+            with _temporary_profile_copy(profile_path) as profile_bind_path:
+                bound_spec = SandboxSpec(
+                    argv=spec.argv, workspace=spec.workspace, workspace_exports=spec.workspace_exports,
+                    runtime_ro=spec.runtime_ro + (RuntimeBind(profile_bind_path, "/opt/opencode.json"),),
+                    env=spec.env, limits=spec.limits, broker=spec.broker,
+                    broker_transcript_dir=spec.broker_transcript_dir,
+                )
+                result = SandboxSupervisor().run(bound_spec)
         finally:
             agent_resource = _resource_monitor_stop(agent_monitor, agent_resource)
         model_requests = sum(event.method == "POST" and event.path == "/v1/chat/completions"
@@ -643,7 +660,8 @@ def _execute_task(row: dict[str, Any], *, install_root: Path, binary: Path,
         failed_output = getattr(result, "output", b"") if result is not None else b""
         record = {**row, "experiment": experiment, "attempted": True,
                   "denominator_eligible": row["stage"] == "measurement", "failure_category": "infrastructure",
-                  "infrastructure_error": f"{type(exc).__name__}: {str(exc)[:400]}",
+                  "infrastructure_error": (getattr(result, "infrastructure_error", None)
+                                            or f"{type(exc).__name__}: {str(exc)[:400]}"),
                   "strict_pass": False, "run_dir": str(run_dir),
                   "agent_exit_code": getattr(result, "returncode", None),
                   "timed_out": getattr(result, "timed_out", None),

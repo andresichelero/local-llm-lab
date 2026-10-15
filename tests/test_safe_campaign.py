@@ -150,6 +150,20 @@ class SafeCampaignPlanTests(unittest.TestCase):
                 self.assertTrue((workspace / "TASK.md").is_file())
                 self.assertFalse(task_prompt.resolve().is_relative_to(workspace.resolve()))
 
+    def test_runtime_profile_copy_is_private_external_and_short_lived(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "opencode.json"
+            source.write_text('{"provider": {}}', encoding="utf-8")
+            copied_path = None
+            with safe_campaign._temporary_profile_copy(source) as bound_profile:
+                copied_path = bound_profile
+                self.assertEqual(bound_profile.read_bytes(), source.read_bytes())
+                self.assertEqual(stat.S_IMODE(bound_profile.stat().st_mode), 0o600)
+                self.assertNotIn(Path.home().resolve(), bound_profile.parents)
+                self.assertNotIn(safe_campaign.REPO_ROOT.resolve(), bound_profile.parents)
+            self.assertIsNotNone(copied_path)
+            self.assertFalse(copied_path.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
