@@ -153,9 +153,15 @@ class SafeCampaignPlanTests(unittest.TestCase):
         self.assertEqual(result["status"], "not_ready")
 
     def test_task_prompt_manifest_uses_repo_paths_for_all_six_tasks(self) -> None:
+        from benchmark.harness_runner import resolve_task
+        from benchmark.pristine_grading import _load_manifest, _verify_fixture
+
+        manifest = _load_manifest()
         with tempfile.TemporaryDirectory() as temporary:
             for task in safe_campaign.TASKS:
                 workspace = Path(temporary) / task
+                fixture, _prompt = resolve_task(task)
+                trusted_files, _modes = _verify_fixture(task, fixture, manifest)
                 task_prompt = safe_campaign._seed_workspace(task, workspace)
                 record = safe_campaign._task_prompt_hash_record(task_prompt)
 
@@ -164,6 +170,12 @@ class SafeCampaignPlanTests(unittest.TestCase):
                     safe_campaign.REPO_ROOT.resolve()).as_posix())
                 self.assertTrue((workspace / "TASK.md").is_file())
                 self.assertFalse(task_prompt.resolve().is_relative_to(workspace.resolve()))
+                actual_files = {
+                    path.relative_to(workspace).as_posix()
+                    for path in workspace.rglob("*") if path.is_file()
+                }
+                self.assertEqual(actual_files, set(trusted_files))
+                self.assertFalse(any(path.name == "__pycache__" for path in workspace.rglob("*")))
 
     def test_runtime_profile_copy_is_private_external_and_short_lived(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

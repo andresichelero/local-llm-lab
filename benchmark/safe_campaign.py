@@ -29,7 +29,12 @@ if str(REPO_ROOT) not in sys.path:
 
 from benchmark import campaign_readiness  # noqa: E402
 from benchmark.model_quality_paired import MODELS as PINNED_MODELS  # noqa: E402
-from benchmark.pristine_grading import GRADER_PROTOCOL_VERSION, TASK_POLICIES  # noqa: E402
+from benchmark.pristine_grading import (  # noqa: E402
+    GRADER_PROTOCOL_VERSION,
+    TASK_POLICIES,
+    _load_manifest,
+    _verify_fixture,
+)
 from benchmark.provenance import git_provenance  # noqa: E402
 from benchmark.run_observer import RunObserver  # noqa: E402
 
@@ -273,10 +278,13 @@ def _seed_workspace(task: str, workspace: Path) -> Path:
     from benchmark.harness_runner import resolve_task
 
     fixture, task_file = resolve_task(task)
-    shutil.copytree(fixture, workspace, symlinks=False)
-    for path in workspace.rglob("*"):
-        if path.is_symlink():
-            raise RuntimeError("task fixture contains a symlink")
+    trusted_files, trusted_modes = _verify_fixture(task, fixture, _load_manifest())
+    workspace.mkdir(parents=True, exist_ok=False, mode=0o700)
+    for relative, content in trusted_files.items():
+        path = workspace.joinpath(*Path(relative).parts)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+        path.chmod(trusted_modes[relative])
     return task_file
 
 
