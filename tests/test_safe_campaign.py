@@ -13,6 +13,38 @@ from benchmark import safe_campaign
 
 
 class SafeCampaignPlanTests(unittest.TestCase):
+    def test_server_accepts_installed_nine_character_revision_and_rejects_mismatch(self) -> None:
+        from benchmark.model_quality_paired import MODELS, RUNTIME_REVISION
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            model = next(iter(MODELS))
+            model_path = root / MODELS[model]["path"]
+            model_path.parent.mkdir(parents=True)
+            model_path.write_bytes(b"synthetic model identity control")
+            for revision, accepted in ((RUNTIME_REVISION[:9], True), ("000000000", False)):
+                with (
+                    self.subTest(revision=revision),
+                    patch.object(safe_campaign, "_port_is_free", return_value=True),
+                    patch.object(safe_campaign.campaign_readiness, "_sha256_file",
+                                 return_value=MODELS[model]["sha256"]),
+                    patch("benchmark.opencode_controlled_probe._assert_server_bundle"),
+                    patch.object(safe_campaign.subprocess, "run", return_value=SimpleNamespace(
+                        returncode=0, stdout=f"version: 9999 ({revision})", stderr="")),
+                    patch.object(safe_campaign.subprocess, "Popen") as launch,
+                    patch.object(safe_campaign, "_port_has_model", return_value=True),
+                ):
+                    launch.return_value.poll.return_value = None
+                    if accepted:
+                        process, log_path = safe_campaign._start_server(root, model, root)
+                        self.assertIs(process, launch.return_value)
+                        self.assertTrue(log_path.is_file())
+                        launch.assert_called_once()
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "Unexpected llama.cpp build"):
+                            safe_campaign._start_server(root, model, root)
+                        launch.assert_not_called()
+
     def test_schedule_is_seeded_six_task_abba_with_two_measurements_per_pair(self) -> None:
         first = safe_campaign.build_schedule(seed=1234)
         self.assertEqual(first, safe_campaign.build_schedule(seed=1234))

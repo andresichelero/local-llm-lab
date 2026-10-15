@@ -762,7 +762,7 @@ def _start_server(benchmark_root: Path, model: str, output_root: Path) -> tuple[
                              text=True, timeout=10, check=False)
     if version.returncode != 0:
         raise RuntimeError("pinned llama-server version query failed")
-    require_runtime_revision(version.stdout, version.stderr, RUNTIME_REVISION[:10])
+    require_runtime_revision(version.stdout, version.stderr, RUNTIME_REVISION[:9])
     log_path = output_root / f"llama-server-{model}-{time.time_ns()}.log"
     output = log_path.open("xb")
     try:
