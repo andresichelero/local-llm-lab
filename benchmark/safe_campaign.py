@@ -11,7 +11,6 @@ import json
 import os
 import random
 import shutil
-import socket
 import stat
 import subprocess
 import sys
@@ -175,12 +174,7 @@ def run_current_readiness(*, evidence_dir: Path | None = None,
 
 
 def _port_is_free(port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-        try:
-            probe.bind(("127.0.0.1", port))
-            return True
-        except OSError:
-            return False
+    return campaign_readiness._loopback_port_is_free(port)
 
 
 def _resource_monitor_start(output_dir: Path, *, run_id: str, phase_id: str,

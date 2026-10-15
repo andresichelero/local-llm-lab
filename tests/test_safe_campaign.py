@@ -4,6 +4,8 @@ import json
 import unittest
 import stat
 import tempfile
+import socket
+import sys
 from types import MappingProxyType
 from types import SimpleNamespace
 from pathlib import Path
@@ -14,6 +16,38 @@ from benchmark import safe_campaign
 
 
 class SafeCampaignPlanTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux socket lifecycle regression")
+    def test_real_two_session_ports_allow_time_wait_and_reject_live_listeners(self) -> None:
+        port = 0
+        for session in range(2):
+            with self.subTest(session=session), socket.socket() as server:
+                server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                server.bind(("127.0.0.1", port))
+                port = server.getsockname()[1]
+                server.listen(1)
+                server.settimeout(2)
+                self.assertFalse(safe_campaign._port_is_free(port))
+                self.assertFalse(safe_campaign.campaign_readiness._loopback_port_is_free(port))
+                with socket.create_connection(("127.0.0.1", port), timeout=2) as client:
+                    accepted, _address = server.accept()
+                    with accepted:
+                        # The server closes first, so TIME_WAIT belongs to the
+                        # server port and survives closing the listening socket.
+                        accepted.shutdown(socket.SHUT_WR)
+                        self.assertEqual(client.recv(1), b"")
+            with socket.socket() as plain_probe:
+                with self.assertRaises(OSError):
+                    plain_probe.bind(("127.0.0.1", port))
+            self.assertTrue(safe_campaign._port_is_free(port))
+            self.assertTrue(safe_campaign.campaign_readiness._loopback_port_is_free(port))
+
+    def test_real_exclusive_port_binder_is_rejected_before_listening(self) -> None:
+        with socket.socket() as binder:
+            binder.bind(("127.0.0.1", 0))
+            port = binder.getsockname()[1]
+            self.assertFalse(safe_campaign._port_is_free(port))
+            self.assertFalse(safe_campaign.campaign_readiness._loopback_port_is_free(port))
+
     def _run_synthetic_campaign(self, *, fail_after_two_rows: bool = False) -> dict:
         """Traverse real orchestration/persistence with zero model or task execution."""
         with tempfile.TemporaryDirectory() as temporary:

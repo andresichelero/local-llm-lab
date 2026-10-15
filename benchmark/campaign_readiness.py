@@ -684,6 +684,20 @@ def _stop_resource_monitor(monitor: Any, startup: dict[str, Any]) -> dict[str, A
                 "reason": f"{type(exc).__name__}: {str(exc)[:200]}"}
 
 
+def _loopback_port_is_free(port: int) -> bool:
+    """Check server-compatible bind/listen availability, including TIME_WAIT reuse."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        try:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            probe.bind(("127.0.0.1", port))
+            # A bind alone can coexist with an existing SO_REUSEADDR listener on
+            # Linux. listen must also succeed; never enable SO_REUSEPORT here.
+            probe.listen(1)
+            return True
+        except OSError:
+            return False
+
+
 def _model_bundle_audit(benchmark_root: Path | None = None) -> dict[str, Any]:
     """Read-only check of pinned model/server bundle and current resource headroom."""
     from benchmark.model_quality_paired import MODELS, RUNTIME_REVISION, SERVER_PORT
@@ -731,13 +745,7 @@ def _model_bundle_audit(benchmark_root: Path | None = None) -> dict[str, Any]:
         evidence["server"]["reason"] = str(exc)[:1000]
     try:
         for port in (SERVER_PORT, 18888):
-            with socket.socket() as probe:
-                try:
-                    probe.bind(("127.0.0.1", port))
-                    free = True
-                except OSError:
-                    free = False
-            evidence["resources"][f"port_{port}_free"] = free
+            evidence["resources"][f"port_{port}_free"] = _loopback_port_is_free(port)
         try:
             meminfo = {}
             for line in Path("/proc/meminfo").read_text(encoding="ascii").splitlines():
