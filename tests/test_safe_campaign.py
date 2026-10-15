@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 import stat
 import tempfile
@@ -177,6 +178,28 @@ class SafeCampaignPlanTests(unittest.TestCase):
                 self.assertNotIn(safe_campaign.REPO_ROOT.resolve(), bound_profile.parents)
             self.assertIsNotNone(copied_path)
             self.assertFalse(copied_path.exists())
+
+    def test_resource_sampling_uses_supported_observer_sampler_events(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "observer"
+            run_dir.mkdir()
+            observer = safe_campaign.RunObserver(
+                run_dir, {"hash_allowlist": [], "snapshot_hash_allowlist": []})
+            agent_phase = observer.start_phase("initial_agent", source="agent_process")
+            grade_phase = observer.start_phase("grading", source="final_grader")
+            safe_campaign._record_resource_sampler_ends(
+                observer, agent_phase, grade_phase,
+                {"status": "measured", "sample_count": 3},
+                {"status": "unavailable", "sample_count": 0},
+            )
+            observer.end_phase(agent_phase, "completed", source="agent_process")
+            observer.end_phase(grade_phase, "completed", source="final_grader")
+            observer.finalize("pass", "complete")
+            events = [json.loads(line) for line in (run_dir / "observer-events.jsonl").read_text().splitlines()]
+
+        sampler_events = [event for event in events if event["event_type"] == "sampler_end"]
+        self.assertEqual([event["details"]["sample_count"] for event in sampler_events], [3, 0])
+        self.assertEqual([event["phase_id"] for event in sampler_events], ["initial_agent", "grading"])
 
 
 if __name__ == "__main__":

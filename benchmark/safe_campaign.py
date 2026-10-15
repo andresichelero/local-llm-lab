@@ -195,6 +195,19 @@ def _resource_monitor_stop(monitor: Any, startup: dict[str, Any]) -> dict[str, A
                 "reason": f"{type(exc).__name__}: {str(exc)[:200]}"}
 
 
+def _record_resource_sampler_ends(observer: RunObserver, agent_phase: str, grade_phase: str,
+                                  agent_resource: Mapping[str, Any],
+                                  grade_resource: Mapping[str, Any]) -> None:
+    for phase_id, agent_id, evidence in (
+        (agent_phase, "opencode", agent_resource),
+        (grade_phase, "trusted-grade-worker", grade_resource),
+    ):
+        count = evidence.get("sample_count", 0)
+        observer.record("sampler_end", phase_id, agent_id=agent_id, source="sampler",
+                        details={"status": str(evidence.get("status", "unavailable")),
+                                 "sample_count": count if type(count) is int and count >= 0 else 0})
+
+
 def _private_directory(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=False, mode=0o700)
     path.chmod(0o700)
@@ -530,11 +543,7 @@ def _execute_task(row: dict[str, Any], *, install_root: Path, binary: Path,
         resource_sampling = {"agent": agent_resource, "grading": grade_resource,
                              "server_session": session_resource or
                              {"status": "unavailable", "reason": "session_sampler_not_started"}}
-        observer.record("resource_sampling", source="observer",
-                        details={"status": "measured" if agent_resource.get("status") == "measured"
-                                 and grade_resource.get("status") == "measured" else "unavailable",
-                                 "sample_count": int(agent_resource.get("sample_count", 0))
-                                 + int(grade_resource.get("sample_count", 0))})
+        _record_resource_sampler_ends(observer, phase, grade_phase, agent_resource, grade_resource)
         broker_transcript = dict(result.broker_transcript_evidence)
         transcript_status = _broker_transcript_status(broker_transcript, len(result.broker_events))
         has_model_request = any(event.method == "POST" and event.path == "/v1/chat/completions"
