@@ -13,6 +13,106 @@ from benchmark import campaign_readiness
 
 
 class CampaignReadinessTests(unittest.TestCase):
+    def test_gate_verdict_cannot_be_overwritten_by_evidence_status(self) -> None:
+        gates = {}
+        for passed in (True, False):
+            campaign_readiness._set_gate(gates, "sampling", passed, "validated_samples",
+                                        {"status": "measured", "reason": None, "sample_count": 2})
+            self.assertEqual(gates["sampling"]["status"], "passed" if passed else "unavailable")
+            self.assertEqual(gates["sampling"]["evidence_status"], "measured")
+            self.assertEqual(gates["sampling"]["reason"], "validated_samples")
+
+    def test_export_mode_control_accepts_runtime_immutable_mapping(self) -> None:
+        result = Mock(returncode=0, cleanup_verified=True, infrastructure_error=None,
+                      workspace_outputs=MappingProxyType({"src/keep.txt": b"after"}),
+                      workspace_output_modes=MappingProxyType({"src/keep.txt": 0o640}),
+                      workspace_audit=MappingProxyType({"complete": True,
+                          "missing_exports": ["src/deleted.txt"], "unsafe_paths": []}))
+        with (patch.object(campaign_readiness.sys, "platform", "linux"),
+              patch.object(campaign_readiness, "_run_sandbox_probe", return_value=result)):
+            evidence = campaign_readiness._workspace_export_mode_probe()
+        self.assertTrue(evidence["passed"])
+        result.workspace_audit = MappingProxyType({"complete": False,
+                                  "missing_exports": ["src/deleted.txt"], "unsafe_paths": []})
+        with (patch.object(campaign_readiness.sys, "platform", "linux"),
+              patch.object(campaign_readiness, "_run_sandbox_probe", return_value=result)):
+            self.assertFalse(campaign_readiness._workspace_export_mode_probe()["passed"])
+
+    def test_bundle_audit_accepts_actual_pinned_short_revision_and_retains_errors(self) -> None:
+        from benchmark import model_quality_paired, opencode_controlled_probe
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binary = root / "envs/node-harnesses/opencode/node_modules/opencode-linux-x64/bin/opencode"
+            binary.parent.mkdir(parents=True)
+            binary.write_text("synthetic executable", encoding="utf-8")
+            with (
+                patch.object(model_quality_paired, "MODELS", {}),
+                patch.object(opencode_controlled_probe, "_assert_server_bundle"),
+                patch.object(campaign_readiness.shutil, "which", return_value=None),
+                patch.object(campaign_readiness.subprocess, "run", side_effect=[
+                    Mock(stdout=b"version: 0.6.0-dev (build 1, commit d81235049)", stderr=b"", returncode=0),
+                    Mock(stdout=b"1.19.0", stderr=b"", returncode=0),
+                ]),
+            ):
+                evidence = campaign_readiness._model_bundle_audit(root)
+            self.assertEqual(evidence["evidence"]["server"]["bundle"], "passed")
+            self.assertFalse(evidence["passed"])  # Unavailable GPU still blocks readiness.
+            with (
+                patch.object(model_quality_paired, "MODELS", {}),
+                patch.object(opencode_controlled_probe, "_assert_server_bundle"),
+                patch.object(campaign_readiness.shutil, "which", return_value=None),
+                patch.object(campaign_readiness.subprocess, "run", return_value=
+                             Mock(stdout=b"commit d81235049", stderr=b"", returncode=1)),
+            ):
+                evidence = campaign_readiness._model_bundle_audit(root)
+            self.assertFalse(evidence["passed"])
+            self.assertNotIn("bundle", evidence["evidence"]["server"])
+            self.assertEqual(evidence["evidence"]["server"]["reason"], "llama_server_version_failed:1")
+            with (
+                patch.object(model_quality_paired, "MODELS", {}),
+                patch.object(opencode_controlled_probe, "_assert_server_bundle",
+                             side_effect=RuntimeError("synthetic invalid bundle")),
+                patch.object(campaign_readiness.shutil, "which", return_value=None),
+            ):
+                evidence = campaign_readiness._model_bundle_audit(root)
+            self.assertEqual(evidence["evidence"]["server"]["reason"], "synthetic invalid bundle")
+
+    def test_fake_probe_binds_private_temporary_profile_outside_durable_evidence(self) -> None:
+        from benchmark import linux_sandbox
+
+        captured = []
+
+        def inspect_spec(spec):
+            profile = next(bind.source for bind in spec.runtime_ro if str(bind.target) == "/opt/opencode.json")
+            captured.append(profile)
+            self.assertTrue(profile.is_file())
+            self.assertEqual(profile.stat().st_mode & 0o777, 0o600)
+            self.assertNotIn(evidence, profile.parents)
+            self.assertEqual(json.loads(profile.read_text(encoding="utf-8")),
+                             json.loads(next(evidence.glob("fake-opencode-*/opencode.json")).read_text(encoding="utf-8")))
+            raise RuntimeError("synthetic stop before sandbox startup")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            evidence = root / "evidence"
+            evidence.mkdir()
+            binary = root / "envs/node-harnesses/opencode/node_modules/opencode-linux-x64/bin/opencode"
+            binary.parent.mkdir(parents=True)
+            binary.write_text("synthetic executable", encoding="utf-8")
+            with (
+                patch.object(campaign_readiness.sys, "platform", "linux"),
+                patch.object(campaign_readiness, "_fake_endpoint",
+                             return_value=(Mock(server_address=("127.0.0.1", 12345)), Mock(), {})),
+                patch.object(campaign_readiness, "_runtime_binds", return_value=()),
+                patch.object(campaign_readiness, "_start_resource_monitor", return_value=(None, {})),
+                patch.object(linux_sandbox.SandboxSupervisor, "run", side_effect=inspect_spec),
+            ):
+                result = campaign_readiness._fake_opencode_probe(evidence, root)
+            self.assertIn("synthetic stop", result["error"])
+            self.assertEqual(len(captured), 1)
+            self.assertFalse(captured[0].exists())
+
     def test_default_evidence_root_is_unique_and_under_benchmark_results(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             benchmark_root = Path(temporary) / "benchmark"

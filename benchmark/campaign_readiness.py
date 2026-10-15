@@ -625,9 +625,10 @@ def _fake_endpoint(model_id: str) -> tuple[ThreadingHTTPServer, threading.Thread
 
 def _set_gate(gates: dict[str, dict[str, Any]], name: str, passed: bool, reason: str,
               details: dict[str, Any] | None = None) -> None:
-    gates[name] = {"status": "passed" if passed else "unavailable", "reason": reason}
-    if details:
-        gates[name].update(_json_safe(details))
+    gates[name] = _json_safe(details) if details else {}
+    if "status" in gates[name]:
+        gates[name]["evidence_status"] = gates[name]["status"]
+    gates[name].update({"status": "passed" if passed else "unavailable", "reason": reason})
 
 
 def _prepare_evidence_root(path: Path | None, *, benchmark_root: Path | None = None) -> Path:
@@ -715,8 +716,10 @@ def _model_bundle_audit(benchmark_root: Path | None = None) -> dict[str, Any]:
         env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp", "TMPDIR": "/tmp",
                "LANG": "C.UTF-8", "LD_LIBRARY_PATH": str(libdir)}
         version = subprocess.run([str(server), "--version"], env=env, capture_output=True, timeout=15, check=False)
+        if version.returncode != 0:
+            raise RuntimeError(f"llama_server_version_failed:{version.returncode}")
         version_text = require_runtime_revision(version.stdout.decode("utf-8", errors="replace"),
-                                               version.stderr.decode("utf-8", errors="replace"), RUNTIME_REVISION[:10])
+                                               version.stderr.decode("utf-8", errors="replace"), RUNTIME_REVISION[:9])
         evidence["server"]["bundle"] = "passed"
         evidence["server"]["runtime_revision"] = version_text
         opencode = subprocess.run([str(binary), "--version"], env=env, capture_output=True, timeout=15, check=False)
@@ -725,6 +728,7 @@ def _model_bundle_audit(benchmark_root: Path | None = None) -> dict[str, Any]:
         evidence["server"]["opencode_binary"] = "passed" if binary.is_file() and opencode.returncode == 0 and "1.19.0" in version_text else "failed"
     except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
         evidence["server"]["status"] = f"unavailable:{type(exc).__name__}"
+        evidence["server"]["reason"] = str(exc)[:1000]
     try:
         for port in (SERVER_PORT, 18888):
             with socket.socket() as probe:
@@ -1085,7 +1089,7 @@ def _workspace_export_mode_probe() -> dict[str, Any]:
             result.returncode == 0 and result.cleanup_verified and not result.infrastructure_error
             and outputs == {"src/keep.txt": b"after"}
             and modes == {"src/keep.txt": 0o640}
-            and isinstance(audit, dict) and audit.get("complete") is True
+            and isinstance(audit, Mapping) and audit.get("complete") is True
             and audit.get("missing_exports") == ["src/deleted.txt"]
             and audit.get("unsafe_paths") == []
         )
@@ -1299,7 +1303,7 @@ def _fake_opencode_probe(evidence_dir: Path,
             monitor_evidence = monitor_start
             # Exercise the exact sandbox resource policy used by campaign agents.
             # Only the upstream model response is fake in this compatibility gate.
-            from benchmark.safe_campaign import _agent_limits
+            from benchmark.safe_campaign import _agent_limits, _temporary_profile_copy
 
             limits = _agent_limits()
             runtime = list(_runtime_binds(benchmark_root=install_root, opencode_binary=binary,
@@ -1310,18 +1314,21 @@ def _fake_opencode_probe(evidence_dir: Path,
                 frozen_generation={"temperature": 0, "seed": 1234, "max_tokens": 1024},
                 max_requests=8,
             )
-            spec = SandboxSpec(
-                argv=("/opt/opencode", "run", "--format", "json", "--pure", "--agent", "build",
-                      "--model", f"local/{model['alias']}", "--dir", "/workspace", prompt),
-                workspace=workspace,
-                workspace_exports=("src/probe.txt", "src/bash-probe.txt"),
-                runtime_ro=tuple(runtime) + (
-                    RuntimeBind(config_path.resolve(strict=True), "/opt/opencode.json"),
-                ),
-                env={"OPENCODE_CONFIG": "/opt/opencode.json", "OPENCODE_DISABLE_AUTOUPDATE": "1"},
-                limits=limits, broker=broker, broker_transcript_dir=transcript_dir,
-            )
-            result = SandboxSupervisor().run(spec)
+            with _temporary_profile_copy(config_path) as profile_copy:
+                # Durable evidence may live under /home, which is not an approved
+                # runtime bind source. Use the canonical private temporary copy.
+                spec = SandboxSpec(
+                    argv=("/opt/opencode", "run", "--format", "json", "--pure", "--agent", "build",
+                          "--model", f"local/{model['alias']}", "--dir", "/workspace", prompt),
+                    workspace=workspace,
+                    workspace_exports=("src/probe.txt", "src/bash-probe.txt"),
+                    runtime_ro=tuple(runtime) + (
+                        RuntimeBind(profile_copy, "/opt/opencode.json"),
+                    ),
+                    env={"OPENCODE_CONFIG": "/opt/opencode.json", "OPENCODE_DISABLE_AUTOUPDATE": "1"},
+                    limits=limits, broker=broker, broker_transcript_dir=transcript_dir,
+                )
+                result = SandboxSupervisor().run(spec)
             # Persist supervisor evidence before inspecting optional side artifacts,
             # so a missing transcript cannot hide the actual sandbox failure.
             (run_dir / "stdout.jsonl").write_bytes(result.output)
