@@ -2,6 +2,11 @@
 
 Reproducible experiments for local inference, quantization, fine-tuning, and agent harnesses on this Windows 10 + WSL2 host. The machine audit is stored under `results/system-audit/`; run results must be recorded separately from upstream claims.
 
+For the next controlled agent/model campaign, follow [safe model testing](docs/SAFE_MODEL_TESTING.md).
+The new readiness command runs without inference; model execution requires a fresh passing gate.
+Historical native-agent launchers are retired from the supported campaign. The new restricted-language
+protocol is separate from historical CPython scores and makes no general coding-capability claim.
+
 ## Machine facts that constrain this lab
 
 - Windows 10 Pro 22H2, Ryzen 5 5600X, 32 GiB physical RAM, RTX 3070 8 GiB, NVIDIA driver 610.62.
