@@ -32,6 +32,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 GRADER_PROTOCOL_VERSION = "restricted-python-workspace-v2"
 FINGERPRINT_MANIFEST = REPO_ROOT / "benchmark/configs/grading/fixture-fingerprints-v2.json"
 MAX_CANDIDATE_FILE_BYTES = 4 * 1024 * 1024
+MAX_WORKFLOW_TEST_BYTES = 256_000
+MAX_WORKFLOW_TEST_AST_NODES = 20_000
+MAX_WORKFLOW_TEST_AST_DEPTH = 128
 OUTPUT_LIMIT = 4000
 
 # Explicit task policy: candidate-authored test paths are workflow evidence
@@ -445,16 +448,45 @@ def _workflow_result(task: str, candidate_bytes: dict[str, bytes]) -> dict[str, 
     policy = TASK_POLICIES[task]
     test_names: set[str] = set()
     parse_errors: list[str] = []
+    resource_errors: list[str] = []
     missing_files: list[str] = []
     for relative in policy["test_files"]:
         raw = candidate_bytes.get(relative)
         if raw is None:
             missing_files.append(relative)
             continue
+        if len(raw) > MAX_WORKFLOW_TEST_BYTES:
+            resource_errors.append(f"{relative}:source_byte_limit")
+            continue
         try:
             tree = ast.parse(raw.decode("utf-8"))
+        except (MemoryError, RecursionError):
+            resource_errors.append(f"{relative}:parser_resource_limit")
+            continue
         except (UnicodeError, SyntaxError) as error:
             parse_errors.append(f"{relative}:{type(error).__name__}")
+            continue
+        stack: list[tuple[ast.AST, int]] = [(tree, 0)]
+        node_count = 0
+        ast_limit: str | None = None
+        while stack:
+            node, depth = stack.pop()
+            node_count += 1
+            if node_count > MAX_WORKFLOW_TEST_AST_NODES:
+                ast_limit = "ast_node_limit"
+                break
+            if depth > MAX_WORKFLOW_TEST_AST_DEPTH:
+                ast_limit = "ast_depth_limit"
+                break
+            for child in ast.iter_child_nodes(node):
+                if node_count + len(stack) >= MAX_WORKFLOW_TEST_AST_NODES:
+                    ast_limit = "ast_node_limit"
+                    break
+                stack.append((child, depth + 1))
+            if ast_limit is not None:
+                break
+        if ast_limit is not None:
+            resource_errors.append(f"{relative}:{ast_limit}")
             continue
         test_names.update(
             node.name for node in ast.walk(tree)
@@ -470,7 +502,7 @@ def _workflow_result(task: str, candidate_bytes: dict[str, bytes]) -> dict[str, 
         )
         present_groups.append(present)
     names_present = bool(present_groups) and all(present_groups)
-    workflow_pass = not missing_files and not parse_errors and names_present
+    workflow_pass = not missing_files and not parse_errors and not resource_errors and names_present
     return {
         "passed": workflow_pass,
         "candidate_test_files": list(policy["test_files"]),
@@ -479,6 +511,7 @@ def _workflow_result(task: str, candidate_bytes: dict[str, bytes]) -> dict[str, 
         "required_test_names_present": names_present,
         "missing_test_files": missing_files,
         "parse_errors": parse_errors,
+        "resource_errors": resource_errors,
         "test_quality": "unmeasured",
         "candidate_tests_executed": False,
     }

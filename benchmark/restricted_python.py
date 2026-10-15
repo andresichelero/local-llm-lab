@@ -1237,9 +1237,11 @@ class _Runtime:
                 value = args[0] if args else 0
                 if type(value) is str:
                     self.check_string(value)
+                    self.tick(len(value))
                     digits = sum(char.isalnum() for char in value)
                     if digits > int(_MAX_INT_BITS * 0.302) + 2:
                         self._raise_limit("integer conversion bit limit exceeded")
+                    self.charge_allocation(64 + len(value))
                     return self.check_int(int(value, base))
                 if type(value) in (bool, int, float):
                     return self.check_int(int(value))
@@ -1248,6 +1250,9 @@ class _Runtime:
                 value = args[0] if args else 0.0
                 if type(value) not in (bool, int, float, str):
                     raise TypeError("float() value is not supported")
+                if type(value) is str:
+                    self.check_string(value)
+                    self.tick(len(value))
                 return float(value)
             if name == "str":
                 return self._safe_str(args[0]) if args else ""

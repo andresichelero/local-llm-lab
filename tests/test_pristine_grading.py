@@ -276,6 +276,37 @@ class PristineGradingRegressionTests(unittest.TestCase):
             self.assertEqual(result["artifact_retention"], "not_requested", result)
             self.assertFalse(marker.exists())
 
+    def test_workflow_test_ast_bytes_nodes_and_depth_are_bounded(self) -> None:
+        test_path = "tests/test_calculator.py"
+        large_ast = ("x=0\n" * 50_000).encode("utf-8")
+        node_limited = pristine_grading._workflow_result(
+            "calculator_division", {test_path: large_ast}
+        )
+        self.assertFalse(node_limited["passed"])
+        self.assertIn(f"{test_path}:ast_node_limit", node_limited["resource_errors"])
+        self.assertEqual(node_limited["parse_errors"], [])
+
+        deep_source = ("value=" + "[" * 140 + "0" + "]" * 140 + "\n").encode("utf-8")
+        depth_limited = pristine_grading._workflow_result(
+            "calculator_division", {test_path: deep_source}
+        )
+        self.assertFalse(depth_limited["passed"])
+        self.assertIn(f"{test_path}:ast_depth_limit", depth_limited["resource_errors"])
+        self.assertEqual(depth_limited["parse_errors"], [])
+
+        byte_limited = pristine_grading._workflow_result(
+            "calculator_division", {test_path: b"#" * (pristine_grading.MAX_WORKFLOW_TEST_BYTES + 1)}
+        )
+        self.assertFalse(byte_limited["passed"])
+        self.assertIn(f"{test_path}:source_byte_limit", byte_limited["resource_errors"])
+
+        malformed = pristine_grading._workflow_result(
+            "calculator_division", {test_path: b"def invalid(:\n"}
+        )
+        self.assertFalse(malformed["passed"])
+        self.assertIn(f"{test_path}:SyntaxError", malformed["parse_errors"])
+        self.assertEqual(malformed["resource_errors"], [])
+
     def test_secret_named_addition_fails_scope_without_opening_its_contents(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary) / "workspace"

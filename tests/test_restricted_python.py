@@ -252,6 +252,27 @@ def generate_service_summary(records: list[dict]) -> dict[str, float]:
                 with self.assertRaises(ExecutionLimitError):
                     module.run()
 
+    def test_invalid_numeric_conversions_in_loops_consume_work_budget(self) -> None:
+        module = self.load_one(
+            "def count_int_failures(values):\n"
+            "    failures = 0\n"
+            "    for value in values:\n"
+            "        try: int(value)\n"
+            "        except ValueError: failures += 1\n"
+            "    return failures\n"
+            "def count_float_failures(values):\n"
+            "    failures = 0\n"
+            "    for value in values:\n"
+            "        try: float(value)\n"
+            "        except ValueError: failures += 1\n"
+            "    return failures\n",
+            step_limit=250,
+        )
+        invalid_values = ["x" * 100] * 4
+        for conversion in (module.count_int_failures, module.count_float_failures):
+            with self.subTest(conversion=conversion.name), self.assertRaises(ExecutionLimitError):
+                conversion(invalid_values)
+
     def test_parser_rejects_unbounded_ast_and_unsupported_callable_shapes(self) -> None:
         with self.assertRaises(ExecutionLimitError):
             self.load_one("def f():\n    return [" + ",".join("0" for _ in range(22_000)) + "]\n")
