@@ -325,9 +325,11 @@ def _parse_native_events(raw: bytes, observer: RunObserver, *, model: str, task:
 
 def _apply_workspace_exports(workspace: Path, outputs: Any, modes: Any,
                               allowed: tuple[str, ...]) -> None:
-    if (not isinstance(outputs, dict) or not isinstance(modes, dict)
+    if (not isinstance(outputs, Mapping) or not isinstance(modes, Mapping)
             or set(outputs) - set(allowed) or set(modes) != set(outputs)):
         raise RuntimeError("sandbox returned workspace paths outside the declared task export allowlist")
+    outputs = dict(outputs)
+    modes = dict(modes)
     for relative in allowed:
         path = workspace.joinpath(*Path(relative).parts)
         if relative not in outputs:

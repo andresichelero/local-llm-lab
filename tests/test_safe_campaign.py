@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 import stat
 import tempfile
+from types import MappingProxyType
 from pathlib import Path
 from unittest.mock import patch
 
@@ -73,6 +74,19 @@ class SafeCampaignPlanTests(unittest.TestCase):
             self.assertEqual(preserved.read_bytes(), b"candidate")
             self.assertEqual(stat.S_IMODE(preserved.stat().st_mode), 0o640)
             self.assertFalse(deleted.exists())
+
+    def test_workspace_export_reconciliation_accepts_read_only_runtime_mappings(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            (workspace / "src").mkdir()
+            safe_campaign._apply_workspace_exports(
+                workspace,
+                MappingProxyType({"src/main.py": b"candidate"}),
+                MappingProxyType({"src/main.py": 0o640}),
+                ("src/main.py",),
+            )
+            self.assertEqual((workspace / "src/main.py").read_bytes(), b"candidate")
+            self.assertEqual(stat.S_IMODE((workspace / "src/main.py").stat().st_mode), 0o640)
 
     def test_workspace_export_rejects_missing_or_invalid_mode_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
