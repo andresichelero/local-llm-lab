@@ -307,6 +307,39 @@ class PristineGradingRegressionTests(unittest.TestCase):
         self.assertIn(f"{test_path}:SyntaxError", malformed["parse_errors"])
         self.assertEqual(malformed["resource_errors"], [])
 
+        with self.assertRaises(pristine_grading.ExecutionLimitError):
+            pristine_grading._functions(large_ast, {"preserved"})
+
+    def test_workflow_resource_limit_sets_execution_status_after_trusted_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary) / "workspace"
+            shutil.copytree(FIXTURE, workspace)
+            source_path = workspace / "src" / "calculator.py"
+            source_path.write_text(
+                source_path.read_text(encoding="utf-8")
+                + "\n\n"
+                + "def divide(a: float, b: float) -> float:\n"
+                + "    if b == 0:\n"
+                + "        raise ValueError('division by zero')\n"
+                + "    return a / b\n",
+                encoding="utf-8",
+            )
+            test_path = workspace / "tests" / "test_calculator.py"
+            test_path.write_text("x=0\n" * 50_000, encoding="utf-8")
+
+            result = grade_workspace(workspace, FIXTURE)
+
+        self.assertTrue(result["integrity_pass"], result)
+        self.assertTrue(result["scope_pass"], result)
+        self.assertTrue(result["regression_pass"], result)
+        self.assertTrue(result["functional_pass"], result)
+        self.assertFalse(result["workflow_pass"], result)
+        self.assertIn("tests/test_calculator.py:ast_node_limit",
+                      result["workflow_metrics"]["resource_errors"])
+        self.assertTrue(result["runtime_result_authenticated"], result)
+        self.assertEqual(result["evaluation_status"], "execution_limit", result)
+        self.assertIn("candidate_workflow_resource_limit", result["skip_reasons"])
+
     def test_secret_named_addition_fails_scope_without_opening_its_contents(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary) / "workspace"

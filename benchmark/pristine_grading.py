@@ -407,8 +407,12 @@ def _scope_result(
             helper_errors.append(f"preserved_helper_source_missing:{relative}")
             continue
         try:
-            current_functions = _functions(current.decode("utf-8"), set(policy["preserved_helpers"]))
-            original_functions = _functions(original.decode("utf-8"), set(policy["preserved_helpers"]))
+            current_functions = _functions(current, set(policy["preserved_helpers"]))
+            original_functions = _functions(original, set(policy["preserved_helpers"]))
+        except ExecutionLimitError as error:
+            helper_ok = False
+            helper_errors.append(f"source_resource_limit:{relative}:{error}")
+            continue
         except (UnicodeError, SyntaxError):
             helper_ok = None
             helper_errors.append(f"source_parse_failed:{relative}")
@@ -435,8 +439,33 @@ def _scope_result(
     }
 
 
-def _functions(source: str, names: set[str]) -> dict[str, str]:
-    tree = ast.parse(source)
+def _bounded_ast(raw: bytes) -> ast.Module:
+    if len(raw) > MAX_WORKFLOW_TEST_BYTES:
+        raise ExecutionLimitError("source_byte_limit")
+    source = raw.decode("utf-8")
+    try:
+        tree = ast.parse(source)
+    except (MemoryError, RecursionError):
+        raise ExecutionLimitError("parser_resource_limit") from None
+
+    stack: list[tuple[ast.AST, int]] = [(tree, 0)]
+    node_count = 0
+    while stack:
+        node, depth = stack.pop()
+        node_count += 1
+        if node_count > MAX_WORKFLOW_TEST_AST_NODES:
+            raise ExecutionLimitError("ast_node_limit")
+        if depth > MAX_WORKFLOW_TEST_AST_DEPTH:
+            raise ExecutionLimitError("ast_depth_limit")
+        for child in ast.iter_child_nodes(node):
+            if node_count + len(stack) >= MAX_WORKFLOW_TEST_AST_NODES:
+                raise ExecutionLimitError("ast_node_limit")
+            stack.append((child, depth + 1))
+    return tree
+
+
+def _functions(source: bytes, names: set[str]) -> dict[str, str]:
+    tree = _bounded_ast(source)
     return {
         node.name: ast.dump(node, include_attributes=False)
         for node in tree.body
@@ -455,38 +484,13 @@ def _workflow_result(task: str, candidate_bytes: dict[str, bytes]) -> dict[str, 
         if raw is None:
             missing_files.append(relative)
             continue
-        if len(raw) > MAX_WORKFLOW_TEST_BYTES:
-            resource_errors.append(f"{relative}:source_byte_limit")
-            continue
         try:
-            tree = ast.parse(raw.decode("utf-8"))
-        except (MemoryError, RecursionError):
-            resource_errors.append(f"{relative}:parser_resource_limit")
+            tree = _bounded_ast(raw)
+        except ExecutionLimitError as error:
+            resource_errors.append(f"{relative}:{error}")
             continue
         except (UnicodeError, SyntaxError) as error:
             parse_errors.append(f"{relative}:{type(error).__name__}")
-            continue
-        stack: list[tuple[ast.AST, int]] = [(tree, 0)]
-        node_count = 0
-        ast_limit: str | None = None
-        while stack:
-            node, depth = stack.pop()
-            node_count += 1
-            if node_count > MAX_WORKFLOW_TEST_AST_NODES:
-                ast_limit = "ast_node_limit"
-                break
-            if depth > MAX_WORKFLOW_TEST_AST_DEPTH:
-                ast_limit = "ast_depth_limit"
-                break
-            for child in ast.iter_child_nodes(node):
-                if node_count + len(stack) >= MAX_WORKFLOW_TEST_AST_NODES:
-                    ast_limit = "ast_node_limit"
-                    break
-                stack.append((child, depth + 1))
-            if ast_limit is not None:
-                break
-        if ast_limit is not None:
-            resource_errors.append(f"{relative}:{ast_limit}")
             continue
         test_names.update(
             node.name for node in ast.walk(tree)
@@ -925,6 +929,12 @@ def _grade_in_root(
         result["skip_reasons"].append("integrity_gate_failed")
         return finalize()
     if not scope["passed"]:
+        if any(
+            error.startswith("source_resource_limit:")
+            for error in scope["preserved_helper_errors"]
+        ):
+            result["evaluation_status"] = "execution_limit"
+            result["skip_reasons"].append("candidate_source_ast_resource_limit")
         result["skip_reasons"].append("scope_gate_failed")
         return finalize()
 
@@ -970,7 +980,11 @@ def _grade_in_root(
          if status in statuses),
         "passed",
     )
-    if result["evaluation_status"] in {"unsupported_syntax", "execution_limit", "infrastructure_failure"}:
+    workflow_resource_errors = result.get("workflow_metrics", {}).get("resource_errors", [])
+    if workflow_resource_errors:
+        result["evaluation_status"] = "execution_limit"
+        result["skip_reasons"].append("candidate_workflow_resource_limit")
+    elif result["evaluation_status"] in {"unsupported_syntax", "execution_limit", "infrastructure_failure"}:
         result["skip_reasons"].append(f"trusted_evaluation_{result['evaluation_status']}")
 
     result["grader_skipped"] = False
