@@ -491,6 +491,7 @@ def _execute_task(row: dict[str, Any], *, install_root: Path, binary: Path,
     result: Any = None
     model_requests = 0
     successful_model_responses = 0
+    workflow_complete = False
     sandbox_evidence_path = run_dir / "sandbox-evidence.json"
     try:
         try:
@@ -684,10 +685,20 @@ def _execute_task(row: dict[str, Any], *, install_root: Path, binary: Path,
         except BaseException:
             pass
         failed_output = getattr(result, "output", b"") if result is not None else b""
+        infrastructure_error = (getattr(result, "infrastructure_error", None)
+                                or f"{type(exc).__name__}: {str(exc)[:400]}")
+        failure_record = {
+            "agent_exit_code": getattr(result, "returncode", None),
+            "timed_out": getattr(result, "timed_out", False),
+            "output_limited": getattr(result, "output_limited", False),
+            "infrastructure_error": infrastructure_error,
+            "workflow_complete": workflow_complete,
+            "grade": {},
+        }
         record = {**row, "experiment": experiment, "attempted": True,
-                  "denominator_eligible": row["stage"] == "measurement", "failure_category": "infrastructure",
-                  "infrastructure_error": (getattr(result, "infrastructure_error", None)
-                                            or f"{type(exc).__name__}: {str(exc)[:400]}"),
+                  "denominator_eligible": row["stage"] == "measurement",
+                  "failure_category": classify_failure(failure_record),
+                  "infrastructure_error": infrastructure_error,
                   "strict_pass": False, "run_dir": str(run_dir),
                   "agent_exit_code": getattr(result, "returncode", None),
                   "timed_out": getattr(result, "timed_out", None),
@@ -704,8 +715,11 @@ def _execute_task(row: dict[str, Any], *, install_root: Path, binary: Path,
                   "sandbox_evidence_path": str(sandbox_evidence_path) if sandbox_evidence_path.is_file() else None,
                   "native_event_authority": "untrusted_process_stream",
                   "workflow_evidence_not_execution_attestation": True,
+                  "workflow_complete": workflow_complete,
                   "resource_sampling": {"agent": agent_resource, "grading": grade_resource,
                                         "server_session": session_resource}}
+        if result is not None:
+            record["workspace_integrity"] = dict(result.workspace_audit)
         _json_write(run_dir / "record.json", record)
         _record_jsonl(output_root / "records.jsonl", record)
         try:

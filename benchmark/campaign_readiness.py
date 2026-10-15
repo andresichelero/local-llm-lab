@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import platform
 import re
@@ -16,6 +17,7 @@ import tempfile
 import threading
 import time
 import traceback
+from collections.abc import Mapping
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -73,6 +75,28 @@ def _sha256_file(path: Path, *, limit: int | None = None) -> str:
 def _json_write(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n",
                     encoding="utf-8")
+
+
+def _json_safe(value: Any, *, depth: int = 0) -> Any:
+    """Normalize immutable mappings/tuples and reject non-JSON evidence values."""
+    if depth > 64:
+        raise ValueError("readiness evidence exceeds JSON nesting limit")
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("readiness evidence contains a non-finite number")
+        return value
+    if isinstance(value, Mapping):
+        result: dict[str, Any] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise TypeError("readiness evidence mapping keys must be strings")
+            result[key] = _json_safe(item, depth=depth + 1)
+        return result
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item, depth=depth + 1) for item in value]
+    raise TypeError(f"readiness evidence contains unsupported JSON value: {type(value).__name__}")
 
 
 def _manifest_files() -> set[str]:
@@ -603,7 +627,7 @@ def _set_gate(gates: dict[str, dict[str, Any]], name: str, passed: bool, reason:
               details: dict[str, Any] | None = None) -> None:
     gates[name] = {"status": "passed" if passed else "unavailable", "reason": reason}
     if details:
-        gates[name].update(details)
+        gates[name].update(_json_safe(details))
 
 
 def _prepare_evidence_root(path: Path | None, *, benchmark_root: Path | None = None) -> Path:
@@ -1480,18 +1504,18 @@ def run_current_readiness(*, evidence_dir: Path | None = None,
         "duration_seconds": round(time.monotonic() - started, 3),
         "limitations": [
             "The six regression tasks do not establish CPython generality, unseen training data, private holdout status, OS isolation, or security proof.",
-            "Candidate-authored test files are inspected as workflow data and never executed.",
+            "Trusted grading inspects candidate-authored test files as workflow data; they may run only inside the native agent sandbox.",
             "Native OpenCode JSONL is an untrusted process stream and workflow evidence, not an attestation that a specific process executed each action.",
             "Broker transcripts attest to the bytes and timings captured at the trusted adapter boundary, not to an individual same-UID writer identity.",
         ],
     }
+    report = _json_safe(report)
     fresh = input_hash_manifest(benchmark_root=benchmark_root)
     report["self_validation"] = validate_readiness_report(report, current_input_digest=fresh["digest"])
     report["ready"] = report["self_validation"]["ready"]
     if not report["ready"]:
         report["verdict"] = "BLOCKED"
-    (evidence_dir / "readiness-report.json").write_text(
-        json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
+    _json_write(evidence_dir / "readiness-report.json", report)
     return report
 
 

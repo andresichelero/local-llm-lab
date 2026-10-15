@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 import urllib.request
+from types import MappingProxyType
 from unittest.mock import Mock, patch
 from pathlib import Path
 
@@ -168,6 +169,19 @@ class CampaignReadinessTests(unittest.TestCase):
         files = campaign_readiness._manifest_files()
         for _fixture, prompt in TASK_PATHS.values():
             self.assertIn(prompt.as_posix(), files)
+
+    def test_gate_and_report_json_normalize_nested_immutable_evidence(self) -> None:
+        gates: dict[str, dict[str, object]] = {}
+        nested = MappingProxyType({"resource": MappingProxyType({"samples": (1, 2)})})
+        campaign_readiness._set_gate(gates, "sentinel", True, "verified", {"evidence": nested})
+
+        report = campaign_readiness._json_safe(MappingProxyType({"gates": MappingProxyType(gates)}))
+        serialized = json.dumps(report, sort_keys=True, allow_nan=False)
+
+        self.assertEqual(json.loads(serialized), {
+            "gates": {"sentinel": {"status": "passed", "reason": "verified",
+                                     "evidence": {"resource": {"samples": [1, 2]}}}}
+        })
 
     def test_missing_or_unavailable_gate_never_yields_ready(self) -> None:
         report = {

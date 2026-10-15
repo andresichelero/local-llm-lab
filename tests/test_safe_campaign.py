@@ -5,6 +5,7 @@ import unittest
 import stat
 import tempfile
 from types import MappingProxyType
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -214,6 +215,41 @@ class SafeCampaignPlanTests(unittest.TestCase):
         sampler_events = [event for event in events if event["event_type"] == "sampler_end"]
         self.assertEqual([event["details"]["sample_count"] for event in sampler_events], [3, 0])
         self.assertEqual([event["phase_id"] for event in sampler_events], ["initial_agent", "grading"])
+
+    def test_mocked_timeout_and_invalid_spec_keep_distinct_failure_categories(self) -> None:
+        for case, timed_out, infrastructure_error, expected in (
+            ("timeout", True, None, "resource"),
+            ("invalid-spec", False, "invalid_spec:ValueError", "infrastructure"),
+        ):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                output_root = root / "campaign"
+                output_root.mkdir()
+                result = SimpleNamespace(
+                    returncode=None, timed_out=timed_out, cleanup_verified=True,
+                    output_limited=False, output=b"", namespace_evidence={}, file_evidence={},
+                    network_evidence={}, resource_evidence={}, broker_events=(),
+                    broker_transcript_evidence=MappingProxyType({}),
+                    workspace_outputs=MappingProxyType({}),
+                    workspace_output_modes=MappingProxyType({}),
+                    workspace_audit=MappingProxyType({"complete": False}),
+                    infrastructure_error=infrastructure_error,
+                )
+                with (
+                    patch.object(safe_campaign, "_safe_runtime_binds", return_value=()),
+                    patch.object(safe_campaign, "_resource_monitor_start",
+                                 return_value=(None, {"status": "unavailable"})),
+                    patch("benchmark.linux_sandbox.SandboxSupervisor.run", return_value=result),
+                ):
+                    record = safe_campaign._execute_task(
+                        {"block": 1, "model": "qwen3.5-4b", "task": "calculator_division",
+                         "repeat": 1, "stage": "measurement"},
+                        install_root=root, binary=root / "opencode", server_log=root / "server.log",
+                        output_root=output_root, experiment=f"mocked-{case}",
+                    )
+
+                self.assertEqual(record["failure_category"], expected)
+                self.assertEqual(record["timed_out"], timed_out)
 
 
 if __name__ == "__main__":
