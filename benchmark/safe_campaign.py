@@ -829,7 +829,7 @@ def _is_ext4(path: Path) -> bool:
 
 def execute_campaign(*, benchmark_root: Path = DEFAULT_BENCHMARK_ROOT,
                      output_root: Path, readiness_runner: Any = None) -> dict[str, Any]:
-    """Run fresh gates, then execute the frozen 4-session ABBA campaign."""
+    """Run fresh gates, then execute the frozen eight-session two-cycle ABBA campaign."""
     benchmark_root = Path(benchmark_root).resolve()
     output_root = Path(output_root).resolve()
     if output_root.exists():

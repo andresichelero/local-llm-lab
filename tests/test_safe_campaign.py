@@ -8,11 +8,129 @@ from types import MappingProxyType
 from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
+from collections import Counter
 
 from benchmark import safe_campaign
 
 
 class SafeCampaignPlanTests(unittest.TestCase):
+    def _run_synthetic_campaign(self, *, fail_after_two_rows: bool = False) -> dict:
+        """Traverse real orchestration/persistence with zero model or task execution."""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output_root = root / "campaign"
+            starts = []
+            stops = []
+            task_calls = []
+
+            def start_server(benchmark_root, model, output_root):
+                process = object()
+                starts.append((model, process))
+                return process, output_root / f"synthetic-server-{len(starts)}.log"
+
+            def execute_task(row, **kwargs):
+                task_calls.append(dict(row))
+                if (fail_after_two_rows and row["block"] == 2
+                        and row["stage"] == "measurement"
+                        and row["task"] == safe_campaign.build_schedule()[8]["task"]):
+                    raise RuntimeError("synthetic interrupted session after two measured rows")
+                run_dir = output_root / f"synthetic-{row['block']}-{row['stage']}-{row['task']}"
+                run_dir.mkdir()
+                record = {**row, "experiment": kwargs["experiment"], "attempted": True,
+                          "denominator_eligible": row["stage"] == "measurement",
+                          "strict_pass": True, "failure_category": "passed",
+                          "model_requests": 0, "successful_model_responses": 0,
+                          "run_dir": str(run_dir),
+                          "synthetic_partial_evidence": f"preserved-block-{row['block']}-{row['task']}",
+                          "resource_sampling": {"server_session": kwargs["session_resource"]}}
+                safe_campaign._json_write(run_dir / "record.json", record)
+                safe_campaign._record_jsonl(output_root / "records.jsonl", record)
+                return record
+
+            def start_monitor(path, **kwargs):
+                return path.name, {"status": "running", "sample_count": 1}
+
+            def stop_monitor(handle, startup):
+                return {"status": "measured", "sample_count": 2,
+                        "cleanup_verified": True, "synthetic_monitor": handle}
+
+            snapshot = {"complete": True, "digest": "a" * 64, "records": []}
+            with (
+                patch.object(safe_campaign, "_port_is_free", return_value=True),
+                patch.object(safe_campaign.campaign_readiness, "input_hash_manifest", return_value=snapshot),
+                patch.object(safe_campaign.campaign_readiness, "validate_readiness_report", return_value={"ready": True}),
+                patch.object(safe_campaign.campaign_readiness, "_model_bundle_audit", return_value={"passed": True}),
+                patch.object(safe_campaign, "_is_ext4", return_value=True),
+                patch.object(safe_campaign.shutil, "disk_usage", return_value=SimpleNamespace(free=16 * 1024**3)),
+                patch.object(safe_campaign, "_start_server", side_effect=start_server),
+                patch.object(safe_campaign, "_stop_server", side_effect=stops.append),
+                patch.object(safe_campaign, "_execute_task", side_effect=execute_task),
+                patch.object(safe_campaign, "_resource_monitor_start", side_effect=start_monitor),
+                patch.object(safe_campaign, "_resource_monitor_stop", side_effect=stop_monitor),
+            ):
+                result = safe_campaign.execute_campaign(
+                    benchmark_root=root, output_root=output_root,
+                    readiness_runner=lambda **kwargs: {"ready": True, "synthetic_control": True})
+            records = [json.loads(line) for line in (output_root / "records.jsonl").read_text().splitlines()]
+            summary = json.loads((output_root / "summary.json").read_text())
+            self.assertEqual(result["status"], "completed")
+            self.assertEqual(result["measurement_rows"], 48)
+            self.assertEqual(len(records), 56)
+            self.assertEqual(result["model_sessions_started"], 8)
+            self.assertEqual([model for model, _process in starts], list(safe_campaign.BLOCK_MODELS))
+            self.assertEqual(stops, [process for _model, process in starts])
+            self.assertEqual(len(stops), 8)
+            self.assertFalse(result["inference_performed"])
+            self.assertEqual(result["model_requests"], 0)
+            self.assertEqual(result["successful_model_responses"], 0)
+            self.assertEqual(summary["strict_passes"], result["strict_passes"])
+            measured = [row for row in records if row["denominator_eligible"]]
+            warmups = [row for row in records if not row["denominator_eligible"]]
+            self.assertEqual(len(warmups), 8)
+            self.assertEqual({row["block"] for row in warmups}, set(range(1, 9)))
+            self.assertTrue(all(row["stage"] == "warmup" and row["repeat"] == 0 for row in warmups))
+            keys = [(row["block"], row["model"], row["task"], row["repeat"]) for row in measured]
+            expected = [(row["block"], row["model"], row["task"], row["repeat"])
+                        for row in safe_campaign.build_schedule()]
+            self.assertCountEqual(keys, expected)
+            self.assertEqual(len(set(keys)), 48)
+            self.assertEqual(Counter((row["model"], row["task"]) for row in measured),
+                             Counter({(model, task): 4 for model in safe_campaign.MODELS
+                                      for task in safe_campaign.TASKS}))
+            for row in records:
+                session = json.loads((output_root / "resource-sessions" /
+                                      f"block-{row['block']}" / "summary.json").read_text())
+                self.assertEqual(row["resource_sampling"]["server_session"], session)
+                self.assertEqual(session["status"], "measured")
+                self.assertTrue(session["cleanup_verified"])
+                if row.get("run_dir"):
+                    saved = json.loads((Path(row["run_dir"]) / "record.json").read_text())
+                    self.assertEqual(saved, row)
+                    self.assertEqual(saved["synthetic_partial_evidence"],
+                                     f"preserved-block-{row['block']}-{row['task']}")
+            return {"result": result, "records": records, "task_calls": task_calls}
+
+    def test_no_model_full_campaign_preserves_all_sessions_rows_and_final_sampling(self) -> None:
+        control = self._run_synthetic_campaign()
+        self.assertEqual(len(control["task_calls"]), 56)
+        self.assertEqual(control["result"]["strict_passes"], 48)
+        self.assertEqual(control["result"]["failure_categories"]["passed"], 48)
+        self.assertEqual(control["result"]["failure_categories"]["infrastructure"], 0)
+
+    def test_no_model_session_interruption_preserves_completed_rows_and_full_denominator(self) -> None:
+        control = self._run_synthetic_campaign(fail_after_two_rows=True)
+        self.assertEqual(control["result"]["strict_passes"], 44)
+        self.assertEqual(control["result"]["failure_categories"]["passed"], 44)
+        self.assertEqual(control["result"]["failure_categories"]["infrastructure"], 4)
+        failed = [row for row in control["records"] if row["failure_category"] == "infrastructure"]
+        self.assertEqual(len(failed), 4)
+        self.assertTrue(all(row["block"] == 2 and not row["attempted"] for row in failed))
+        self.assertTrue(all("synthetic interrupted session" in row["infrastructure_error"] for row in failed))
+        preserved = [row for row in control["records"] if row["block"] == 2
+                     and row["denominator_eligible"] and row["strict_pass"]]
+        self.assertEqual(len(preserved), 2)
+        self.assertTrue(all(row["synthetic_partial_evidence"] for row in preserved))
+
     def test_server_accepts_installed_nine_character_revision_and_rejects_mismatch(self) -> None:
         from benchmark.model_quality_paired import MODELS, RUNTIME_REVISION
 
