@@ -57,6 +57,11 @@
   "runtime": {
     "harness": "opencode",
     "harness_version": "1.19.0",
+    "agent_environment": {
+      "OPENCODE_CONFIG": "/opt/opencode.json",
+      "OPENCODE_DISABLE_AUTOUPDATE": "1",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    },
     "llama_cpp_revision": "d81235049384534c167caea52b85a694f6103d14",
     "host_server": "127.0.0.1:8080",
     "agent_broker": "127.0.0.1:18888",

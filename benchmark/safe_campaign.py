@@ -54,6 +54,11 @@ SEED = 1234
 OUTPUT_TOKENS = 1024
 TASK_LIMIT_SECONDS = 240
 SERVER_LOAD_SECONDS = 180
+AGENT_ENVIRONMENT = {
+    "OPENCODE_CONFIG": "/opt/opencode.json",
+    "OPENCODE_DISABLE_AUTOUPDATE": "1",
+    "PYTHONDONTWRITEBYTECODE": "1",
+}
 
 
 def _load_config() -> dict[str, Any]:
@@ -76,6 +81,8 @@ def _load_config() -> dict[str, Any]:
     if (configured_schedule.get("block_models") != list(BLOCK_MODELS)
             or configured_schedule.get("repeats_per_model_task") != 4):
         raise ValueError("campaign schedule does not match the frozen four-repeat ABBA design")
+    if payload.get("runtime", {}).get("agent_environment") != AGENT_ENVIRONMENT:
+        raise ValueError("campaign agent environment differs from the frozen workspace policy")
     return payload
 
 
@@ -470,7 +477,7 @@ def _execute_task(row: dict[str, Any], *, install_root: Path, binary: Path,
         workspace=workspace,
         workspace_exports=_task_source_exports(task),
         runtime_ro=_safe_runtime_binds(binary, install_root),
-        env={"OPENCODE_CONFIG": "/opt/opencode.json", "OPENCODE_DISABLE_AUTOUPDATE": "1"},
+        env=dict(AGENT_ENVIRONMENT),
         limits=limits,
         broker=broker,
         broker_transcript_dir=_private_directory(run_dir / "broker-transcript"),

@@ -46,6 +46,8 @@ class SafeCampaignPlanTests(unittest.TestCase):
         self.assertEqual(protocol["measured_repeats_per_model_task"], 4)
         self.assertEqual(protocol["warmup"]["count_per_model_session"], 1)
         self.assertTrue(protocol["warmup"]["excluded_from_denominator"])
+        self.assertEqual(protocol["runtime"]["agent_environment"], safe_campaign.AGENT_ENVIRONMENT)
+        self.assertEqual(protocol["runtime"]["agent_environment"]["PYTHONDONTWRITEBYTECODE"], "1")
 
     def test_candidate_prompt_declares_restricted_language_and_limits_claims(self) -> None:
         prompt = safe_campaign.build_task_prompt("calculator_division")
