@@ -174,24 +174,44 @@ def generate_service_summary(records):
 }
 
 
-def _preserved_functions(task: str) -> dict[str, str]:
-    policy = TASK_POLICIES[task]
-    fixture = REPO_ROOT / policy["fixture"]
-    preserved: dict[str, list[str]] = {}
-    for relative in policy["source_files"]:
-        if not (fixture / relative).is_file():
-            continue
-        raw = (fixture / relative).read_text(encoding="utf-8")
-        tree = ast.parse(raw)
-        functions = {
-            node.name: ast.get_source_segment(raw, node)
-            for node in tree.body
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        }
-        for name in policy["preserved_helpers"]:
-            if name in functions:
-                preserved.setdefault(relative, []).append(functions[name] or "")
-    return {relative: "\n\n".join(parts) for relative, parts in preserved.items()}
+def _merge_candidate_module(fixture_source: str, candidate_source: str) -> str:
+    """Keep the real fixture module imports/signatures and replace only bodies."""
+    original = ast.parse(fixture_source)
+    candidate = ast.parse(candidate_source)
+    original_functions = {
+        node.name: node
+        for node in original.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    additions: list[ast.stmt] = []
+    for node in candidate.body:
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            if not any(ast.dump(node, include_attributes=False) == ast.dump(existing, include_attributes=False)
+                       for existing in original.body if isinstance(existing, (ast.Import, ast.ImportFrom))):
+                additions.append(node)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            prior = original_functions.get(node.name)
+            if prior is None:
+                additions.append(node)
+            else:
+                docstring = (
+                    prior.body[0]
+                    if prior.body and isinstance(prior.body[0], ast.Expr)
+                    and isinstance(prior.body[0].value, ast.Constant)
+                    and isinstance(prior.body[0].value.value, str)
+                    else None
+                )
+                prior.body = ([docstring] if docstring is not None else []) + node.body
+                prior.type_comment = node.type_comment or prior.type_comment
+    if additions:
+        insert_at = next(
+            (index for index, node in enumerate(original.body)
+             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))),
+            len(original.body),
+        )
+        original.body[insert_at:insert_at] = additions
+    ast.fix_missing_locations(original)
+    return ast.unparse(original) + "\n"
 
 
 def _candidate_test_source(task: str) -> str:
@@ -199,21 +219,29 @@ def _candidate_test_source(task: str) -> str:
     return "class CandidateTests:\n" + "".join(f"    def {name}(self): pass\n" for name in names)
 
 
+def _prepare_grade_workspace(task: str, implementation: dict[str, str], workspace: Path) -> None:
+    policy = TASK_POLICIES[task]
+    fixture = REPO_ROOT / policy["fixture"]
+    shutil.copytree(fixture, workspace)
+    for relative, candidate_source in implementation.items():
+        target = workspace / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.is_file():
+            original = target.read_text(encoding="utf-8")
+            merged = _merge_candidate_module(original, candidate_source)
+        else:
+            merged = candidate_source
+        target.write_text(merged, encoding="utf-8")
+    for relative in policy["test_files"]:
+        (workspace / relative).write_text(_candidate_test_source(task), encoding="utf-8")
+
+
 def _grade_case(task: str, implementation: dict[str, str]) -> dict[str, object]:
     policy = TASK_POLICIES[task]
     fixture = REPO_ROOT / policy["fixture"]
     with tempfile.TemporaryDirectory() as temporary:
         workspace = Path(temporary) / "workspace"
-        shutil.copytree(fixture, workspace)
-        combined = _preserved_functions(task)
-        for relative, source in implementation.items():
-            combined[relative] = "\n\n".join(part for part in (combined.get(relative), source) if part)
-        for relative, source in combined.items():
-            target = workspace / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(source, encoding="utf-8")
-        for relative in policy["test_files"]:
-            (workspace / relative).write_text(_candidate_test_source(task), encoding="utf-8")
+        _prepare_grade_workspace(task, implementation, workspace)
         return grade_workspace(workspace, fixture, task)
 
 

@@ -28,6 +28,8 @@ access, attribute assignment, dynamic code execution, I/O, subprocesses, network
 calls, or arbitrary standard-library imports (including re, os, sys and unittest)
 in implementation modules. No native library or regex engine is exposed to the
 implementation. Test code may use the normal sandboxed unittest environment.
+Python bytecode caching is disabled in that environment. Keep this setting;
+generated files outside the declared task paths fail the workspace scope check.
 
 Implementation source is limited to 262,144 bytes per module, 1,048,576 bytes in
 total, 20,000 AST nodes and depth 128. Execution has bounded work, allocation,
