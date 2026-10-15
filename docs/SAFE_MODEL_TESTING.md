@@ -13,12 +13,15 @@ geral com CPython, tarefas inéditas, qualidade geral de programação ou ausên
 contaminação de treinamento. Sintaxe não suportada é uma falha separada; não é
 descartada da contagem nem aprovada silenciosamente. Resultados anteriores mantêm
 seu protocolo original e não são comparáveis diretamente com esta campanha.
+O [contrato de linguagem](restricted-python-v2.md) também integra o prompt de cada
+tarefa, para que as restrições sejam conhecidas antes da tentativa.
 
 O código produzido pelo agente é dado para o interpretador restrito. Apenas os
 testes e as sondas originais, verificados por impressão digital, executam no
-avaliador confiável. Os cinco critérios são registrados separadamente: testes
-originais, sondas adicionais, escopo/integridade, contrato de trabalho e preservação
-dos auxiliares. Verificar a presença de testes escritos pelo agente não prova a
+avaliador confiável. Os cinco critérios são registrados separadamente: regressão
+nos testes originais, funcionalidade nas sondas adicionais, integridade, escopo e
+contrato estático de trabalho. A preservação dos auxiliares integra o critério de
+escopo. Verificar a presença de testes escritos pelo agente não prova a
 qualidade desses testes; essa dimensão continua não medida.
 
 ## Ambiente de execução
@@ -96,6 +99,9 @@ Preserve protocolo e hashes, prompts, saída nativa, chamadas e resultados de
 ferramentas, transcrições limitadas do broker, estados do sandbox, resultado do
 avaliador e amostras de recursos externas. Correlacione por execução, fase, agente,
 evento e horário. Não trate fala do agente como evidência de que um comando passou.
+O fluxo nativo registra os bytes recebidos do processo; ele não é uma atestação
+independente de cada ação descrita. A sequência de ferramentas é uma observação
+do harness, separada das verificações confiáveis de arquivos e comportamento.
 
 As métricas globais de WSL/GPU incluem outros processos; não são consumo exclusivo
 do agente. Amostras periódicas não capturam necessariamente todos os picos.
