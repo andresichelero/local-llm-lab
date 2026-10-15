@@ -594,13 +594,42 @@ def _cleanup_evidence(process: subprocess.Popen[bytes], cgroup_dir: Path | None)
     try:
         if process.poll() is None:
             return False
-        if cgroup_dir is None or not cgroup_dir.exists():
+        if cgroup_dir is None:
+            return True
+        try:
+            cgroup_dir.stat()
+        except FileNotFoundError:
             return True
         populated = _read_cgroup_file(cgroup_dir, "cgroup.events")
         values = dict(line.split() for line in populated.splitlines() if len(line.split()) == 2)
         return values.get("populated") == "0" and _read_cgroup_file(cgroup_dir, "cgroup.procs") == ""
-    except (OSError, SandboxError, ValueError):
+    except (OSError, SandboxError):
+        # systemd may remove an empty scope between stat and either read. cgroupfs
+        # can report ENODEV here, or the reader can reject a vanished control file.
+        # Only confirmed directory removal proves cleanup; unreadable is not empty.
+        try:
+            if cgroup_dir is not None:
+                cgroup_dir.stat()
+        except FileNotFoundError:
+            return process.poll() is not None
+        except OSError:
+            pass
         return False
+    except ValueError:
+        return False
+
+
+def _wait_for_cleanup_evidence(process: subprocess.Popen[bytes], cgroup_dir: Path | None,
+                               timeout: float) -> bool:
+    """Observe the same owned scope until its bounded teardown has completed."""
+    deadline = time.monotonic() + timeout
+    while True:
+        if _cleanup_evidence(process, cgroup_dir):
+            return True
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(0.01, remaining))
 
 
 def _infrastructure_result(error: str, *, timed_out: bool = False, cleanup: bool = False,
@@ -900,7 +929,8 @@ class SandboxSupervisor:
                 else:
                     process.stdout.close()
 
-        cleanup = process is not None and _cleanup_evidence(process, cgroup_dir)
+        cleanup = process is not None and _wait_for_cleanup_evidence(
+            process, cgroup_dir, limits.stop_grace_seconds)
         try:
             shutil.rmtree(temp_root)
         except OSError:

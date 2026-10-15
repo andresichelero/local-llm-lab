@@ -6,6 +6,8 @@ import shutil
 import socket
 import sys
 import threading
+import errno
+from unittest.mock import Mock, patch
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path, PurePosixPath
 
@@ -21,9 +23,56 @@ from benchmark.linux_sandbox import (
     _validate_runtime_tree,
 )
 from benchmark.model_broker import BrokerPolicy
+from benchmark import linux_sandbox
 
 
 pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="rootless Linux namespaces are required")
+
+
+@pytest.mark.parametrize("control_file,error", [
+    ("cgroup.events", OSError(errno.ENODEV, "synthetic cgroup teardown")),
+    ("cgroup.procs", linux_sandbox.SandboxError("synthetic vanished control file")),
+])
+def test_cleanup_accepts_kernel_removed_scope_during_control_read(tmp_path, control_file, error) -> None:
+    cgroup = tmp_path / "synthetic-owned-scope"
+    cgroup.mkdir()
+    process = Mock()
+    process.poll.return_value = 0
+
+    def read(directory, name):
+        if name == control_file:
+            directory.rmdir()
+            raise error
+        return "populated 0\nfrozen 0"
+
+    with patch.object(linux_sandbox, "_read_cgroup_file", side_effect=read):
+        assert linux_sandbox._cleanup_evidence(process, cgroup) is True
+
+
+def test_cleanup_stays_unverified_for_live_process_populated_or_unreadable_scope(tmp_path) -> None:
+    process = Mock()
+    process.poll.return_value = None
+    assert linux_sandbox._cleanup_evidence(process, tmp_path / "absent") is False
+    process.poll.return_value = 0
+    with patch.object(linux_sandbox, "_read_cgroup_file", return_value="populated 1\nfrozen 0"):
+        assert linux_sandbox._cleanup_evidence(process, tmp_path) is False
+    with patch.object(linux_sandbox, "_read_cgroup_file", side_effect=PermissionError("synthetic denied")):
+        assert linux_sandbox._cleanup_evidence(process, tmp_path) is False
+    unreadable = Mock()
+    unreadable.stat.side_effect = PermissionError("synthetic denied")
+    assert linux_sandbox._cleanup_evidence(process, unreadable) is False
+
+
+def test_cleanup_wait_observes_teardown_without_restarting_or_accepting_timeout(tmp_path) -> None:
+    process = Mock()
+    with (patch.object(linux_sandbox, "_cleanup_evidence", side_effect=[False, False, True]) as check,
+          patch.object(linux_sandbox.time, "sleep")):
+        assert linux_sandbox._wait_for_cleanup_evidence(process, tmp_path, 1) is True
+        assert check.call_count == 3
+        assert all(call.args == (process, tmp_path) for call in check.call_args_list)
+        process.assert_not_called()
+    with patch.object(linux_sandbox, "_cleanup_evidence", return_value=False):
+        assert linux_sandbox._wait_for_cleanup_evidence(process, tmp_path, 0) is False
 
 
 def python_runtime() -> tuple[RuntimeBind, ...]:
