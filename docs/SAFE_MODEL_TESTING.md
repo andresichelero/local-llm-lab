@@ -1,5 +1,24 @@
 # Testes controlados dos modelos locais
 
+## Liberação verificada em 2026-10-15
+
+O código `6133bb6bd2af2daed6c1678b88ff61570df92464` obteve `READY` nos 20
+controles obrigatórios, com 389 testes e 70 subtestes aprovados. Nenhum modelo foi
+carregado e nenhuma inferência foi realizada durante esta preparação. A liberação
+vale para a campanha de regressão de seis tarefas descrita abaixo; as condições de
+recursos e as entradas são verificadas novamente antes de executar.
+
+O [relatório e índice de evidências](C:/Users/Andre/.codex/state/plugins/codex-security/scans/local-llm-lab/artifacts-ea8449f477509b0759c670a45dde0c65a4df2fbee8ab7fcf70bac2a42a4c0c38/hardening/safe-model-release-20261015.md)
+registra hashes, controles, revisão independente, limitações e tentativas anteriores.
+O relatório original está em
+`/home/foxtrot/local-llm-benchmark/results/safe-readiness-6133bb6-20261015/readiness-report.json`.
+
+Foram verificados separadamente o ciclo completo simulado da campanha (oito sessões,
+48 linhas medidas e oito aquecimentos), uma tarefa pelo caminho nativo completo com
+provedor simulado e os contratos do avaliador para as seis tarefas. Esses controles
+não são 48 resultados reais dos modelos. Não há verificador de tipos configurado;
+Ruff, compilação Python e sintaxe dos 40 scripts passaram como verificações distintas.
+
 ## Contrato e alcance
 
 A entrada suportada para a próxima campanha é `python -m benchmark.safe_campaign`.

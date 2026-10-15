@@ -1,4 +1,17 @@
-# Execution status — updated 2026-10-12
+# Execution status — updated 2026-10-15
+
+## Current preparation — controlled regression campaign ready
+
+Source `6133bb6bd2af2daed6c1678b88ff61570df92464` passed all 20 source-bound
+readiness controls without loading models or inference. Full checks passed:
+389 tests, 70 subtests, Ruff, Python compilation, 40 shell syntax checks and diff
+validation. No typechecker is configured. Follow the
+[current safe testing procedure](../../docs/SAFE_MODEL_TESTING.md) for the supported
+entry point, evidence and scope. Execution repeats current controls and resource
+checks before model load. This is readiness for six public regression tasks under
+`restricted-python-workspace-v2`, not general coding capability or private holdout
+evidence. Earlier entries below remain historical; their retired native execution
+commands do not authorize a new campaign.
 
 ## Plan implementation — in progress
 
