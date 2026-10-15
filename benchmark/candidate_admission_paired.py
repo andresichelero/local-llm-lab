@@ -34,6 +34,7 @@ from benchmark.harness_runner import (  # noqa: E402
     summarize_usage,
 )
 from benchmark.provenance import git_provenance  # noqa: E402
+from benchmark.safe_execution_guard import block_legacy_execution  # noqa: E402
 
 DEFAULT_EXPERIMENT = "candidate-admission-granite-8b-20261012"
 HARNESS = "opencode"
@@ -150,6 +151,7 @@ def run_single_trial(
     round_deadline: float,
     experiment: str = DEFAULT_EXPERIMENT,
 ) -> dict[str, Any]:
+    block_legacy_execution("benchmark.candidate_admission_paired.run_single_trial")
     info = MODELS[model]
     run_dir = output_root / "runs" / task / f"{model}_repeat_{repeat}"
     run_dir.mkdir(parents=True, exist_ok=False)
@@ -320,6 +322,8 @@ def run_series(
         for item in schedule:
             print(f"  Trial {item['trial']}: task={item['task']}, model={item['model']}, repeat={item['repeat']}")
         return schedule
+
+    block_legacy_execution("benchmark.candidate_admission_paired.run_series")
 
     install_root = install_root.resolve()
     output_root = output_root.resolve()

@@ -23,6 +23,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from benchmark.harness_eval import GRADER_PROTOCOL_VERSION, grade_workspace  # noqa: E402
 from benchmark.provenance import git_provenance  # noqa: E402
+from benchmark.safe_execution_guard import block_legacy_execution  # noqa: E402
 from benchmark.harness_runner import (  # noqa: E402
     DEFAULT_CONTEXT,
     DEFAULT_MODEL,
@@ -444,6 +445,7 @@ def _run_arm(
     task: str,
     label: str | None = None,
 ) -> dict[str, Any]:
+    block_legacy_execution("benchmark.opencode_controlled_probe._run_arm")
     fixture = REPO_ROOT / "benchmark/fixtures/harness_env_parser" if task == "readonly" else REPO_ROOT / "benchmark/fixtures/harness_task"
     if task == "readonly":
         prompt = (
@@ -558,6 +560,7 @@ def _scratch_bytes(root: Path) -> int:
 
 
 def main() -> int:
+    block_legacy_execution("benchmark.opencode_controlled_probe.main")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--install-root", type=Path, default=Path(os.getenv("BENCHMARK_ROOT", "/home/foxtrot/local-llm-benchmark")))
     parser.add_argument("--output-root", type=Path, default=None)

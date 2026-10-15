@@ -19,13 +19,13 @@ _PHASES = {
 _EVENTS = {
     "run_start", "phase_start", "phase_end", "snapshot_start", "snapshot_end",
     "evidence_error", "agent_spawn", "agent_exit", "sampler_start", "sampler_end",
-    "model_transition", "visible_feedback", "grader_result", "run_end",
+    "model_transition", "visible_feedback", "grader_result", "native_event", "run_end",
 }
 _SOURCES = {"cascade", "observer", "agent_process", "sampler", "final_grader"}
 _DETAIL_KEYS = {
     "status", "duration_ns", "exit_code", "timed_out", "passed", "sample_count",
     "component", "error_type", "escalated", "result", "reason", "snapshot_id",
-    "evidence_status",
+    "evidence_status", "event_name", "tool_name", "event_index", "payload_sha256",
 }
 _SECRET_PARTS = ("secret", "token", "credential", "password", "private_key")
 _SECRET_SUFFIXES = {".pem", ".key", ".p12", ".pfx", ".crt", ".cer"}
@@ -196,7 +196,7 @@ class RunObserver:
         turn_id: str | None = None,
         source: str | None = None,
         details: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> str:
         if self._finalized:
             raise RuntimeError("observer is finalized")
         if event_type not in _EVENTS or (phase_id is not None and phase_id not in _PHASES):
@@ -220,6 +220,7 @@ class RunObserver:
         }
         self._event_file.write(json.dumps(event, sort_keys=True) + "\n")
         self._event_file.flush()
+        return event["event_id"]
 
     def start_phase(
         self,

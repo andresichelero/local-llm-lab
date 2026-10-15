@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Literal, Mapping, NotRequired, TypeGuard, TypedDict
 
 from benchmark.process_control import stop_process_group
+from benchmark.safe_execution_guard import block_legacy_execution
 
 
 class VisibleDevelopmentFeedback(TypedDict):
@@ -48,7 +49,8 @@ def collect_visible_feedback(
     env: Mapping[str, str],
     timeout_seconds: float = 45,
 ) -> VisibleDevelopmentFeedback:
-    """Run workspace tests only, with bounded time and caller-supplied isolated env."""
+    """Retired host-side candidate test execution; use the canonical campaign."""
+    block_legacy_execution("benchmark.visible_feedback.collect_visible_feedback")
     tests_dir = workspace.resolve() / "tests"
     test_files = [path for path in tests_dir.rglob("test*.py") if path.is_file()] if tests_dir.is_dir() else []
     if not test_files:

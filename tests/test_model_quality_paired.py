@@ -96,7 +96,8 @@ class ModelQualityPairedTests(unittest.TestCase):
             for path in paired.PROTOCOL_SOURCE_PATHS
         }
         self.assertIn("benchmark/pristine_grading.py", source_paths)
-        self.assertIn("benchmark/configs/grading/fixture-fingerprints-v1.json", source_paths)
+        self.assertIn("benchmark/configs/grading/fixture-fingerprints-v2.json", source_paths)
+        self.assertIn("benchmark/restricted_python.py", source_paths)
 
     def test_profile_is_single_agent_local_no_update_and_explicitly_scoped(self) -> None:
         profile = build_profile("qwen3.5-4b")
@@ -433,6 +434,7 @@ class ModelQualityPairedTests(unittest.TestCase):
                 mock.patch.object(paired, "_profile_checks", return_value={"passed": False, "checks": {"task_denied": False}}),
                 mock.patch.object(paired, "_model_loaded", return_value=True),
                 mock.patch.object(paired.subprocess, "Popen") as child,
+                mock.patch.object(paired, "block_legacy_execution"),
             ):
                 record = paired._tool_round_trip(Path("opencode"), root, "qwen3.5-4b", server_log,
                                                   root / "output", time.monotonic() + 10, 0)
@@ -486,6 +488,7 @@ class ModelQualityPairedTests(unittest.TestCase):
                 mock.patch.object(paired, "_server_ready", return_value=True),
                 mock.patch.object(paired.subprocess, "Popen", side_effect=fake_popen) as popen,
                 mock.patch.object(paired, "_terminate_process_group"),
+                mock.patch.object(paired, "block_legacy_execution"),
             ):
                 record = paired._tool_round_trip(Path("opencode"), root, "qwen3.5-4b", server_log,
                                                   output_root, time.monotonic() + 30, 0)

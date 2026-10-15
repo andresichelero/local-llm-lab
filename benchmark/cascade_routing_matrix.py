@@ -40,6 +40,7 @@ from benchmark.harness_runner import (  # noqa: E402
     summarize_usage,
 )
 from benchmark.provenance import git_provenance  # noqa: E402
+from benchmark.safe_execution_guard import block_legacy_execution  # noqa: E402
 from benchmark.visible_feedback import (  # noqa: E402
     collect_visible_feedback,
     is_visible_development_feedback,
@@ -173,6 +174,7 @@ class LlamaServerManager:
 
     def ensure_model(self, model_key: str) -> float:
         """Ensures the specified model is active. Returns swap duration in seconds if swapped."""
+        block_legacy_execution("benchmark.cascade_routing_matrix.LlamaServerManager.ensure_model")
         if self.current_model == model_key and self.proc is not None and self.proc.poll() is None:
             return 0.0
 
@@ -314,7 +316,8 @@ def _observer_manifest(
             "benchmark/guarded_edit.py",
             "benchmark/harness_eval.py",
             "benchmark/pristine_grading.py",
-            "benchmark/configs/grading/fixture-fingerprints-v1.json",
+            "benchmark/restricted_python.py",
+            "benchmark/configs/grading/fixture-fingerprints-v2.json",
         )
     ]
     config_template = REPO_ROOT / "benchmark/configs/harnesses/opencode-subagents.json"
@@ -416,6 +419,7 @@ def run_single_trial(
     output_root: Path,
     round_deadline: float,
 ) -> dict[str, Any]:
+    block_legacy_execution("benchmark.cascade_routing_matrix.run_single_trial")
     policy = trial_info["policy"]
     task = trial_info["task"]
     repeat = trial_info["repeat"]

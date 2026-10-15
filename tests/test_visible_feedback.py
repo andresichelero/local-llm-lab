@@ -13,8 +13,7 @@ from benchmark import visible_feedback
 from benchmark.visible_feedback import collect_visible_feedback
 
 
-@pytest.mark.skipif(os.name == "nt", reason="the timeout test validates POSIX process groups")
-def test_timeout_stops_visible_test_descendants_before_returning(tmp_path: Path) -> None:
+def test_candidate_test_execution_fails_closed_before_spawn(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     workspace = tmp_path / "workspace"
     tests_dir = workspace / "tests"
     tests_dir.mkdir(parents=True)
@@ -31,11 +30,10 @@ def test_timeout_stops_visible_test_descendants_before_returning(tmp_path: Path)
     (tests_dir / "test_hangs.py").write_text(test_code, encoding="utf-8")
     env = {"PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(workspace)}
 
-    result = collect_visible_feedback(workspace, env=env, timeout_seconds=0.2)
-    time.sleep(0.9)
-
-    assert result["timed_out"] is True
-    assert not marker.exists(), "a visible-test child wrote to the workspace after feedback returned"
+    monkeypatch.setattr(visible_feedback.subprocess, "Popen", lambda *args, **kwargs: pytest.fail("candidate code must not spawn"))
+    with pytest.raises(RuntimeError, match="benchmark.safe_campaign --readiness"):
+        collect_visible_feedback(workspace, env=env, timeout_seconds=0.2)
+    assert not marker.exists()
 
 
 @pytest.mark.skipif(os.name == "nt", reason="process groups are POSIX-specific")
@@ -65,42 +63,15 @@ def test_process_group_cleanup_stops_child_after_normal_leader_exit(tmp_path: Pa
     assert not marker.exists(), "a child wrote after its normally-exited leader was cleaned up"
 
 
-def test_communication_oserror_stops_spawned_group_and_marks_feedback_failed(
+def test_retired_visible_runner_does_not_spawn_candidate_tests(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     workspace = tmp_path / "workspace"
     (workspace / "tests").mkdir(parents=True)
     (workspace / "tests/test_example.py").write_text("pass\n", encoding="utf-8")
-    captures = []
-    stopped = []
+    monkeypatch.setattr(visible_feedback.subprocess, "Popen",
+                        lambda *args, **kwargs: pytest.fail("candidate code must not spawn"))
 
-    class BrokenCaptureProcess:
-        pid = 123
-        returncode: int | None = None
-
-        def __init__(self) -> None:
-            self.stdout = open(os.devnull, "r", encoding="utf-8")
-            self.stderr = open(os.devnull, "r", encoding="utf-8")
-            captures.extend((self.stdout, self.stderr))
-
-        def communicate(self, *, timeout: float) -> tuple[str, str]:
-            del timeout
-            raise OSError("synthetic capture failure")
-
-    process = BrokenCaptureProcess()
-
-    def fake_stop(child) -> int:
-        stopped.append(child)
-        child.returncode = -15
-        return child.returncode
-
-    monkeypatch.setattr(visible_feedback.subprocess, "Popen", lambda *args, **kwargs: process)
-    monkeypatch.setattr(visible_feedback, "stop_process_group", fake_stop)
-
-    result = collect_visible_feedback(workspace, env={}, timeout_seconds=1)
-
-    assert stopped == [process]
-    assert all(capture.closed for capture in captures)
-    assert result["passed"] is False
-    assert result["execution_error"] is True
+    with pytest.raises(RuntimeError, match="benchmark.safe_campaign --readiness"):
+        collect_visible_feedback(workspace, env={}, timeout_seconds=1)

@@ -22,6 +22,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from benchmark.provenance import git_provenance  # noqa: E402
 from benchmark.harness_eval import GRADER_PROTOCOL_VERSION, grade_workspace  # noqa: E402
+from benchmark.safe_execution_guard import block_legacy_execution  # noqa: E402
 
 DEFAULT_ROOT = Path.home() / "local-llm-benchmark"
 DEFAULT_MODEL = "Qwen3.5-9B-Q4_K_M"
@@ -424,6 +425,7 @@ def run_one(
     results_output: Path | None = None,
     task: str = "calculator_division",
 ) -> dict[str, Any]:
+    block_legacy_execution("benchmark.harness_runner.run_one")
     source_revision, source_tree_dirty = git_provenance(REPO_ROOT)
     resolved_model_path = install_root / DEFAULT_MODEL_PATH if model_path is None else model_path
     resolved_server_log = install_root / "logs/harness-llama-server.log" if server_log is None else server_log

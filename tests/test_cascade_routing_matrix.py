@@ -351,19 +351,26 @@ def _run_fake_trial(
         return real_popen(command, **kwargs)
 
     monkeypatch.setattr(cascade.subprocess, "Popen", fake_popen)
-    original_feedback = getattr(cascade, "collect_visible_feedback", None)
+    visible_feedback_calls = 0
 
     def visible_feedback(*args, **kwargs):
+        nonlocal visible_feedback_calls
+        del args, kwargs
         timeline.append("visible_feedback")
+        visible_feedback_calls += 1
         if visible_execution_error:
             return {
                 "phase": "visible_development", "passed": False, "output": "",
                 "exit_code": None, "timed_out": False,
                 "process_group_stopped": True, "execution_error": True,
             }
-        if original_feedback is None:
-            raise AssertionError("cascade did not use visible workspace feedback")
-        return original_feedback(*args, **kwargs)
+        passed = initially_visible_passes or visible_feedback_calls > 1
+        return {
+            "phase": "visible_development", "passed": passed,
+            "output": "" if passed else "VISIBLE_WORKSPACE_FAILURE_SENTINEL",
+            "exit_code": 0 if passed else 1, "timed_out": False,
+            "process_group_stopped": True,
+        }
 
     monkeypatch.setattr(cascade, "collect_visible_feedback", visible_feedback, raising=False)
 
@@ -397,6 +404,9 @@ def _run_fake_trial(
         preserved_run = output_root / "runs/trial_01_dynamic-cascade_calculator_division_r1"
         preserved_run.mkdir(parents=True)
         (preserved_run / "marker.txt").write_text("preserve this run", encoding="utf-8")
+    # This historical lifecycle test deliberately bypasses the production guard
+    # to exercise old, mocked process behavior. It must never run a real model.
+    monkeypatch.setattr(cascade, "block_legacy_execution", lambda *_args: None)
     result = cascade.run_single_trial(
         binary=Path(fake_binary),
         install_root=tmp_path / "install",
@@ -698,6 +708,12 @@ def test_timeout_stops_agent_descendants_before_final_grading(
         return {"success": False}
 
     monkeypatch.setattr(cascade, "grade_workspace", final_grade)
+    monkeypatch.setattr(cascade, "collect_visible_feedback", lambda *_args, **_kwargs: {
+        "phase": "visible_development", "passed": False, "output": "synthetic",
+        "exit_code": 1, "timed_out": False, "process_group_stopped": True,
+    })
+    # This historical lifecycle test uses only a synthetic subprocess tree.
+    monkeypatch.setattr(cascade, "block_legacy_execution", lambda *_args: None)
 
     result = cascade.run_single_trial(
         binary=binary,

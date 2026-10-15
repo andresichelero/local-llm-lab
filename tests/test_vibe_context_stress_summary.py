@@ -3,7 +3,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from benchmark.summarize_vibe_context_stress import _phase_archive_reads, summarize_run
+from benchmark.summarize_vibe_context_stress import _phase_archive_reads, summarize_run, write_outputs
 
 
 def test_manifest_output_does_not_count_as_archive_reads(tmp_path: Path):
@@ -105,7 +105,10 @@ def test_grades_a_compacted_two_phase_continuation(tmp_path: Path):
     (run / "source_diff_sha256.txt").write_text("a" * 64 + "\n", encoding="utf-8")
     for folder in ("output-phase-1", "output-phase-2"):
         (run / folder / "session/journal").mkdir(parents=True)
-    (workspace / "test_result.py").write_text("import unittest\nclass T(unittest.TestCase):\n def test_ok(self): self.assertTrue(True)\n", encoding="utf-8")
+    marker = tmp_path / "candidate-test-ran"
+    (workspace / "test_result.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed')\n",
+        encoding="utf-8")
     (workspace / "README.md").write_text("synthetic fixture\n", encoding="utf-8")
     subprocess.run(["git", "init", "--quiet"], cwd=workspace, check=True)
     subprocess.run(["git", "add", "."], cwd=workspace, check=True)
@@ -189,13 +192,23 @@ def test_grades_a_compacted_two_phase_continuation(tmp_path: Path):
     assert record["git_sha"] == "recorded-sha"
     assert record["source_dirty"] is True
     assert record["source_diff_sha256"] == "a" * 64
-    assert record["quality_pass"] is True
+    assert record["tests_pass"] is None
+    assert record["candidate_tests_execution"] == "not_run_untrusted_code"
+    assert record["quality_pass"] is None
+    assert not marker.exists(), "the source-only report helper executed candidate-authored tests"
     assert record["compaction_count"] == 1
     assert record["tool_calls"] == 33
     assert record["archive_files_read_count"] == 32
     assert record["phase2_archive_files_read_count"] == 0
     assert record["wall_s"] == 3.0
     assert record["vram_used_mb_peak"] == 6000.0
+
+    raw = tmp_path / "raw.jsonl"
+    csv_path = tmp_path / "out.csv"
+    report = tmp_path / "report.md"
+    write_outputs([record], raw, csv_path, report)
+    assert "UNAVAILABLE" in report.read_text(encoding="utf-8")
+    assert "does not execute candidate-authored tests" in report.read_text(encoding="utf-8")
 
     events = [
         event for event in events

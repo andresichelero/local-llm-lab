@@ -40,6 +40,7 @@ from benchmark.harness_runner import (  # noqa: E402  # Project-root bootstrap a
 )
 from benchmark.provenance import git_provenance  # noqa: E402  # Project-root bootstrap above enables direct module execution.
 from benchmark.pristine_grading import GRADER_PROTOCOL_VERSION  # noqa: E402  # Project-root bootstrap above enables direct module execution.
+from benchmark.safe_execution_guard import block_legacy_execution  # noqa: E402
 
 EXPERIMENT = "model-quality-paired-20261012-r1d"
 HARNESS = "opencode"
@@ -108,7 +109,8 @@ PROTOCOL_SOURCE_PATHS = (
     REPO_ROOT / "benchmark/harness_eval.py",
     REPO_ROOT / "benchmark/opencode_controlled_probe.py",
     REPO_ROOT / "benchmark/pristine_grading.py",
-    REPO_ROOT / "benchmark/configs/grading/fixture-fingerprints-v1.json",
+    REPO_ROOT / "benchmark/restricted_python.py",
+    REPO_ROOT / "benchmark/configs/grading/fixture-fingerprints-v2.json",
 )
 
 
@@ -730,6 +732,7 @@ def _tool_round_trip(binary: Path, install_root: Path, model: str, server_log: P
                      output_root: Path, round_deadline: float,
                      swap_baseline_bytes: int) -> dict[str, Any]:
     """One real local OpenCode tool call gates compatibility; excluded from results."""
+    block_legacy_execution("benchmark.model_quality_paired._tool_round_trip")
     run_dir = output_root / "compatibility" / model
     run_dir.mkdir(parents=True, exist_ok=False)
     prompt = ("First, use bash to run python3 -c 'print(6 * 7)'. "
@@ -885,6 +888,7 @@ def _tool_round_trip(binary: Path, install_root: Path, model: str, server_log: P
 def _run_task(binary: Path, install_root: Path, model: str, task: str, stage: str,
               repeat: int | None, output_root: Path, server_log: Path, round_deadline: float,
               swap_baseline_bytes: int, experiment_name: str = EXPERIMENT) -> dict[str, Any]:
+    block_legacy_execution("benchmark.model_quality_paired._run_task")
     info = MODELS[model]
     label = stage if repeat is None else f"{stage}-{repeat}"
     run_dir = output_root / "runs" / model / task / label
@@ -1126,6 +1130,7 @@ def _scratch_size(root: Path) -> int:
 
 def _run_server(server: Path, install_root: Path, model: str, server_log: Path,
                 round_deadline: float) -> tuple[subprocess.Popen[Any], float]:
+    block_legacy_execution("benchmark.model_quality_paired._run_server")
     libdir = install_root / "tools/llama-bin"
     env = {"PATH": "/usr/local/bin:/usr/bin:/bin:/usr/lib/wsl/lib", "LD_LIBRARY_PATH": str(libdir),
            "HOME": str(install_root), "TMPDIR": "/tmp", "LANG": "C.UTF-8"}
@@ -1154,6 +1159,7 @@ def _stop_server(proc: subprocess.Popen[Any]) -> None:
 def run_series(install_root: Path, output_root: Path, *, single_agent_released: bool = False,
                mode: str = "r1d") -> list[dict[str, Any]]:
     """Execute gated calibration, warmups, then the frozen schedule."""
+    block_legacy_execution("benchmark.model_quality_paired.run_series")
     if not single_agent_released:
         raise RuntimeError("Single-agent prerequisite requires the explicit parent release flag before measurement")
     install_root, output_root = install_root.resolve(), output_root.resolve()

@@ -9,7 +9,6 @@ import re
 import shlex
 import statistics
 import subprocess
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -398,7 +397,8 @@ def summarize_run(run_dir: Path, git_sha: str) -> dict[str, Any]:
     ]
     summary = (workspace / "summary.md").read_text(encoding="utf-8") if (workspace / "summary.md").exists() else ""
     recovery = (workspace / "recovery.txt").read_text(encoding="utf-8").strip() if (workspace / "recovery.txt").exists() else ""
-    test = subprocess.run([sys.executable, "test_result.py"], cwd=workspace, capture_output=True, text=True) if (workspace / "test_result.py").exists() else None
+    # This historical report helper is source-only. Candidate-authored tests
+    # require a trusted grader and are never executed from a workspace here.
     baseline = subprocess.run(
         ["git", "rev-list", "--max-parents=0", "HEAD"], cwd=workspace, capture_output=True, text=True, check=True
     ).stdout.splitlines()[0] if (workspace / ".git").exists() else ""
@@ -435,8 +435,8 @@ def summarize_run(run_dir: Path, git_sha: str) -> dict[str, Any]:
     summary_exact = "archive_count: 32" in summary and f"recovery_key: {RECOVERY_KEY}" in summary
     recovery_exact = recovery == RECOVERY_KEY
     manifest_exact = manifest == expected_manifest
-    tests_pass = test is not None and test.returncode == 0
-    quality_pass = all((
+    tests_pass = None
+    other_checks_pass = all((
         phase1_exit == 0,
         phase2_exit == 0,
         len(compaction_ids) > 0,
@@ -444,10 +444,10 @@ def summarize_run(run_dir: Path, git_sha: str) -> dict[str, Any]:
         summary_exact,
         recovery_exact,
         manifest_exact,
-        tests_pass,
         changes_scoped,
         not phase2_archive_ids,
     ))
+    quality_pass = False if not other_checks_pass else None
     usage1 = (phase1 or {}).get("usage") or {}
     usage2 = (phase2 or {}).get("usage") or {}
     return {
@@ -486,6 +486,7 @@ def summarize_run(run_dir: Path, git_sha: str) -> dict[str, Any]:
         "manifest_exact": manifest_exact,
         "recovery_exact": recovery_exact,
         "tests_pass": tests_pass,
+        "candidate_tests_execution": "not_run_untrusted_code",
         "changed_files": changed_files,
         "mode_changed_files": mode_changed_files,
         "mode_changed_count": len(mode_changed_files),
@@ -521,7 +522,7 @@ def write_outputs(records: list[dict[str, Any]], raw_path: Path, csv_path: Path,
         "",
         "The same local Qwen3.5-9B Q4_K_M endpoint and synthetic 32-file workspace were used in two Vibe prompts. The second prompt resumed the exact first session ID. The runtime, model, scratch workspaces, server logs, and resource samples were on C:-backed WSL ext4; no HDD performance I/O or paid endpoint was used.",
         "",
-        "A full pass requires both phases to exit cleanly, at least one automatic compaction, tool-call evidence for all 32 archive files, an exact fingerprint manifest, the recovery key preserved and recovered, passing workspace tests, and only expected output files changed.",
+        "This source-only report does not execute candidate-authored tests. A quality result is unavailable unless all other checks pass and a trusted external grade is supplied; no test pass is inferred from a candidate marker.",
         "",
         "| Started (UTC) | Wall (s) | Tokens in/out | Compactions | Tools | Successful reads | Reopened | Manifest | Continuity | Tests | Mode flips | Result |",
         "|---|---:|---:|---:|---:|---:|---:|---|---|---|---:|---|",
@@ -533,8 +534,8 @@ def write_outputs(records: list[dict[str, Any]], raw_path: Path, csv_path: Path,
             f"| {row.get('phase2_archive_files_read_count')} "
             f"| {'pass' if row.get('manifest_exact') else 'fail'} "
             f"| {'pass' if row.get('summary_exact') and row.get('recovery_exact') else 'fail'} "
-            f"| {'pass' if row.get('tests_pass') else 'fail'} | {row.get('mode_changed_count')} "
-            f"| {'PASS' if row.get('quality_pass') else 'FAIL'} |"
+            f"| {'not run' if row.get('tests_pass') is None else ('pass' if row.get('tests_pass') else 'fail')} | {row.get('mode_changed_count')} "
+            f"| {'PASS' if row.get('quality_pass') is True else ('FAIL' if row.get('quality_pass') is False else 'UNAVAILABLE')} |"
         )
     passed = sum(bool(row.get("quality_pass")) for row in records)
     successful_reads = ", ".join(f"{row.get('archive_files_read_count')}/32" for row in records)
@@ -548,7 +549,7 @@ def write_outputs(records: list[dict[str, Any]], raw_path: Path, csv_path: Path,
         "",
         f"Strict full-task passes: {passed}/{len(records)}.",
         "",
-        f"Correlating archive paths with successful file-read tool results gives {successful_reads} successful reads in run order. The earlier summary used intent-only matching; the updated journal audit confirms each reported read through a successful read result or successful shell output containing the deterministic archive fingerprints. Workspace mode-change counts in run order were {mode_counts}; mode changes remain a strict-scope failure even when file contents are unchanged. Reopened archives after continuation: {', '.join(reopened) if reopened else 'none'}. The latest run completed both phases, preserved all required artifacts, passed workspace tests, and made no out-of-scope workspace changes. Strict full-task passes: {passed}/{len(records)}.",
+        f"Correlating archive paths with successful file-read tool results gives {successful_reads} reported reads in run order. Journal records are workflow evidence, not action attestation. Workspace mode-change counts in run order were {mode_counts}; mode changes remain a strict-scope failure even when file contents are unchanged. Reopened archives after continuation: {', '.join(reopened) if reopened else 'none'}. Candidate-authored tests were not executed by this report helper. Strict full-task passes: {passed}/{len(records)}.",
         "",
         "Usage totals are the harness-reported sum across model calls, not the peak context size. Vibe's journal records compaction IDs and requests, but this run does not expose a reliable token count for the history removed; no token compression ratio is claimed. Resource samples are one-second observations and the RTX 3070 is shared with the Windows desktop.",
         "",

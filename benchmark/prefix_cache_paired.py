@@ -34,6 +34,7 @@ from benchmark.harness_runner import (  # noqa: E402
     summarize_usage,
 )
 from benchmark.provenance import git_provenance  # noqa: E402
+from benchmark.safe_execution_guard import block_legacy_execution  # noqa: E402
 
 EXPERIMENT = "prefix-cache-paired-20261012-6a"
 HARNESS = "opencode"
@@ -132,6 +133,7 @@ def run_single_trial(
     server_log: Path,
     round_deadline: float,
 ) -> dict[str, Any]:
+    block_legacy_execution("benchmark.prefix_cache_paired.run_single_trial")
     info = MODELS[model]
     mode_label = "cache_on" if cache_prompt else "cache_off"
     run_dir = output_root / "runs" / task / f"pair_{pair_num}_{mode_label}"
@@ -300,6 +302,8 @@ def run_series(
         for item in schedule:
             print(f"  Trial {item['trial']}: task={item['task']}, pair={item['pair']}, cache_prompt={item['cache_prompt']}")
         return schedule
+
+    block_legacy_execution("benchmark.prefix_cache_paired.run_series")
 
     install_root = install_root.resolve()
     output_root = output_root.resolve()
