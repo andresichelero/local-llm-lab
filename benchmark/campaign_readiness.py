@@ -690,7 +690,7 @@ def _loopback_port_is_free(port: int) -> bool:
         try:
             probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             probe.bind(("127.0.0.1", port))
-            # A bind alone can coexist with an existing SO_REUSEADDR listener on
+            # A bind alone can coexist with another SO_REUSEADDR bound socket on
             # Linux. listen must also succeed; never enable SO_REUSEPORT here.
             probe.listen(1)
             return True

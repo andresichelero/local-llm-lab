@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "experiment": "safe-model-readiness-campaign-v1",
+  "experiment": "safe-model-readiness-campaign-v2",
   "grader_protocol_version": "restricted-python-workspace-v2",
   "candidate_language_contract": "restricted-python-workspace-v2",
   "models_source": "benchmark/model_quality_paired.py:MODELS",

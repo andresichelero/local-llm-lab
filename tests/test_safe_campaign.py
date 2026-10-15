@@ -219,6 +219,7 @@ class SafeCampaignPlanTests(unittest.TestCase):
 
     def test_protocol_freezes_required_language_and_generation_contract(self) -> None:
         protocol = safe_campaign.frozen_protocol(seed=1234)
+        self.assertEqual(protocol["experiment"], "safe-model-readiness-campaign-v2")
         self.assertEqual(protocol["grader_protocol_version"], "restricted-python-workspace-v2")
         self.assertEqual(protocol["candidate_language_contract"], "restricted-python-workspace-v2")
         self.assertEqual(protocol["generation"], {"temperature": 0, "seed": 1234, "max_output_tokens": 1024})
