@@ -452,6 +452,8 @@ def _evidence_socket(fd: int) -> socket.socket:
 
 def _send_message(channel: socket.socket, payload: dict[str, Any]) -> None:
     encoded = json.dumps(payload, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    if len(encoded) > 16 * 1024 * 1024:
+        raise BootstrapError("supervisor control message exceeds its limit")
     channel.sendall(struct.pack("!I", len(encoded)) + encoded)
 
 
@@ -542,6 +544,155 @@ def _read_export(path_parts: tuple[str, ...], max_bytes: int) -> tuple[bytes, in
         os.close(dir_fd)
 
 
+def _workspace_inventory(*, hash_paths: set[str] | None, max_files: int,
+                         max_file_bytes: int, max_total_bytes: int) -> tuple[list[dict[str, Any]], list[str], int]:
+    """Return bounded metadata for workspace entries and hash only trusted paths.
+
+    ``hash_paths=None`` is used once before candidate execution for the trusted
+    seed. After execution, hashes are read only for seed paths and declared
+    exports. Newly-created unauthorized files contribute metadata only.
+    """
+    root_fd = os.open("/workspace", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    entries: list[dict[str, Any]] = []
+    unsafe: list[str] = []
+    total_bytes = 0
+    file_count = 0
+    entry_count = 0
+    max_entries = max_files * 2 + 64
+
+    def scan(directory_fd: int, prefix: str, depth: int) -> None:
+        nonlocal total_bytes, file_count, entry_count
+        if depth > 32:
+            raise BootstrapError("workspace inventory exceeds the maximum depth")
+        with os.scandir(directory_fd) as iterator:
+            for item in iterator:
+                name = item.name
+                path = f"{prefix}/{name}" if prefix else name
+                try:
+                    encoded_path = path.encode("utf-8")
+                except UnicodeEncodeError:
+                    unsafe.append(path.encode("utf-8", errors="backslashreplace").decode("ascii"))
+                    continue
+                if len(encoded_path) > 1024:
+                    raise BootstrapError("workspace inventory path exceeds its limit")
+                entry_count += 1
+                if entry_count > max_entries:
+                    raise BootstrapError("workspace inventory exceeds its entry limit")
+                info = item.stat(follow_symlinks=False)
+                mode = stat.S_IMODE(info.st_mode) & 0o777
+                if stat.S_ISDIR(info.st_mode):
+                    entries.append({"path": path, "type": "directory", "mode": mode, "size": 0, "sha256": None})
+                    child_fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory_fd)
+                    try:
+                        scan(child_fd, path, depth + 1)
+                    finally:
+                        os.close(child_fd)
+                    continue
+                if not stat.S_ISREG(info.st_mode):
+                    kind = (
+                        "symlink" if stat.S_ISLNK(info.st_mode) else
+                        "socket" if stat.S_ISSOCK(info.st_mode) else
+                        "fifo" if stat.S_ISFIFO(info.st_mode) else
+                        "device" if stat.S_ISCHR(info.st_mode) or stat.S_ISBLK(info.st_mode) else "other"
+                    )
+                    unsafe.append(path)
+                    entries.append({"path": path, "type": kind, "mode": mode, "size": max(0, info.st_size), "sha256": None})
+                    continue
+                file_count += 1
+                total_bytes += info.st_size
+                if (info.st_nlink != 1 or info.st_size > max_file_bytes or file_count > max_files
+                        or total_bytes > max_total_bytes):
+                    unsafe.append(path)
+                    entries.append({"path": path, "type": "file", "mode": mode,
+                                    "size": max(0, info.st_size), "sha256": None})
+                    continue
+                digest: str | None = None
+                if hash_paths is None or path in hash_paths:
+                    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory_fd)
+                    try:
+                        opened = os.fstat(fd)
+                        if (not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1
+                                or opened.st_ino != info.st_ino or opened.st_dev != info.st_dev):
+                            unsafe.append(path)
+                        else:
+                            hasher = hashlib.sha256()
+                            remaining = max_file_bytes + 1
+                            read_size = 0
+                            while remaining:
+                                part = os.read(fd, min(1024 * 1024, remaining))
+                                if not part:
+                                    break
+                                hasher.update(part)
+                                read_size += len(part)
+                                remaining -= len(part)
+                            after = os.fstat(fd)
+                            if (read_size != info.st_size or read_size > max_file_bytes
+                                    or after.st_size != info.st_size or after.st_mtime_ns != info.st_mtime_ns
+                                    or after.st_ctime_ns != info.st_ctime_ns):
+                                unsafe.append(path)
+                            else:
+                                digest = hasher.hexdigest()
+                    finally:
+                        os.close(fd)
+                entries.append({"path": path, "type": "file", "mode": mode,
+                                "size": info.st_size, "sha256": digest})
+
+    try:
+        scan(root_fd, "", 0)
+    finally:
+        os.close(root_fd)
+    entries.sort(key=lambda item: item["path"])
+    return entries, sorted(set(unsafe)), total_bytes
+
+
+def _workspace_audit(seed: list[dict[str, Any]], final: list[dict[str, Any]], unsafe: list[str],
+                     exports: list[str]) -> dict[str, Any]:
+    seed_by_path = {item["path"]: item for item in seed}
+    final_by_path = {item["path"]: item for item in final}
+    export_set = set(exports)
+    export_parents = {
+        "/".join(parts[:index])
+        for path in exports
+        for parts in (path.split("/"),)
+        for index in range(1, len(parts))
+    }
+    protected_changed: list[dict[str, Any]] = []
+    protected_missing: list[str] = []
+    missing_exports: list[str] = []
+    unauthorized_extra: list[dict[str, Any]] = []
+    for path, original in seed_by_path.items():
+        current = final_by_path.get(path)
+        if current is None:
+            if path in export_set:
+                missing_exports.append(path)
+            else:
+                protected_missing.append(path)
+        elif path not in export_set and any(
+            current.get(key) != original.get(key) for key in ("type", "mode", "size", "sha256")
+        ):
+            protected_changed.append({"path": path, "before": original, "after": current})
+    for path, current in final_by_path.items():
+        if path in seed_by_path or path in export_set:
+            continue
+        if current["type"] == "directory" and path in export_parents:
+            continue
+        if current["type"] == "file" and current.get("sha256") is not None:
+            # Hashes for new files are emitted only for exact declared exports.
+            raise BootstrapError("workspace audit hashed a non-export candidate file")
+        unauthorized_extra.append({key: current[key] for key in ("path", "type", "mode", "size")})
+    return {
+        "complete": not unsafe,
+        "seed_inventory": seed,
+        "final_inventory": final,
+        "protected_changed": protected_changed,
+        "protected_missing": sorted(protected_missing),
+        "unauthorized_extra_paths": unauthorized_extra,
+        "missing_exports": sorted(missing_exports),
+        "unsafe_paths": unsafe,
+        "entry_count": len(final),
+    }
+
+
 def _export_files(channel: socket.socket, paths: list[str], max_file_bytes: int, max_total_bytes: int) -> tuple[list[dict[str, Any]], bool]:
     files: list[dict[str, Any]] = []
     total = 0
@@ -614,6 +765,12 @@ def run(config: dict[str, Any]) -> int:
     adapter: LoopbackAdapter | None = None
     adapter_thread: threading.Thread | None = None
     candidate: subprocess.Popen[bytes] | None = None
+    seed_inventory: list[dict[str, Any]] = []
+    workspace_audit: dict[str, Any] = {
+        "complete": False, "seed_inventory": [], "final_inventory": [],
+        "protected_changed": [], "protected_missing": [], "unauthorized_extra_paths": [],
+        "missing_exports": [], "unsafe_paths": [], "entry_count": 0,
+    }
     try:
         if config["broker"] is not None:
             broker_socket = socket.socket(fileno=int(config["broker_fd"]))
@@ -642,6 +799,15 @@ def run(config: dict[str, Any]) -> int:
             _send_message(evidence, {"type": "ABORTED"})
             return 125
 
+        seed_inventory, seed_unsafe, _seed_bytes = _workspace_inventory(
+            hash_paths=None,
+            max_files=config["limits"]["workspace_files"],
+            max_file_bytes=config["limits"]["workspace_file_bytes"],
+            max_total_bytes=config["limits"]["workspace_bytes"],
+        )
+        if seed_unsafe:
+            raise BootstrapError("trusted seed workspace inventory is unsafe")
+
         if broker_socket is not None:
             policy = BrokerPolicy(**config["broker"])
             client = BrokerChannelClient(broker_socket, max_request_bytes=policy.max_request_bytes)
@@ -664,6 +830,19 @@ def run(config: dict[str, Any]) -> int:
         except OSError:
             returncode = 127
         descendants_clean = _kill_namespace_children()
+        if descendants_clean:
+            known_hashes = {
+                item["path"] for item in seed_inventory if item["type"] == "file"
+            } | set(config["exports"])
+            final_inventory, unsafe_paths, _final_bytes = _workspace_inventory(
+                hash_paths=known_hashes,
+                max_files=config["limits"]["workspace_files"],
+                max_file_bytes=config["limits"]["workspace_file_bytes"],
+                max_total_bytes=config["limits"]["workspace_bytes"],
+            )
+            workspace_audit = _workspace_audit(
+                seed_inventory, final_inventory, unsafe_paths, config["exports"],
+            )
         _ADAPTER_STOP.set()
         if adapter is not None:
             adapter.close()
@@ -703,6 +882,7 @@ def run(config: dict[str, Any]) -> int:
             "export_count": export_count,
             "export_bytes": export_total,
             "export_files": output_metadata,
+            "workspace_audit": workspace_audit,
         })
         try:
             finish = _recv_message(evidence)

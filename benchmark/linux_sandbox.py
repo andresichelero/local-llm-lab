@@ -12,6 +12,7 @@ import os
 import re
 import shutil
 import socket
+import stat
 import struct
 import subprocess
 import sys
@@ -73,12 +74,15 @@ class ResourceLimits:
 class RuntimeBind:
     source: Path
     target: PurePosixPath | str
+    symlinks_within_source: bool = False
 
     def __post_init__(self) -> None:
         source = Path(self.source)
         target = PurePosixPath(self.target)
         if not target.is_absolute() or target == PurePosixPath("/") or ".." in target.parts:
             raise ValueError("runtime target must be a safe absolute path")
+        if type(self.symlinks_within_source) is not bool:
+            raise ValueError("symlinks_within_source must be a boolean")
         object.__setattr__(self, "source", source)
         object.__setattr__(self, "target", target)
 
@@ -92,6 +96,7 @@ class SandboxSpec:
     env: Mapping[str, str] = field(default_factory=dict)
     limits: ResourceLimits = field(default_factory=ResourceLimits)
     broker: BrokerPolicy | None = None
+    broker_transcript_dir: Path | None = None
 
     def __post_init__(self) -> None:
         argv = tuple(self.argv)
@@ -123,11 +128,15 @@ class SandboxSpec:
             if key in reserved or any(marker in normalized_key for marker in ("_KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL", "AUTH")):
                 raise ValueError(f"env key is reserved or may carry credentials: {key}")
         workspace = Path(self.workspace)
+        transcript_dir = None if self.broker_transcript_dir is None else Path(self.broker_transcript_dir)
+        if transcript_dir is not None and self.broker is None:
+            raise ValueError("broker transcript output requires a broker")
         object.__setattr__(self, "argv", argv)
         object.__setattr__(self, "workspace", workspace)
         object.__setattr__(self, "workspace_exports", exports)
         object.__setattr__(self, "runtime_ro", binds)
         object.__setattr__(self, "env", MappingProxyType(env))
+        object.__setattr__(self, "broker_transcript_dir", transcript_dir)
 
 
 @dataclass(frozen=True)
@@ -138,11 +147,14 @@ class RunResult:
     output_limited: bool
     output: bytes
     workspace_outputs: Mapping[str, bytes]
+    workspace_output_modes: Mapping[str, int]
+    workspace_audit: Mapping[str, Any]
     namespace_evidence: Mapping[str, Any]
     file_evidence: Mapping[str, Any]
     network_evidence: Mapping[str, Any]
     resource_evidence: Mapping[str, Any]
     broker_events: tuple[BrokerEvent, ...] = ()
+    broker_transcript_evidence: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     infrastructure_error: str | None = None
 
 
@@ -218,14 +230,102 @@ def _validate_runtime_binds(binds: tuple[RuntimeBind, ...]) -> list[dict[str, st
         home = Path.home()
         if home in source.parents:
             allowed_opencode = home / "local-llm-benchmark/envs/node-harnesses/opencode/node_modules/opencode-linux-x64"
-            if source != allowed_opencode and allowed_opencode not in source.parents:
+            provider_cache = home / "local-llm-benchmark/cache/opencode-node-modules"
+            allowed_provider_paths = {
+                provider_cache,
+                provider_cache.parent / "package.json",
+                provider_cache.parent / "package-lock.json",
+            }
+            if (source != allowed_opencode and allowed_opencode not in source.parents
+                    and source not in allowed_provider_paths):
                 raise ValueError("home-directory runtime binds are limited to the installed OpenCode runtime")
+            if source == provider_cache and not bind.symlinks_within_source:
+                raise ValueError("the OpenCode provider cache requires in-tree symlink validation")
         if not (os.path.isfile(source) or os.path.isdir(source)):
             raise ValueError("runtime bind source is not mountable")
         if not (info.st_mode & 0o444):
             raise ValueError("runtime bind source is not readable")
+        if stat.S_ISDIR(info.st_mode):
+            _validate_runtime_tree(source, symlinks_within_source=bind.symlinks_within_source)
         result.append({"source": str(source), "target": str(bind.target)})
     return result
+
+
+def _validate_runtime_tree(root: Path, *, max_entries: int = 50_000, max_depth: int = 64,
+                           symlinks_within_source: bool = False) -> None:
+    """Inspect runtime tree metadata only; reject IPC/device nodes before bind-mounting.
+
+    Directory traversal never follows symlinks and is bounded by entry count/depth.
+    Dependency trees can require links to resolve to existing files or directories
+    inside the source tree, preventing a package link from exposing another host path.
+    """
+    root = root.resolve(strict=True)
+    root_info = root.lstat()
+    root_device = root_info.st_dev
+    entries_seen = 0
+    pending: list[tuple[Path, int]] = [(root, 0)]
+    while pending:
+        directory, depth = pending.pop()
+        if depth > max_depth:
+            raise ValueError("runtime bind directory exceeds the maximum depth")
+        try:
+            with os.scandir(directory) as iterator:
+                for entry in iterator:
+                    entries_seen += 1
+                    if entries_seen > max_entries:
+                        raise ValueError("runtime bind directory exceeds the metadata scan limit")
+                    info = entry.stat(follow_symlinks=False)
+                    if info.st_dev != root_device:
+                        raise ValueError("runtime bind directory crosses a filesystem boundary")
+                    mode = info.st_mode
+                    if stat.S_ISDIR(mode):
+                        pending.append((Path(entry.path), depth + 1))
+                    elif stat.S_ISREG(mode):
+                        continue
+                    elif stat.S_ISLNK(mode):
+                        link_target = os.readlink(entry.path)
+                        if not link_target or len(os.fsencode(link_target)) > 4096:
+                            raise ValueError("runtime bind contains an invalid or oversized symlink")
+                        if symlinks_within_source:
+                            if os.path.isabs(link_target):
+                                raise ValueError("runtime dependency contains an absolute symlink")
+                            lexical_target = Path(os.path.abspath(
+                                os.path.join(os.path.dirname(entry.path), link_target)
+                            ))
+                            if root not in lexical_target.parents:
+                                raise ValueError("runtime dependency symlink escapes its source tree")
+                            try:
+                                resolved_target = Path(entry.path).resolve(strict=True)
+                                target_info = resolved_target.stat()
+                            except OSError as exc:
+                                raise ValueError("runtime dependency contains a dangling symlink") from exc
+                            if (root not in resolved_target.parents
+                                    or not (stat.S_ISREG(target_info.st_mode) or stat.S_ISDIR(target_info.st_mode))):
+                                raise ValueError("runtime dependency symlink escapes its source tree")
+                        # Ordinary runtime links are not followed in the host
+                        # namespace; the candidate chroot resolves them later.
+                    else:
+                        raise ValueError("runtime bind contains a socket, FIFO, or device node")
+        except OSError as exc:
+            raise ValueError("runtime bind directory metadata cannot be inspected") from exc
+
+
+def _validate_transcript_directory(path: Path, workspace: Path) -> Path:
+    absolute = Path(os.path.abspath(path))
+    try:
+        resolved = absolute.resolve(strict=True)
+        info = absolute.lstat()
+    except OSError as exc:
+        raise ValueError("broker transcript directory must already exist") from exc
+    if absolute != resolved or not stat.S_ISDIR(info.st_mode):
+        raise ValueError("broker transcript directory must be a canonical directory")
+    if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
+        raise ValueError("broker transcript directory must be owned by this user and private")
+    repo = Path(__file__).resolve(strict=True).parents[1]
+    if (absolute == repo or repo in absolute.parents or absolute == workspace
+            or workspace in absolute.parents or absolute in workspace.parents):
+        raise ValueError("broker transcript directory must be separate from the repository and workspace")
+    return absolute
 
 
 def _read_cgroup_file(cgroup_dir: Path, name: str) -> str:
@@ -233,6 +333,94 @@ def _read_cgroup_file(cgroup_dir: Path, name: str) -> str:
     if not path.is_file():
         raise SandboxError(f"required cgroup evidence unavailable: {name}")
     return path.read_text(encoding="ascii").strip()
+
+
+def _cgroup_usage_sample(cgroup_dir: Path, elapsed_seconds: float) -> dict[str, Any]:
+    sample: dict[str, Any] = {"elapsed_seconds": round(max(0.0, elapsed_seconds), 3)}
+    for name in (
+        "memory.current", "memory.swap.current", "pids.current", "cpu.stat", "io.stat",
+        "memory.events", "pids.events", "cgroup.events",
+    ):
+        try:
+            with (cgroup_dir / name).open("rb") as stream:
+                value = stream.read(8193)
+            if len(value) > 8192:
+                sample[name] = value[:8192].decode("ascii", errors="replace") + "[truncated]"
+            else:
+                sample[name] = value.decode("ascii", errors="replace").strip()
+        except OSError:
+            sample[name] = None
+    return sample
+
+
+def _sample_cgroup_usage(cgroup_dir: Path, stop: threading.Event, samples: list[dict[str, Any]],
+                         max_samples: int) -> None:
+    started = time.monotonic()
+    while len(samples) < max_samples:
+        samples.append(_cgroup_usage_sample(cgroup_dir, time.monotonic() - started))
+        if stop.wait(1.0):
+            break
+
+
+def _valid_export_mode(value: Any) -> bool:
+    return type(value) is int and 0 <= value <= 0o777
+
+
+def _export_manifest_matches(export_files: Any, outputs: Mapping[str, bytes], modes: Mapping[str, int]) -> bool:
+    if not isinstance(export_files, list) or len(export_files) != len(outputs):
+        return False
+    seen: set[str] = set()
+    for item in export_files:
+        if not isinstance(item, dict) or set(item) != {"path", "size", "mode", "sha256"}:
+            return False
+        path = item["path"]
+        if (not isinstance(path, str) or path in seen or path not in outputs
+                or type(item["size"]) is not int or item["size"] != len(outputs[path])
+                or not _valid_export_mode(item["mode"]) or item["mode"] != modes.get(path)
+                or not isinstance(item["sha256"], str)
+                or item["sha256"] != hashlib.sha256(outputs[path]).hexdigest()):
+            return False
+        seen.add(path)
+    return seen == set(outputs)
+
+
+def _valid_workspace_audit(value: Any) -> bool:
+    required = {
+        "complete", "seed_inventory", "final_inventory", "protected_changed", "protected_missing",
+        "unauthorized_extra_paths", "missing_exports", "unsafe_paths", "entry_count",
+    }
+    if not isinstance(value, dict) or set(value) != required or type(value["complete"]) is not bool:
+        return False
+    for key in ("seed_inventory", "final_inventory"):
+        entries = value[key]
+        if not isinstance(entries, list):
+            return False
+        seen: set[str] = set()
+        for item in entries:
+            if not isinstance(item, dict) or set(item) != {"path", "type", "mode", "size", "sha256"}:
+                return False
+            path = item["path"]
+            digest = item["sha256"]
+            if (not isinstance(path, str) or not path or path in seen
+                    or not isinstance(item["type"], str)
+                    or item["type"] not in {"file", "directory", "symlink", "socket", "fifo", "device", "other"}
+                    or not _valid_export_mode(item["mode"])
+                    or type(item["size"]) is not int or item["size"] < 0
+                    or (digest is not None and
+                        (not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest)))):
+                return False
+            seen.add(path)
+    if type(value["entry_count"]) is not int or value["entry_count"] != len(value["final_inventory"]):
+        return False
+    list_fields = ("protected_changed", "protected_missing", "unauthorized_extra_paths", "missing_exports", "unsafe_paths")
+    if any(not isinstance(value[key], list) for key in list_fields):
+        return False
+    if any(not isinstance(path, str) for key in ("protected_missing", "missing_exports", "unsafe_paths") for path in value[key]):
+        return False
+    if any(not isinstance(item, dict) or not isinstance(item.get("path"), str)
+           for key in ("protected_changed", "unauthorized_extra_paths") for item in value[key]):
+        return False
+    return True
 
 
 def _scope_evidence(unit: str, limits: ResourceLimits) -> tuple[dict[str, Any], Path]:
@@ -425,6 +613,8 @@ def _infrastructure_result(error: str, *, timed_out: bool = False, cleanup: bool
         output_limited=output_limited,
         output=output,
         workspace_outputs=MappingProxyType({}),
+        workspace_output_modes=MappingProxyType({}),
+        workspace_audit=MappingProxyType({}),
         namespace_evidence=MappingProxyType({}),
         file_evidence=MappingProxyType({}),
         network_evidence=MappingProxyType({}),
@@ -445,6 +635,10 @@ class SandboxSupervisor:
         try:
             workspace = _canonical_workspace(spec.workspace)
             runtime_binds = _validate_runtime_binds(spec.runtime_ro)
+            transcript_dir = (
+                _validate_transcript_directory(spec.broker_transcript_dir, workspace)
+                if spec.broker_transcript_dir is not None else None
+            )
             namespace_inodes = _namespace_inodes()
         except (OSError, ValueError) as exc:
             return _infrastructure_result(f"invalid_spec:{type(exc).__name__}")
@@ -512,16 +706,22 @@ class SandboxSupervisor:
         )
         output_state: dict[str, Any] = {"output": b"", "limited": False}
         process: subprocess.Popen[bytes] | None = None
-        broker: ModelBroker | None = ModelBroker(spec.broker) if spec.broker else None
+        broker: ModelBroker | None = None
         broker_thread: threading.Thread | None = None
         cgroup_dir: Path | None = None
         resources: dict[str, Any] = {}
         evidence: dict[str, Any] = {}
         outputs: dict[str, bytes] = {}
+        output_modes: dict[str, int] = {}
+        workspace_audit: dict[str, Any] = {}
+        cgroup_samples: list[dict[str, Any]] = []
+        sampler_stop = threading.Event()
+        sampler_thread: threading.Thread | None = None
         timed_out = False
         ready = False
         infra_error: str | None = None
         try:
+            broker = ModelBroker(spec.broker, transcript_dir=transcript_dir) if spec.broker else None
             process = subprocess.Popen(
                 command,
                 stdin=subprocess.PIPE,
@@ -554,6 +754,12 @@ class SandboxSupervisor:
                 raise SandboxError(infra_error)
             evidence = message["evidence"]
             resources, cgroup_dir = _scope_evidence(unit, limits)
+            sampler_thread = threading.Thread(
+                target=_sample_cgroup_usage,
+                args=(cgroup_dir, sampler_stop, cgroup_samples, min(limits.wall_seconds + 2, 3602)),
+                daemon=True,
+            )
+            sampler_thread.start()
             if not _required_sandbox_evidence(evidence, len(runtime_binds)):
                 infra_error = "sandbox_evidence_incomplete"
                 raise SandboxError(infra_error)
@@ -572,7 +778,7 @@ class SandboxSupervisor:
                     break
                 control_host.settimeout(remaining)
                 try:
-                    message = _recv_message(control_host, max_bytes=limits.export_total_bytes + 8192)
+                    message = _recv_message(control_host, max_bytes=max(16 * 1024 * 1024, limits.export_total_bytes + 8192))
                 except socket.timeout:
                     timed_out = True
                     infra_error = "sandbox_wall_timeout"
@@ -584,9 +790,13 @@ class SandboxSupervisor:
                 if kind == "FILE":
                     path = message.get("path")
                     size = message.get("size")
+                    mode = message.get("mode")
                     digest = message.get("sha256")
-                    if (path not in spec.workspace_exports or type(size) is not int or size < 0
+                    if (set(message) != {"type", "path", "size", "mode", "sha256"}
+                            or not isinstance(path, str) or path not in spec.workspace_exports
+                            or type(size) is not int or size < 0
                             or size > limits.export_file_bytes or path in outputs
+                            or not _valid_export_mode(mode)
                             or not isinstance(digest, str) or len(digest) != 64):
                         infra_error = "invalid_workspace_export"
                         break
@@ -598,10 +808,22 @@ class SandboxSupervisor:
                         infra_error = "workspace_export_total_limit"
                         break
                     outputs[path] = data
+                    output_modes[path] = mode
                     continue
                 if kind == "RESULT":
+                    audit = message.get("workspace_audit")
+                    if not _valid_workspace_audit(audit):
+                        infra_error = "invalid_workspace_audit"
+                        break
+                    workspace_audit = audit
+                    if audit["complete"] is not True:
+                        infra_error = "workspace_audit_incomplete"
+                        break
                     returncode = message.get("returncode")
-                    if type(returncode) is not int:
+                    if (set(message) != {
+                        "type", "returncode", "descendants_clean", "exports_valid", "export_count",
+                        "export_bytes", "export_files", "workspace_audit",
+                    } or type(returncode) is not int):
                         infra_error = "invalid_sandbox_result"
                         break
                     if message.get("descendants_clean") is not True or message.get("exports_valid") is not True:
@@ -613,18 +835,7 @@ class SandboxSupervisor:
                             or type(message.get("export_bytes")) is not int
                             or message["export_count"] != len(outputs)
                             or message["export_bytes"] != export_bytes
-                            or not isinstance(export_files, list)
-                            or {item.get("path") for item in export_files if isinstance(item, dict)} != set(outputs)
-                            or len(export_files) != len(outputs)):
-                        infra_error = "workspace_export_manifest_mismatch"
-                        break
-                    manifest_ok = all(
-                        isinstance(item, dict)
-                        and item.get("size") == len(outputs[item["path"]])
-                        and item.get("sha256") == hashlib.sha256(outputs[item["path"]]).hexdigest()
-                        for item in export_files
-                    )
-                    if not manifest_ok:
+                            or not _export_manifest_matches(export_files, outputs, output_modes)):
                         infra_error = "workspace_export_manifest_mismatch"
                         break
                     resources.update({
@@ -659,6 +870,11 @@ class SandboxSupervisor:
                         process.wait(timeout=2)
                     except (OSError, subprocess.TimeoutExpired):
                         pass
+            sampler_stop.set()
+            if sampler_thread is not None:
+                sampler_thread.join(timeout=2.0)
+            if broker is not None:
+                broker.cancel()
             if broker_host is not None:
                 try:
                     broker_host.shutdown(socket.SHUT_RDWR)
@@ -667,6 +883,8 @@ class SandboxSupervisor:
                 broker_host.close()
             if broker_thread is not None:
                 broker_thread.join(timeout=1.0)
+            if broker is not None:
+                broker.close()
             if control_host.fileno() >= 0:
                 control_host.close()
             if control_child.fileno() >= 0:
@@ -689,6 +907,8 @@ class SandboxSupervisor:
             cleanup = False
             infra_error = infra_error or "sandbox_temp_cleanup_failed"
         if resources:
+            resources["cgroup_usage_samples"] = cgroup_samples
+            resources["cgroup_usage_sample_interval_seconds"] = 1.0
             resources.update({
                 "cleanup_verified": cleanup,
                 "scope_unit": unit,
@@ -710,11 +930,14 @@ class SandboxSupervisor:
                 output_limited=bool(output_state["limited"]),
                 output=output_state["output"],
                 workspace_outputs=MappingProxyType({}),
+                workspace_output_modes=MappingProxyType({}),
+                workspace_audit=MappingProxyType(workspace_audit),
                 namespace_evidence=MappingProxyType(dict(evidence.get("namespace", {}))),
                 file_evidence=MappingProxyType(dict(evidence.get("mounts", {}))),
                 network_evidence=MappingProxyType(dict(evidence.get("network", {}))),
                 resource_evidence=MappingProxyType(resources),
                 broker_events=broker.events if broker else (),
+                broker_transcript_evidence=broker.transcript_evidence if broker else MappingProxyType({}),
                 infrastructure_error=infra_error or "sandbox_not_ready",
             )
         return RunResult(
@@ -724,9 +947,12 @@ class SandboxSupervisor:
             output_limited=bool(output_state["limited"]),
             output=output_state["output"],
             workspace_outputs=MappingProxyType(outputs),
+            workspace_output_modes=MappingProxyType(output_modes),
+            workspace_audit=MappingProxyType(workspace_audit),
             namespace_evidence=MappingProxyType(dict(evidence.get("namespace", {}))),
             file_evidence=MappingProxyType(dict(evidence.get("files", {}))),
             network_evidence=MappingProxyType(dict(evidence.get("network", {}))),
             resource_evidence=MappingProxyType(resources),
             broker_events=broker.events if broker else (),
+            broker_transcript_evidence=broker.transcript_evidence if broker else MappingProxyType({}),
         )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import socket
 import threading
 import time
@@ -143,8 +144,13 @@ def test_model_list_is_filtered_to_allowlist(fake_endpoint: int) -> None:
     assert [item["id"] for item in json.loads(response)["data"]] == ["fake-model"]
 
 
-def test_sse_chunks_are_forwarded_with_full_stream_timing(fake_endpoint: int) -> None:
-    broker = ModelBroker(policy(fake_endpoint))
+def test_sse_chunks_are_forwarded_and_transcribed_with_full_stream_timing(
+    fake_endpoint: int, tmp_path,
+) -> None:
+    transcript_dir = tmp_path / "trusted-transcript"
+    transcript_dir.mkdir(mode=0o700)
+    transcript_dir.chmod(0o700)
+    broker = ModelBroker(policy(fake_endpoint), transcript_dir=transcript_dir)
     body = json.dumps({
         "model": "fake-model",
         "messages": [{"role": "user", "content": "fixture prompt"}],
@@ -158,6 +164,55 @@ def test_sse_chunks_are_forwarded_with_full_stream_timing(fake_endpoint: int) ->
     assert b"data: [DONE]" in response
     assert broker.events[0].response_bytes == len(response)
     assert broker.events[0].elapsed_seconds >= 0.05
+    assert broker.events[0].completed_utc is not None
+    assert broker.events[0].upstream_first_response_byte_seconds is not None
+    assert broker.events[0].first_response_chunk_seconds is not None
+    evidence = broker.transcript_evidence
+    assert evidence["complete"] is True
+    assert evidence["completed_requests"] == 1
+    record = json.loads((transcript_dir / "transcript.jsonl").read_text(encoding="utf-8"))
+    assert record["upstream_status"] == 200
+    assert record["request_to_upstream_first_response_byte_seconds"] is not None
+    assert record["response_duration_seconds"] >= 0.05
+    recorded_response = (transcript_dir / record["files"]["upstream_response"]["name"]).read_bytes()
+    assert recorded_response == response
+    client_request = (transcript_dir / record["files"]["client_request"]["name"]).read_bytes()
+    upstream_request = (transcript_dir / record["files"]["upstream_request"]["name"]).read_bytes()
+    assert json.loads(client_request)["messages"][0]["content"] == "fixture prompt"
+    assert json.loads(upstream_request)["max_tokens"] == 32
+    assert b"Authorization" not in (transcript_dir / "transcript.jsonl").read_bytes()
+
+
+def test_transcript_close_releases_directory_and_incomplete_exchange_fds(tmp_path) -> None:
+    transcript_dir = tmp_path / "incomplete-transcript"
+    transcript_dir.mkdir(mode=0o700)
+    transcript_dir.chmod(0o700)
+    before = len(os.listdir("/proc/self/fd"))
+    broker = ModelBroker(policy(12345), transcript_dir=transcript_dir)
+    assert broker._transcript is not None
+    broker._transcript.begin("POST", "/v1/chat/completions", b"fixture request")
+    assert len(os.listdir("/proc/self/fd")) >= before + 5
+
+    broker.close()
+    broker.close()
+
+    assert broker.transcript_evidence["complete"] is False
+    assert len(os.listdir("/proc/self/fd")) == before
+
+
+def test_transcript_initialization_failure_unwinds_open_file_descriptors(tmp_path) -> None:
+    transcript_dir = tmp_path / "failed-transcript"
+    transcript_dir.mkdir(mode=0o700)
+    transcript_dir.chmod(0o700)
+    before = len(os.listdir("/proc/self/fd"))
+    broker = ModelBroker(policy(12345, max_request_bytes=1), transcript_dir=transcript_dir)
+    assert broker._transcript is not None
+
+    with pytest.raises(BrokerError, match="per-file limit"):
+        broker._transcript.begin("POST", "/v1/chat/completions", b"too long")
+    broker.close()
+
+    assert len(os.listdir("/proc/self/fd")) == before
 
 
 def test_unlisted_routes_and_unknown_generation_fields_are_rejected(fake_endpoint: int) -> None:

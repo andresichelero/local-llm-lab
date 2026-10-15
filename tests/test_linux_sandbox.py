@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import socket
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -16,6 +18,7 @@ from benchmark.linux_sandbox import (
     SandboxSupervisor,
     new_scope_unit,
     systemd_scope_command,
+    _validate_runtime_tree,
 )
 from benchmark.model_broker import BrokerPolicy
 
@@ -79,6 +82,7 @@ def test_rootless_sandbox_bounds_workspace_runtime_and_parent_routes(tmp_path: P
     workspace = tmp_path / "seed"
     workspace.mkdir()
     (workspace / "seed.txt").write_text("fixture-only", encoding="utf-8")
+    (workspace / "delete-me.txt").write_text("seed-file", encoding="utf-8")
     host_marker = tmp_path / "parent-sentinel.txt"
     host_marker.write_text("benign-parent-sentinel", encoding="utf-8")
     runtime_marker = tmp_path / "runtime-sentinel.txt"
@@ -96,18 +100,20 @@ def test_rootless_sandbox_bounds_workspace_runtime_and_parent_routes(tmp_path: P
         "report['workspace_write'] = False\n"
         "try: open('/workspace/result.txt', 'w').write('candidate-output'); report['workspace_write'] = True\n"
         "except OSError: pass\n"
+        "os.unlink('/workspace/delete-me.txt')\n"
         f"report['parent_root_denied'] = denied('/proc/1/root/etc/passwd') and denied('/proc/1/root{host_marker}')\n"
         "try: os.listdir('/proc/1/fd'); report['pid1_fds_denied'] = False\n"
         "except OSError: report['pid1_fds_denied'] = True\n"
         "report['runtime_ro_denied'] = write_denied('/fixture/readonly.txt')\n"
         "open('/workspace/report.json', 'w').write(json.dumps(report, sort_keys=True))\n"
+        "os.chmod('/workspace/report.json', 0o640)\n"
         "print('bounded-agent-output')\n",
         encoding="utf-8",
     )
     spec = SandboxSpec(
         argv=("/usr/bin/python3.12", "/workspace/agent.py"),
         workspace=workspace,
-        workspace_exports=("report.json", "result.txt"),
+        workspace_exports=("report.json", "result.txt", "delete-me.txt"),
         runtime_ro=(*python_runtime(), RuntimeBind(runtime_marker, PurePosixPath("/fixture/readonly.txt"))),
         limits=ResourceLimits(output_bytes=4096),
     )
@@ -119,6 +125,13 @@ def test_rootless_sandbox_bounds_workspace_runtime_and_parent_routes(tmp_path: P
     assert result.cleanup_verified is True
     assert result.timed_out is False
     assert result.workspace_outputs["result.txt"] == b"candidate-output"
+    assert result.workspace_output_modes["report.json"] == 0o640
+    assert result.workspace_output_modes["result.txt"] == 0o644
+    assert "delete-me.txt" not in result.workspace_outputs
+    assert "delete-me.txt" not in result.workspace_output_modes
+    assert (workspace / "delete-me.txt").read_text(encoding="utf-8") == "seed-file"
+    assert result.workspace_audit["complete"] is True
+    assert result.workspace_audit["missing_exports"] == ["delete-me.txt"]
     report = json.loads(result.workspace_outputs["report.json"])
     assert report == {
         "parent_root_denied": True,
@@ -140,6 +153,9 @@ def test_rootless_sandbox_bounds_workspace_runtime_and_parent_routes(tmp_path: P
     assert result.resource_evidence["pids_max"] == str(spec.limits.pids)
     assert result.resource_evidence["cpu_max"] == "100000 100000"
     assert result.resource_evidence["descendants_clean"] is True
+    assert result.resource_evidence["cgroup_usage_sample_interval_seconds"] == 1.0
+    assert result.resource_evidence["cgroup_usage_samples"]
+    assert "memory.current" in result.resource_evidence["cgroup_usage_samples"][0]
 
 
 def test_model_broker_roundtrip_uses_only_fake_loopback_endpoint(tmp_path: Path) -> None:
@@ -149,6 +165,9 @@ def test_model_broker_roundtrip_uses_only_fake_loopback_endpoint(tmp_path: Path)
     try:
         workspace = tmp_path / "broker-seed"
         workspace.mkdir()
+        transcript_dir = tmp_path / "observer"
+        transcript_dir.mkdir(mode=0o700)
+        transcript_dir.chmod(0o700)
         script = workspace / "roundtrip.py"
         script.write_text(
             "import json, socket\n"
@@ -181,6 +200,7 @@ def test_model_broker_roundtrip_uses_only_fake_loopback_endpoint(tmp_path: Path)
             workspace_exports=("roundtrip.txt",),
             runtime_ro=python_runtime(),
             broker=policy,
+            broker_transcript_dir=transcript_dir,
         ))
     finally:
         server.shutdown()
@@ -200,6 +220,19 @@ def test_model_broker_roundtrip_uses_only_fake_loopback_endpoint(tmp_path: Path)
     assert forwarded["seed"] == 1234
     assert forwarded["max_tokens"] == 16
     assert FakeEndpointHandler.requests[0]["authorization"] is None
+    assert result.broker_transcript_evidence["enabled"] is True
+    assert result.broker_transcript_evidence["complete"] is True
+    assert result.broker_transcript_evidence["completed_requests"] == 1
+    transcript = json.loads((transcript_dir / "transcript.jsonl").read_text(encoding="utf-8"))
+    assert transcript["model_id"] == "fake-model"
+    assert transcript["request_to_upstream_first_response_byte_seconds"] is not None
+    assert transcript["request_to_first_response_chunk_seconds"] is not None
+    assert (transcript_dir / transcript["files"]["client_request"]["name"]).read_bytes()
+    upstream_request = (transcript_dir / transcript["files"]["upstream_request"]["name"]).read_bytes()
+    assert json.loads(upstream_request)["messages"][0]["content"] == "fixture only"
+    upstream_response = (transcript_dir / transcript["files"]["upstream_response"]["name"]).read_bytes()
+    assert b"fake-provider-ok" in upstream_response
+    assert b"Authorization" not in (transcript_dir / "transcript.jsonl").read_bytes()
 
 
 def test_output_and_detached_descendant_are_bounded_and_cleaned(tmp_path: Path) -> None:
@@ -293,3 +326,95 @@ def test_scope_helper_rejects_unowned_unit_names() -> None:
     assert unit.startswith("safe-model-trusted-grader-") and unit.endswith(".scope")
     with pytest.raises(ValueError):
         systemd_scope_command(("true",), ResourceLimits(), unit="user.service")
+
+
+def test_runtime_directory_with_unix_socket_is_rejected_before_candidate_runs(tmp_path: Path) -> None:
+    workspace = tmp_path / "socket-probe-workspace"
+    workspace.mkdir()
+    (workspace / "agent.py").write_text(
+        "import socket\n"
+        "sock = socket.socket(socket.AF_UNIX)\n"
+        "sock.connect('/fixture/host-listener.sock')\n"
+        "sock.sendall(b'fixture-sentinel')\n",
+        encoding="utf-8",
+    )
+    runtime = tmp_path / "runtime-with-socket"
+    runtime.mkdir()
+    listener_path = runtime / "host-listener.sock"
+    listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    listener.bind(str(listener_path))
+    listener.listen(1)
+    listener.settimeout(0.1)
+    try:
+        result = SandboxSupervisor().run(SandboxSpec(
+            argv=("/usr/bin/python3.12", "/workspace/agent.py"),
+            workspace=workspace,
+            runtime_ro=(RuntimeBind(runtime, PurePosixPath("/fixture")),),
+        ))
+        assert result.infrastructure_error == "invalid_spec:ValueError"
+        with pytest.raises(socket.timeout):
+            listener.accept()
+    finally:
+        listener.close()
+
+
+def test_runtime_directory_with_fifo_is_rejected(tmp_path: Path) -> None:
+    runtime = tmp_path / "runtime-with-fifo"
+    runtime.mkdir()
+    os.mkfifo(runtime / "control.fifo")
+    workspace = tmp_path / "fifo-probe-workspace"
+    workspace.mkdir()
+    result = SandboxSupervisor().run(SandboxSpec(
+        argv=("/usr/bin/true",),
+        workspace=workspace,
+        runtime_ro=(RuntimeBind(runtime, PurePosixPath("/fixture")),),
+    ))
+    assert result.infrastructure_error == "invalid_spec:ValueError"
+
+
+def test_runtime_dependency_symlinks_can_be_confined_to_the_bind_source(tmp_path: Path) -> None:
+    runtime = tmp_path / "provider-cache"
+    target = runtime / "pkg" / "index.js"
+    target.parent.mkdir(parents=True)
+    target.write_text("fixture module", encoding="utf-8")
+    bin_dir = runtime / ".bin"
+    bin_dir.mkdir()
+    os.symlink("../pkg/index.js", bin_dir / "in-tree")
+
+    _validate_runtime_tree(runtime, symlinks_within_source=True)
+
+    os.symlink("../../outside.txt", bin_dir / "escape")
+    with pytest.raises(ValueError, match="escapes its source tree"):
+        _validate_runtime_tree(runtime, symlinks_within_source=True)
+
+
+def test_workspace_audit_reports_protected_changes_and_new_paths(tmp_path: Path) -> None:
+    if not shutil.which("systemd-run") or not shutil.which("unshare"):
+        pytest.skip("systemd-run or unshare is unavailable")
+    workspace = tmp_path / "audit-seed"
+    workspace.mkdir()
+    (workspace / "TASK.md").write_text("protected task", encoding="utf-8")
+    (workspace / "protected.txt").write_text("protected fixture", encoding="utf-8")
+    (workspace / "agent.py").write_text(
+        "import os\n"
+        "open('/workspace/TASK.md','w').write('changed')\n"
+        "os.unlink('/workspace/protected.txt')\n"
+        "open('/workspace/extra.py','w').write('candidate-created')\n"
+        "open('/workspace/result.txt','w').write('allowed-export')\n",
+        encoding="utf-8",
+    )
+    result = SandboxSupervisor().run(SandboxSpec(
+        argv=("/usr/bin/python3.12", "/workspace/agent.py"),
+        workspace=workspace,
+        workspace_exports=("result.txt",),
+        runtime_ro=python_runtime(),
+    ))
+    assert result.infrastructure_error is None, result
+    audit = result.workspace_audit
+    assert audit["complete"] is True
+    assert any(item["path"] == "TASK.md" for item in audit["protected_changed"])
+    assert audit["protected_missing"] == ["protected.txt"]
+    extra = next(item for item in audit["unauthorized_extra_paths"] if item["path"] == "extra.py")
+    assert extra["size"] == len("candidate-created")
+    assert "sha256" not in extra
+    assert "extra.py" in {item["path"] for item in audit["final_inventory"]}

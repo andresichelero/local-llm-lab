@@ -7,12 +7,16 @@ from __future__ import annotations
 
 import base64
 import http.client
+import hashlib
 import json
+import os
 import socket
 import struct
 import threading
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Iterator, Mapping
 
@@ -41,6 +45,7 @@ _CHAT_FIELDS = {
     "tool_choice",
     "tools",
 }
+_MAX_TRANSCRIPT_BODY_BYTES = 768 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -121,6 +126,10 @@ class BrokerEvent:
     response_bytes: int
     elapsed_seconds: float
     outcome: str
+    request_started_utc: str | None = None
+    completed_utc: str | None = None
+    upstream_first_response_byte_seconds: float | None = None
+    first_response_chunk_seconds: float | None = None
 
 
 @dataclass(frozen=True)
@@ -128,6 +137,260 @@ class BrokerResponse:
     status: int
     content_type: str
     chunks: Iterator[bytes]
+
+
+class _TranscriptExchange:
+    def __init__(self, owner: _BrokerTranscript, index: int, method: str, path: str, body: bytes):
+        self.owner = owner
+        self.index = index
+        self.method = method
+        self.path = path
+        self.started = time.monotonic()
+        self.started_utc = datetime.now(timezone.utc).isoformat()
+        self.upstream_started: float | None = None
+        self.upstream_started_utc: str | None = None
+        self.upstream_first_byte: float | None = None
+        self.first_chunk: float | None = None
+        self.upstream_status: int | None = None
+        self.upstream_content_type: str | None = None
+        self.model_id: str | None = None
+        self.status = 0
+        self.content_type = ""
+        self.outcome = "incomplete"
+        self.error: str | None = None
+        self.files: dict[str, dict[str, Any]] = {}
+        self._fds: dict[str, int] = {}
+        self._hashes: dict[str, Any] = {}
+        self._closed = False
+        try:
+            self._write_file("client_request", body, owner.policy.max_request_bytes)
+            self._open_file("upstream_request")
+            self._open_file("upstream_response")
+            self._open_file("response")
+        except BaseException:
+            self.abort()
+            raise
+
+    def _filename(self, kind: str) -> str:
+        return f"request-{self.index:06d}-{kind}.bin"
+
+    def _open_file(self, kind: str) -> None:
+        fd = os.open(self._filename(kind), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600,
+                     dir_fd=self.owner._dir_fd)
+        self._fds[kind] = fd
+        self._hashes[kind] = hashlib.sha256()
+        self.files[kind] = {"name": self._filename(kind), "bytes": 0}
+
+    def _write_file(self, kind: str, data: bytes, per_file_limit: int) -> None:
+        if kind not in self._fds:
+            self._open_file(kind)
+        record = self.files[kind]
+        if record["bytes"] + len(data) > per_file_limit:
+            raise BrokerError("broker transcript per-file limit exceeded")
+        self.owner._reserve(len(data))
+        view = memoryview(data)
+        while view:
+            count = os.write(self._fds[kind], view)
+            if count <= 0:
+                raise OSError("short transcript write")
+            view = view[count:]
+        self._hashes[kind].update(data)
+        record["bytes"] += len(data)
+
+    def set_upstream_request(self, body: bytes) -> None:
+        self._write_file("upstream_request", body, self.owner.policy.max_request_bytes)
+
+    def mark_upstream_started(self) -> None:
+        self.upstream_started = time.monotonic()
+        self.upstream_started_utc = datetime.now(timezone.utc).isoformat()
+
+    def mark_upstream_first_byte(self) -> None:
+        if self.upstream_first_byte is None:
+            self.upstream_first_byte = time.monotonic()
+
+    def mark_upstream_response(self, status: int, content_type: str) -> None:
+        self.upstream_status = status
+        self.upstream_content_type = content_type
+
+    def write_upstream_response(self, data: bytes) -> None:
+        if data:
+            self.mark_upstream_first_byte()
+            self._write_file("upstream_response", data, self.owner.policy.max_response_bytes)
+
+    def mark_first_chunk(self) -> None:
+        if self.first_chunk is None:
+            self.first_chunk = time.monotonic()
+
+    def write_response(self, data: bytes) -> None:
+        if data:
+            self.mark_first_chunk()
+            self._write_file("response", data, self.owner.policy.max_response_bytes)
+
+    def finish(self, *, status: int, content_type: str, model_id: str | None,
+               outcome: str, error: str | None = None) -> dict[str, Any]:
+        self.status = status
+        self.content_type = content_type
+        self.model_id = model_id
+        self.outcome = outcome
+        self.error = error
+        for fd in tuple(self._fds.values()):
+            os.fsync(fd)
+            os.close(fd)
+        self._fds.clear()
+        for kind, record in self.files.items():
+            record["sha256"] = self._hashes[kind].hexdigest()
+        completed = time.monotonic()
+        summary = {
+            "request_id": self.index,
+            "request_started_utc": self.started_utc,
+            "upstream_started_utc": self.upstream_started_utc,
+            "completed_utc": datetime.now(timezone.utc).isoformat(),
+            "method": self.method,
+            "path": self.path,
+            "model_id": self.model_id,
+            "status": status,
+            "content_type": content_type,
+            "upstream_status": self.upstream_status,
+            "upstream_content_type": self.upstream_content_type,
+            "outcome": outcome,
+            "error": error,
+            "request_to_upstream_first_response_byte_seconds": self._elapsed(self.upstream_first_byte),
+            "upstream_to_first_response_byte_seconds": self._delta(self.upstream_started, self.upstream_first_byte),
+            "request_to_first_response_chunk_seconds": self._elapsed(self.first_chunk),
+            "response_duration_seconds": round(max(0.0, completed - self.started), 6),
+            "files": self.files,
+        }
+        self.abort()
+        self.owner._record(summary, self)
+        return summary
+
+    def abort(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        for fd in tuple(self._fds.values()):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        self._fds.clear()
+
+    def _elapsed(self, moment: float | None) -> float | None:
+        return None if moment is None else round(max(0.0, moment - self.started), 6)
+
+    @staticmethod
+    def _delta(start: float | None, end: float | None) -> float | None:
+        return None if start is None or end is None else round(max(0.0, end - start), 6)
+
+class _BrokerTranscript:
+    def __init__(self, directory: Path, policy: BrokerPolicy):
+        self.directory = directory
+        self.policy = policy
+        self._lock = threading.Lock()
+        self._next = 0
+        self._body_bytes = 0
+        self._metadata_bytes = 0
+        self._completed = 0
+        self._active: set[_TranscriptExchange] = set()
+        self._closed = False
+        self._dir_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        self._manifest_fd = -1
+        try:
+            info = os.fstat(self._dir_fd)
+            if info.st_uid != os.getuid() or info.st_mode & 0o077:
+                raise BrokerError("broker transcript directory is not private")
+            self._manifest_fd = os.open(
+                "transcript.jsonl", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                0o600, dir_fd=self._dir_fd,
+            )
+        except BaseException:
+            os.close(self._dir_fd)
+            self._dir_fd = -1
+            raise
+
+    def begin(self, method: str, path: str, body: bytes) -> _TranscriptExchange:
+        with self._lock:
+            if self._closed:
+                raise BrokerError("broker transcript is closed")
+            if self._next >= self.policy.max_requests + 1:
+                raise BrokerError("broker transcript request-count limit exceeded")
+            self._next += 1
+            index = self._next
+        exchange = _TranscriptExchange(self, index, method, path, body)
+        with self._lock:
+            if self._closed:
+                exchange.abort()
+                raise BrokerError("broker transcript is closed")
+            self._active.add(exchange)
+        return exchange
+
+    def _reserve(self, size: int) -> None:
+        with self._lock:
+            if self._closed:
+                raise BrokerError("broker transcript is closed")
+            if self._body_bytes + size > _MAX_TRANSCRIPT_BODY_BYTES:
+                raise BrokerError("broker transcript aggregate body limit exceeded")
+            self._body_bytes += size
+
+    def _record(self, summary: Mapping[str, Any], exchange: _TranscriptExchange) -> None:
+        data = json.dumps(summary, separators=(",", ":"), allow_nan=False).encode("utf-8") + b"\n"
+        if len(data) > 8192:
+            raise BrokerError("broker transcript metadata exceeds its limit")
+        with self._lock:
+            if self._closed:
+                raise BrokerError("broker transcript is closed")
+            metadata_limit = (self.policy.max_requests + 1) * 8192
+            if self._metadata_bytes + len(data) > metadata_limit:
+                raise BrokerError("broker transcript metadata aggregate limit exceeded")
+            view = memoryview(data)
+            while view:
+                count = os.write(self._manifest_fd, view)
+                if count <= 0:
+                    raise OSError("short transcript manifest write")
+                view = view[count:]
+            os.fsync(self._manifest_fd)
+            self._metadata_bytes += len(data)
+            self._completed += 1
+            self._active.discard(exchange)
+
+    @property
+    def evidence(self) -> Mapping[str, Any]:
+        with self._lock:
+            return MappingProxyType({
+                "enabled": True,
+                "complete": self._completed == self._next,
+                "directory": str(self.directory),
+                "manifest": str(self.directory / "transcript.jsonl"),
+                "completed_requests": self._completed,
+                "request_count": self._next,
+                "body_bytes": self._body_bytes,
+                "body_limit_bytes": _MAX_TRANSCRIPT_BODY_BYTES,
+                "metadata_bytes": self._metadata_bytes,
+                "metadata_limit_bytes": (self.policy.max_requests + 1) * 8192,
+            })
+
+    def close(self) -> None:
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            active = tuple(self._active)
+            self._active.clear()
+            manifest_fd = self._manifest_fd
+            self._manifest_fd = -1
+            dir_fd = self._dir_fd
+            self._dir_fd = -1
+        for exchange in active:
+            exchange.abort()
+        try:
+            if manifest_fd >= 0:
+                try:
+                    os.fsync(manifest_fd)
+                finally:
+                    os.close(manifest_fd)
+        finally:
+            if dir_fd >= 0:
+                os.close(dir_fd)
 
 
 def _recv_exact(sock: socket.socket, size: int) -> bytes:
@@ -217,23 +480,49 @@ class BrokerChannelClient:
 class ModelBroker:
     """Host-side fixed-target HTTP client and socketpair protocol handler."""
 
-    def __init__(self, policy: BrokerPolicy):
+    def __init__(self, policy: BrokerPolicy, *, transcript_dir: Path | None = None):
         self.policy = policy
         self._events: list[BrokerEvent] = []
         self._events_lock = threading.Lock()
         self._request_count = 0
+        self._transcript = _BrokerTranscript(transcript_dir, policy) if transcript_dir is not None else None
+        self._active_connections: set[http.client.HTTPConnection] = set()
+        self._connections_lock = threading.Lock()
+        self._cancelled = False
 
     @property
     def events(self) -> tuple[BrokerEvent, ...]:
         with self._events_lock:
             return tuple(self._events)
 
+    @property
+    def transcript_evidence(self) -> Mapping[str, Any]:
+        return MappingProxyType({}) if self._transcript is None else self._transcript.evidence
+
+    def close(self) -> None:
+        if self._transcript is not None:
+            self._transcript.close()
+
+    def cancel(self) -> None:
+        with self._connections_lock:
+            self._cancelled = True
+            connections = tuple(self._active_connections)
+        for connection in connections:
+            connection.close()
+
+    def _release_connection(self, connection: http.client.HTTPConnection) -> None:
+        connection.close()
+        with self._connections_lock:
+            self._active_connections.discard(connection)
+
     def _record(self, event: BrokerEvent) -> None:
         with self._events_lock:
             self._events.append(event)
 
-    def handle(self, method: str, path: str, body: bytes) -> tuple[int, str, Iterator[bytes], str | None, int]:
+    def handle(self, method: str, path: str, body: bytes, *,
+               _transcript: _TranscriptExchange | None = None) -> tuple[int, str, Iterator[bytes], str | None, int]:
         started = time.monotonic()
+        started_utc = datetime.now(timezone.utc).isoformat()
         model_id: str | None = None
         status = 400
         response_type = "application/json"
@@ -250,8 +539,11 @@ class ModelBroker:
                     status, data = 400, _error_body("GET requests cannot include a body")
                     outcome = "invalid_body"
                     return status, response_type, iter((data,)), model_id, len(data)
+                if _transcript is not None:
+                    _transcript.set_upstream_request(b"")
                 status, response_type, chunks, response_bytes = self._upstream(
-                    "GET", "/v1/models", b"", streaming=False, model_list=True, started=started
+                    "GET", "/v1/models", b"", streaming=False, model_list=True, started=started,
+                    transcript=_transcript,
                 )
                 outcome = "allowed"
                 return status, response_type, chunks, model_id, response_bytes
@@ -311,16 +603,19 @@ class ModelBroker:
                 status, data = 413, _error_body("canonical request exceeds the configured limit")
                 outcome = "body_limit"
                 return status, response_type, iter((data,)), model_id, len(data)
+            if _transcript is not None:
+                _transcript.set_upstream_request(wire)
             status, response_type, chunks, response_bytes = self._upstream(
                 "POST", "/v1/chat/completions", wire, streaming=stream,
-                model_list=False, started=started,
+                model_list=False, started=started, transcript=_transcript,
             )
             outcome = "allowed"
             return status, response_type, chunks, model_id, response_bytes
         finally:
             # The response byte count is refined by the framed server after streaming.
             elapsed = max(0.0, time.monotonic() - started)
-            self._record(BrokerEvent(method, path, status, model_id, len(body), response_bytes, elapsed, outcome))
+            self._record(BrokerEvent(method, path, status, model_id, len(body), response_bytes, elapsed, outcome,
+                                     started_utc))
 
     def _upstream(
         self,
@@ -331,13 +626,21 @@ class ModelBroker:
         streaming: bool,
         model_list: bool,
         started: float,
+        transcript: _TranscriptExchange | None = None,
     ) -> tuple[int, str, Iterator[bytes], int]:
         remaining = self.policy.deadline_seconds - (time.monotonic() - started)
         if remaining <= 0:
             data = _error_body("broker deadline exceeded")
             return 504, "application/json", iter((data,)), len(data)
         connection = http.client.HTTPConnection("127.0.0.1", self.policy.upstream_port, timeout=remaining)
+        with self._connections_lock:
+            if self._cancelled:
+                data = _error_body("broker is stopping")
+                return 503, "application/json", iter((data,)), len(data)
+            self._active_connections.add(connection)
         try:
+            if transcript is not None:
+                transcript.mark_upstream_started()
             headers = {
                 "Accept": "text/event-stream" if streaming else "application/json",
                 "Connection": "close",
@@ -347,12 +650,16 @@ class ModelBroker:
             connection.request(method, path, body=body if method == "POST" else None, headers=headers)
             response = connection.getresponse()
             response_type = response.getheader("Content-Type", "application/json").split(";", 1)[0].strip().lower()
+            if transcript is not None:
+                transcript.mark_upstream_response(response.status, response_type)
             if response_type not in {"application/json", "text/event-stream"}:
-                connection.close()
+                self._read_bounded(response, connection, started, transcript=transcript)
+                self._release_connection(connection)
                 data = _error_body("upstream content type is not allowed")
                 return 502, "application/json", iter((data,)), len(data)
             if model_list:
-                data = self._read_bounded(response, connection, started)
+                data = self._read_bounded(response, connection, started, transcript=transcript)
+                self._release_connection(connection)
                 parsed = _decode_json(data)
                 if not isinstance(parsed, dict) or not isinstance(parsed.get("data"), list):
                     safe_data = _error_body("upstream model list is invalid")
@@ -363,44 +670,50 @@ class ModelBroker:
                 filtered_body = _compact_json({"object": "list", "data": safe_models})
                 return response.status, "application/json", iter((filtered_body,)), len(filtered_body)
             if response.status >= 400:
-                connection.close()
+                self._read_bounded(response, connection, started, transcript=transcript)
+                self._release_connection(connection)
                 data = _error_body("local model endpoint rejected the request")
                 return response.status, "application/json", iter((data,)), len(data)
             if streaming and response_type != "text/event-stream":
-                data = self._read_bounded(response, connection, started)
-                connection.close()
+                data = self._read_bounded(response, connection, started, transcript=transcript)
+                self._release_connection(connection)
                 return response.status, response_type, iter((data,)), len(data)
             if not streaming:
-                data = self._read_bounded(response, connection, started)
-                connection.close()
-                return response.status, response_type, iter((data,)), len(data)
-
-            def stream_chunks() -> Iterator[bytes]:
-                total = 0
-                try:
-                    while True:
-                        remaining_time = self.policy.deadline_seconds - (time.monotonic() - started)
-                        if remaining_time <= 0:
-                            raise TimeoutError("broker response deadline exceeded")
-                        if connection.sock is not None:
-                            connection.sock.settimeout(remaining_time)
-                        chunk = response.read1(_CHUNK_BYTES)
-                        if not chunk:
-                            return
-                        total += len(chunk)
-                        if total > self.policy.max_response_bytes:
-                            raise BrokerError("broker response exceeds the configured limit")
-                        yield chunk
-                finally:
-                    connection.close()
-
-            return response.status, response_type, stream_chunks(), 0
+                return response.status, response_type, self._stream_bounded(
+                    response, connection, started, transcript=transcript,
+                ), 0
+            return response.status, response_type, self._stream_bounded(
+                response, connection, started, transcript=transcript,
+            ), 0
         except (OSError, http.client.HTTPException, TimeoutError, BrokerError, ValueError):
-            connection.close()
+            self._release_connection(connection)
             data = _error_body("upstream request failed or exceeded its limit")
             return 502, "application/json", iter((data,)), len(data)
 
-    def _read_bounded(self, response: http.client.HTTPResponse, connection: http.client.HTTPConnection, started: float) -> bytes:
+    def _stream_bounded(self, response: http.client.HTTPResponse, connection: http.client.HTTPConnection,
+                        started: float, *, transcript: _TranscriptExchange | None = None) -> Iterator[bytes]:
+        total = 0
+        try:
+            while True:
+                remaining = self.policy.deadline_seconds - (time.monotonic() - started)
+                if remaining <= 0:
+                    raise TimeoutError("broker response deadline exceeded")
+                if connection.sock is not None:
+                    connection.sock.settimeout(remaining)
+                chunk = response.read1(_CHUNK_BYTES)
+                if not chunk:
+                    return
+                total += len(chunk)
+                if total > self.policy.max_response_bytes:
+                    raise BrokerError("broker response exceeds the configured limit")
+                if transcript is not None:
+                    transcript.write_upstream_response(chunk)
+                yield chunk
+        finally:
+            self._release_connection(connection)
+
+    def _read_bounded(self, response: http.client.HTTPResponse, connection: http.client.HTTPConnection,
+                      started: float, *, transcript: _TranscriptExchange | None = None) -> bytes:
         chunks = bytearray()
         try:
             while True:
@@ -412,6 +725,8 @@ class ModelBroker:
                 part = response.read1(min(_CHUNK_BYTES, self.policy.max_response_bytes - len(chunks) + 1))
                 if not part:
                     return bytes(chunks)
+                if transcript is not None:
+                    transcript.write_upstream_response(part)
                 chunks.extend(part)
                 if len(chunks) > self.policy.max_response_bytes:
                     raise BrokerError("broker response exceeds the configured limit")
@@ -444,13 +759,31 @@ class ModelBroker:
                 started = time.monotonic()
                 with self._events_lock:
                     event_index = len(self._events)
+                exchange: _TranscriptExchange | None = None
+                if self._transcript is not None:
+                    try:
+                        exchange = self._transcript.begin(method, path, body)
+                    except (OSError, BrokerError):
+                        data = _error_body("trusted transcript could not record this request")
+                        _send_frame(channel, _compact_json({"status": 507, "content_type": "application/json", "model_id": None}))
+                        channel.sendall(struct.pack("!I", len(data)) + data + struct.pack("!I", 0))
+                        continue
                 try:
-                    status, content_type, chunks, model_id, _ = self.handle(method, path, body)
+                    status, content_type, chunks, model_id, _ = self.handle(
+                        method, path, body, _transcript=exchange,
+                    )
                     _send_frame(channel, _compact_json({"status": status, "content_type": content_type, "model_id": model_id}))
                 except (BrokerError, ValueError, TypeError, KeyError, OSError, http.client.HTTPException):
                     data = _error_body("broker request rejected")
                     _send_frame(channel, _compact_json({"status": 502, "content_type": "application/json", "model_id": None}))
                     channel.sendall(struct.pack("!I", len(data)) + data + struct.pack("!I", 0))
+                    if exchange is not None:
+                        try:
+                            exchange.write_response(data)
+                            exchange.finish(status=502, content_type="application/json", model_id=None,
+                                            outcome="broker_error", error="request_rejected")
+                        except (OSError, BrokerError):
+                            pass
                     continue
                 try:
                     response_size = 0
@@ -460,23 +793,53 @@ class ModelBroker:
                         response_size += len(chunk)
                         if response_size > self.policy.max_response_bytes:
                             raise BrokerError("response exceeds the configured limit")
+                        if exchange is not None:
+                            exchange.write_response(chunk)
                         for offset in range(0, len(chunk), _CHUNK_BYTES):
                             part = chunk[offset:offset + _CHUNK_BYTES]
                             channel.sendall(struct.pack("!I", len(part)) + part)
                     channel.sendall(struct.pack("!I", 0))
-                    self._update_response_event(event_index, response_size, time.monotonic() - started)
-                except (BrokerError, BrokenPipeError, ConnectionError, OSError, TimeoutError):
+                    event = self.events[event_index] if event_index < len(self.events) else None
+                    self._update_response_event(event_index, response_size, time.monotonic() - started, exchange)
+                    if exchange is not None:
+                        exchange.finish(
+                            status=status,
+                            content_type=content_type,
+                            model_id=model_id,
+                            outcome=event.outcome if event is not None else "allowed",
+                        )
+                    if event is not None and event.outcome == "request_budget":
+                        return
+                except (BrokerError, BrokenPipeError, ConnectionError, OSError, TimeoutError) as exc:
+                    if exchange is not None:
+                        try:
+                            event = self.events[event_index] if event_index < len(self.events) else None
+                            exchange.finish(
+                                status=status,
+                                content_type=content_type,
+                                model_id=model_id,
+                                outcome=event.outcome if event is not None else "broker_error",
+                                error=type(exc).__name__,
+                            )
+                        except (OSError, BrokerError):
+                            pass
                     return
         except (EOFError, OSError):
             return
+        finally:
+            self.close()
 
-    def _update_response_event(self, index: int, size: int, elapsed: float) -> None:
+    def _update_response_event(self, index: int, size: int, elapsed: float,
+                               exchange: _TranscriptExchange | None = None) -> None:
         with self._events_lock:
             if 0 <= index < len(self._events):
                 event = self._events[index]
                 self._events[index] = BrokerEvent(
                     event.method, event.path, event.status, event.model_id,
                     event.request_bytes, size, max(event.elapsed_seconds, elapsed), event.outcome,
+                    event.request_started_utc, datetime.now(timezone.utc).isoformat(),
+                    None if exchange is None else exchange._elapsed(exchange.upstream_first_byte),
+                    None if exchange is None else exchange._elapsed(exchange.first_chunk),
                 )
 
 
