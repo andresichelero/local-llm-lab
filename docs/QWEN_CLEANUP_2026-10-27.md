@@ -14,7 +14,16 @@ The cleanup below affected local files under `D:\Usuario\Downloads\LLM`, not tra
 - Compressed 34 historical report files as `reports-20261016.zip`; verified all 34 hashes before removing the originals. Compressed seven temporary Ornith scripts as `ornith-scripts-temporarios-20261016.zip` and verified them before removing the originals.
 - Removed 238 files (2,370,124 bytes) from the old practical-repair temporary snapshot after confirming each matched `practical-repair-preparation-20261021.zip`. Earlier in the same cleanup, removed four pytest cache files (4,002 bytes) and 31 bytecode files (1,352,697 bytes).
 - Removed the clean `local-llm-lab-cross-model-phase1` worktree via Git; its local branch and commits remain in the shared repository. Kept the main `local-llm-lab` repository because it contains shared Git data and local changes, the active `practical-agent-v2` worktree, and this PR worktree while the PR is being updated.
-- Moved ten untracked practical-campaign report directories from the active checkout to `archives/relatorios-praticos-antigos-20261027`. The active Qwen manifest did not list them as frozen inputs; their old links can require the archive location.
+- Moved ten untracked practical-campaign report directories out of the active checkout during the first cleanup. Their 114 files were subsequently removed at the user's request during the final campaign reset.
 - `reports/` and `tmp/` may reappear when other work creates new output; do not assume they are obsolete based on directory name alone.
 
-The active Qwen cache, runtime, outputs, imported provenance, and the v4/r1/r2 recovery sources were retained. Filesystem free space also changes as the campaign downloads and stages models.
+The preceding cleanup retained the then-active Qwen cache and v4/r1/r2 lineage. The user subsequently replaced that campaign with `final` and requested removal of obsolete results and weights.
+
+## Final campaign reset
+
+- Preserved 22 completed historical attempts for the selected final artifacts, including original protocol IDs, source manifests and 1,015 hash-verified evidence files, as `reference-selected` inside the final output. They remain reference only, not new-protocol scores.
+- Removed old result directories under the WSL laboratory results root after verifying that selected reference bundle. Retained the final output and operational launcher/review files. Deleted 96 files from the previous local Qwen report directories, excluding the final report and harness-qualification inputs.
+- Removed unselected, catalog-identified model cache links and objects, including partial downloads, freeing approximately 44.5 GiB of object data. The existing selected 9B Q4_K_M model and current final inputs were retained.
+- Prepared a separate 10-artifact final catalog, completed offline checks, and started its own service. Runtime resource limits are still necessary because file size does not guarantee GPU fit.
+
+Space available changes while models download and stage; it is not a fixed benchmark result. Previous local report paths no longer establish the current campaign state.

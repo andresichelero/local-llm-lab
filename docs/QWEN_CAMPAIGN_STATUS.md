@@ -1,72 +1,35 @@
-# Qwen3.5 quantization and harness campaign
+# Qwen3.5 final campaign
 
-**Latest data capture:** 2026-10-27 07:58 UTC (04:58 BRT)
-**Scope:** mixed-protocol progress and selected qualification observations; no final selection
+**Protocol:** `qwen-quant-harness-optimization-final`
+**Local output:** `/home/foxtrot/local-llm-benchmark/results/qwen-quant-harness-optimization-final`
 **Campaign checkout:** `D:\Usuario\Downloads\LLM\.worktrees\practical-agent-v2`
+**Status:** the qualification stage was started on 2026-10-27; consult the live output for current progress.
 
-This document records the latest supplied data capture and the earlier saved assessment. It is a historical snapshot, not a live process check. The assessment at 02:13 UTC reported 147 finalized records; the later `report-data.json` capture has 159. Their schedules and record coverage differ, so use the latest capture for progress and the assessment report for its detailed interpretation of context, development, and measurement limits.
+The campaign evaluates five GGUF variants each for Qwen3.5-4B and Qwen3.5-9B. They are Unsloth conversions of the base models, not additional model families. Each catalog entry records its source, revision, file hashes, tokenizer and template information as available.
 
-## Objective and selection rules
+| Model | Selected quantizations |
+|---|---|
+| Qwen3.5-4B | Q5_K_S, Q5_K_M, UD-Q5_K_XL, Q6_K, Q8_0 |
+| Qwen3.5-9B | Q4_K_M, Q5_K_S, Q5_K_M, UD-Q5_K_XL, Q6_K |
 
-The campaign aims to choose **four measured Qwen3.5 configurations**, two each for 4B and 9B. It evaluates GGUF quantizations and compatible alternative engines while preserving existing installations, model weights, evidence, and protocol lineage. The selection is gated by correctness, useful context, generation speed, and memory headroom; a fast qualification attempt alone cannot make a finalist.
+All selected files are smaller than 7,500,000,000 bytes. The 9B Q6_K is close to that limit at 7,458,301,152 bytes. Size alone does not include runtime buffers, KV cache or other applications. The runner requests all layers on the GPU, disables automatic fitting and checks a 512 MiB device reserve. A configuration that cannot satisfy its capacity checks is blocked or deferred rather than counted as a reasoning failure. These controls do not prove that desktop contention cannot occur between telemetry samples.
 
-For each model, the planned selections are:
+All variants are nominally above four bits except 9B Q4_K_M, which the user expressly permitted after local GGUF tensor inspection reported 5.0656 bits per element across 427 tensors. The file contains a mixture of F32, Q4_K, Q5_K, Q6_K and Q8_0 tensors. The figure is an average across tensor elements, not a claim that every tensor is above four bits.
 
-1. The fastest eligible configuration among those with the best task completion.
-2. The configuration with the largest verified useful context that stays within one task of the best completion rate, with any shortfall reported.
+## Additional formats
 
-The frozen plan calls for a floor of 10/12 qualification checks; three performance repetitions at 16K, 32K, 64K, and 128K where safe; and six development tasks for each eligible artifact. After quantization selection, compare all eleven historical/current harness candidates on six tasks per harness/configuration. Deepen the top three to twelve tasks, two seeds, and both model sizes, then run the separately gated ablations and six fresh confirmation tasks across two seeds. Install checks or simulated-provider smokes do not count as model-quality comparisons.
+The earlier EXL3 catalog contained 9B variants through 6 bits per weight. Its 2–4 bpw variants are below or equal to the strict four-bit floor, while the 5–6 bpw files exceed 7.5 GB; none enters the final queue under these constraints. No 4B EXL3 artifact was present in that catalog. AWQ, GPTQ, FP8, MNN, OpenVINO, MLX and raw Hugging Face formats are not currently qualified as compatible by this runner and are not included. A new candidate needs separate provenance, compatibility and capacity checks before entering a new frozen protocol.
 
-The planned reasoning-profile follow-up (off, low, and medium) is separate from recovery-r2. It uses one fixed 9B artifact and holds engine, harness, task set, seeds, context, sampling, output ceiling, cache policy, and thread count constant. First verify that the pinned chat template honors the requested effort; otherwise describe the arms as budget-defined profiles. Run a six-task, one-seed pilot first, and expand only if controls and final answers are valid. Record reasoning and answer tokens separately. Do not append this work to a recovery manifest.
+## Evidence and selection
 
-## Latest progress capture
+Qualification uses twelve checks with a 10/12 floor. Eligible candidates advance to the separately recorded context/capacity and development tasks. Selection is not a throughput-only ranking: task completion, useful context, elapsed time and memory evidence matter. The schedule can grow as gates pass. Model errors remain model results; resource, transport, tool and infrastructure problems are recorded separately.
 
-`D:\Usuario\Downloads\LLM\reports\outputs\qwen-performance-20261027\source\report-data.json` contains **159 records**, **585 pending units**, and **744 scheduled units**. The schedule is adaptive and can grow as qualification gates pass. Its stage counts are:
+Twenty-two completed historical attempts for selected artifacts were copied with their original protocol identifiers and raw evidence to `reference-selected` under the final output. The 1,015 copied evidence files were hash-verified; the bundle is historical reference and is not silently mixed into the new-protocol ranking. Blocked attempts without reusable model results were excluded. Old campaign result directories and unselected model-cache objects were removed at the user's request.
 
-| Stage | Records |
-|---|---:|
-| Qualification | 141 |
-| Capacity | 12 |
-| Development | 6 |
+The planned comparison of coding harnesses and reasoning-off/low/medium profiles remains a later stage. It is not yet an automatic continuation of `final`: the older native harness runner references the removed v4 output and requires adaptation and offline validation under its own protocol before use. No harness winner or final quantization winner has been established.
 
-The records include 79 v4, 61 recovery-r2, 18 recovery-r3-dns, and one qualification record whose protocol is unregistered. The saved 02:13 UTC assessment predates this capture: it had 147 records, 579 pending of 726 scheduled, and only seven r3-dns records. Do not substitute those earlier totals for this later progress checkpoint or imply that all 159 records share one unchanged protocol.
+## Local operation and limitations
 
-Overall statuses in the latest capture are 42 `complete`, 61 `model_failure`, and 56 `blocked`. These are stored labels across multiple stages and protocol cohorts; `model_failure` is not a fresh causal audit. Keep model, harness, tool, transport, telemetry, and infrastructure explanations distinct. The assessment's official selection state is `mixed_protocols_requires_review`; no final quantization or harness selection is established here. **R4 has not been verified in the supplied evidence.**
+The current local implementation resides in the separate campaign checkout and includes uncommitted/untracked files not supplied by this documentation-only branch. The final service is `qwen-quant-optimization-final.service`; status queries must specify the final output and confirm the service directly because the older status helper can display a stale service name. The monitor is scheduled every 30 minutes to investigate and safely recover confirmed infrastructure failures, while preserving final evidence and avoiding retries of completed model failures.
 
-The assessment source for its detailed qualification analysis is `results/reports/qwen-live-assessment-20261027T021305Z/README.md` in the separate campaign checkout. Its 02:13 UTC qualification table reports 19 4B and 11 9B artifacts at or above 10/12. The newer capture adds records, but this document does not independently recompute a final eligible-artifact set from them.
-
-## Recent qualification observations
-
-The following rows are individual qualification observations from the later capture. Tok/s values are per-attempt averages over recorded calls at 16K context. They are not repeated performance trials or a robust ranking.
-
-| Model and artifact | Protocol | Checks | Recorded average |
-|---|---|---:|---:|
-| Qwen3.5-4B, Unsloth UD-IQ3_XXS | v4 | 10/12 | 103.61 tok/s |
-| Qwen3.5-9B, mradermacher I1-IQ4_XS | v4 | 10/12 | 67.28 tok/s |
-| Qwen3.5-9B, mradermacher IQ4_XS | v4 | 12/12 | 66.74 tok/s |
-
-These are candidates for continued evaluation only. The apparent speed differences are not sufficient to select a quantization: qualification includes a small fixed check set, its task completion and resource behavior need deeper evaluation, and the planned three-repetition performance/context measurements and development tasks are incomplete. Compare artifacts only within matched protocols, hardware conditions, contexts, and telemetry coverage.
-
-## Context and development evidence
-
-The earlier 02:13 UTC assessment contains a separate r2 context probe for Qwen3.5-9B Unsloth Q4_K_M. It recovered three planted markers in three repeats at total contexts 16,384, 32,768, and 65,536; actual inputs were about 11,978, 28,362, and 61,130 tokens, each with a 4,096-token output reserve. Median TTFT was 5.91, 15.05, and 35.99 seconds. At 65,536, the device-wide GPU peak was 7,281–7,285 MiB. Three 131,072-context attempts could not retain the 512 MiB reserve after warm-up. This is a synthetic marker-recovery and capacity result for one r2 configuration, not repository-scale context quality or a comparison of current quantizations.
-
-In six historical development tasks for that same r2 Q4_K_M/9B setup, two completed, three were recorded as `model_failure` (two no-progress stops and one compaction-budget stop), and one required transport/configuration review. A JavaScript task returned HTTP 500 while the server parsed tool arguments; its cause was unresolved in the assessment and should not be assigned to the model without evidence.
-
-The earlier assessment found incomplete GPU telemetry in five of seven then-finalized r3 qualifications; all three that reached 10/12 were in that group. The later data capture has 18 r3-dns qualification records, so that earlier telemetry count is not a summary of all later r3 records. The cause of the recorded 15-second `nvidia-smi` timeouts was unproven. Do not promote results with missing telemetry to memory-capacity finalists until the resource evidence is adequate.
-
-## Priorities and operating constraints
-
-1. Preserve R3 and the v4/r1/r2 evidence lineage for as long as they are needed. Keep manifests, raw attempts, imported provenance, and reports intact; do not overwrite or retrospectively reclassify them. The supplied assessment specifically separates v4, r2, and r3-dns cohorts, while r1 is part of the historical lineage to retain where present.
-2. Establish useful context per configuration, including output reserve, answer correctness, TTFT, memory headroom, and desktop responsiveness. Do not equate a context-window setting or synthetic marker recovery with usable coding context.
-3. Complete qualification and matched performance/development measurements before selecting artifacts; then compare all eleven harness candidates under the planned matched tasks and deepen only the top three.
-4. Compare harnesses and reasoning profiles only with pinned configurations and their own explicit protocols. Keep install/connectivity readiness separate from real-model task results and keep protocol cohorts separate in analysis.
-5. Respect shared GPU and memory resources: the Windows desktop uses the same RTX 3070. Serialize GPU measurements, protect the memory reserve, and do not run project tests or graders concurrently with inference. Check current resource availability before any authorized continuation.
-6. Treat incomplete telemetry, unregistered protocol provenance, and unresolved transport/tool failures as review items. Add new cases or change criteria only under a new protocol; retain the existing records unchanged.
-7. No R4 output or final R4 state is verified by the supplied capture. Verify the exact output and protocol before making any later R4 claim.
-
-## Checkout and documentation boundary
-
-The campaign plan and source assessment live in `D:\Usuario\Downloads\LLM\.worktrees\practical-agent-v2`; the newest supplied capture is `D:\Usuario\Downloads\LLM\reports\outputs\qwen-performance-20261027\source\report-data.json`. The active checkout has local uncommitted scripts/configuration and is not represented by this documentation branch. This branch documents the evidence and decisions; it does not provide those local campaign scripts or a monitor command. Snapshot counts can become stale as the separate checkout changes.
-
-This documentation update did not start inference, tests, or graders; the existing campaign continued independently.
+The offline foundation gate completed with 186 tests, lint and compilation before inference. A focused set of 16 wrapper, catalog and retention tests also passed; these sets overlap. No tests or graders were run concurrently with inference.
