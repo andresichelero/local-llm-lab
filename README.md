@@ -32,9 +32,17 @@ Do not use `--tier all` until the model matrix has been reviewed and each downlo
 
 ## Experiment status
 
-See `results/reports/status.md` for the current ledger of what has been researched, installed, executed, measured, and deferred. `research/source-ledger.csv` classifies primary evidence separately from community reports. Community throughput claims are leads, not lab measurements.
+See `results/reports/status.md` for the historical ledger of what was researched, installed, executed, measured, and deferred. `research/source-ledger.csv` classifies primary evidence separately from community reports. Community throughput claims are leads, not lab measurements.
 
-For the separate Qwen quantization recovery campaign, see [the dated campaign status snapshot](docs/QWEN_CAMPAIGN_STATUS.md). Its active run and local monitor belong to a different checkout; this note does not imply their code is present in this branch.
+## Active Qwen3.5 quantization campaign — 2026-10-27 snapshot
+
+The campaign aims to choose four measured Qwen3.5 configurations, two each for 4B and 9B, then compare eleven historical/current coding harness candidates. Selection depends on task completion, useful context, speed, and memory headroom; the fastest qualification attempt is not automatically a finalist. See the [campaign status note](docs/QWEN_CAMPAIGN_STATUS.md) for objectives, rules, evidence, limitations, and priorities.
+
+The latest supplied capture (2026-10-27 07:58 UTC / 04:58 BRT) has **159 records: 141 qualification, 12 capacity, and 6 development**, with 585 pending of 744 scheduled units. The schedule can grow as qualification gates pass. Records span v4 (79), recovery-r2 (61), recovery-r3-dns (18), and one qualification record with unregistered protocol provenance. This is mixed-protocol progress, not a homogeneous benchmark; the assessment selection remains `mixed_protocols_requires_review`, and no final quantization or harness winner is established. R4 is not verified in the supplied evidence.
+
+Recent 16K qualification observations include Qwen3.5-4B Unsloth UD-IQ3_XXS at 10/12 and 103.61 tok/s average; Qwen3.5-9B mradermacher I1-IQ4_XS at 10/12 and 67.28 tok/s; and mradermacher IQ4_XS at 12/12 and 66.74 tok/s. These are per-attempt call averages, not repeated performance trials or a robust ranking. The detailed note keeps them separate from the earlier 02:13 UTC assessment and its r2 context/development evidence.
+
+The active campaign checkout contains local uncommitted scripts/configuration that are not included in this documentation branch. This README does not provide those files or a monitor command. The RTX 3070 is shared with the Windows desktop; preserve the campaign protocol lineage, serialize GPU measurements, and check current resource availability before continuing. Historical results below remain evidence from their own protocols.
 
 ### Current SSD findings — 2026-10-11
 
