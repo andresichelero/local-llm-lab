@@ -32,8 +32,15 @@ Do not use `--tier all` until the model matrix has been reviewed and each downlo
 
 ## Experiment status
 
-See `results/reports/status.md` for the current ledger of what has been researched, installed, executed, measured, and deferred. `research/source-ledger.csv` classifies primary evidence separately from community reports. Community throughput claims are leads, not lab measurements.
+See `results/reports/status.md` for the historical ledger of what was researched, installed, executed, measured, and deferred. `research/source-ledger.csv` classifies primary evidence separately from community reports. Community throughput claims are leads, not lab measurements.
 
+## Active Qwen3.5 final campaign
+
+The local `final` campaign compares two base-model families, Qwen3.5-4B and Qwen3.5-9B, using five selected Unsloth GGUF quantizations for each. It prioritizes coding correctness, useful context, responsiveness, and memory headroom on an RTX 3070 8 GiB. Model files must be below 7.5 GB; a file fitting that limit does not by itself prove that the model plus KV cache and other GPU workloads will fit.
+
+The 9B Q4_K_M is an explicitly approved exception to the nominal above-4-bit rule: local inspection measured 5.0656 bits per tensor element. The other candidates are Q5, Q6, or Q8. Existing EXL3 variants above 4 bits exceed the file-size limit; lower-bit variants are excluded. See [the final campaign status and plan](docs/QWEN_CAMPAIGN_STATUS.md) for the exact list, provenance, limits, and remaining work.
+
+The active campaign implementation and output live in a separate local checkout and WSL directory; this documentation branch does not include those uncommitted files. Historical results retained as reference are not counted as final-protocol results.
 ### Current SSD findings — 2026-10-11
 
 New benchmark runs use the C:-hosted WSL ext4 SSD for active model/runtime files, scratch workspaces, logs, resource traces, and raw outputs. The core llama.cpp inference and quality launchers now check the model, executable, shared libraries, benchmark root, and output directories before starting; HDD-backed model/runtime/library paths are rejected. E: is reserved for verified archives and historical records; no new HDD performance tests are part of this lab. Existing HDD comparisons are retained only as explicitly labeled historical context.
