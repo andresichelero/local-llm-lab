@@ -34,6 +34,8 @@ Do not use `--tier all` until the model matrix has been reviewed and each downlo
 
 See `results/reports/status.md` for the current ledger of what has been researched, installed, executed, measured, and deferred. `research/source-ledger.csv` classifies primary evidence separately from community reports. Community throughput claims are leads, not lab measurements.
 
+For the separate Qwen quantization recovery campaign, see [the dated campaign status snapshot](docs/QWEN_CAMPAIGN_STATUS.md). Its active run and local monitor belong to a different checkout; this note does not imply their code is present in this branch.
+
 ### Current SSD findings — 2026-10-11
 
 New benchmark runs use the C:-hosted WSL ext4 SSD for active model/runtime files, scratch workspaces, logs, resource traces, and raw outputs. The core llama.cpp inference and quality launchers now check the model, executable, shared libraries, benchmark root, and output directories before starting; HDD-backed model/runtime/library paths are rejected. E: is reserved for verified archives and historical records; no new HDD performance tests are part of this lab. Existing HDD comparisons are retained only as explicitly labeled historical context.
