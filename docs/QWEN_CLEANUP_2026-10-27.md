@@ -22,7 +22,7 @@ The preceding cleanup retained the then-active Qwen cache and v4/r1/r2 lineage. 
 ## Final campaign reset
 
 - Preserved 22 completed historical attempts for the selected final artifacts, including original protocol IDs, source manifests and 1,015 hash-verified evidence files, as `reference-selected` inside the final output. They remain reference only, not new-protocol scores.
-- Removed old result directories under the WSL laboratory results root after verifying that selected reference bundle. Retained the final output and operational launcher/review files. Deleted 96 files from the previous local Qwen report directories, excluding the final report and harness-qualification inputs.
+- Removed old result directories under the WSL laboratory results root after verifying that selected reference bundle. Retained the final output and operational launcher/review files. Deleted 96 files from previous local Qwen report directories and 114 archived practical-result files, excluding the final report and harness-qualification inputs. The old audit, report and Bonsai-text ZIP archives were subsequently removed.
 - Removed unselected, catalog-identified model cache links and objects, including partial downloads, freeing approximately 44.5 GiB of object data. The existing selected 9B Q4_K_M model and current final inputs were retained.
 - Prepared a separate 10-artifact final catalog, completed offline checks, and started its own service. Runtime resource limits are still necessary because file size does not guarantee GPU fit.
 
