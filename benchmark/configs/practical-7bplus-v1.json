@@ -1,0 +1,55 @@
+{
+  "protocol_id": "practical-agent-selection-7bplus-tool-review-v2",
+  "models": {
+    "bonsai-2-27b": {
+      "alias": "Ternary-Bonsai-2-27B-PTQ1_0",
+      "path": "/mnt/c/Users/Andre/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "sha256": "53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3",
+      "revision": "existing-personal-artifact-20261020",
+      "quantization": "PTQ1_0",
+      "runtime": {
+        "server": "/home/foxtrot/local-llm-benchmark/tools/prism-b10787-73bfe6c/llama-prism-b10787-73bfe6c/llama-server",
+        "version_prefix": "73bfe6c",
+        "sha256": "661b413b780759bfa2c9b8fd87608c15fcc3651142d771b1c94d11d01195d298"
+      }
+    },
+    "bonsai-2-9b": {
+      "alias": "Ternary-Bonsai-2-9B-PQ2_0",
+      "path": "/mnt/c/Users/Andre/LocalLLMLabModels/Ternary-Bonsai-2-9B-PQ2_0.gguf",
+      "sha256": "7a89ab48f5038c704480f60781f9b8d4035351f5f6beb7d11fad80001fde23f9",
+      "revision": "5b2abb02362efbed46bbe204014b02837778b2c2",
+      "quantization": "PQ2_0",
+      "runtime": {
+        "server": "/home/foxtrot/local-llm-benchmark/tools/prism-b10787-73bfe6c/llama-prism-b10787-73bfe6c/llama-server",
+        "version_prefix": "73bfe6c",
+        "sha256": "661b413b780759bfa2c9b8fd87608c15fcc3651142d771b1c94d11d01195d298"
+      }
+    },
+    "ornith-1.0-9b": {
+      "alias": "Ornith-1.0-9B-Q4_K_M",
+      "revision": "3296bc7a404871a72ac3f1903f561459c09b5c17",
+      "path": "models/gguf/ornith-1.0-9b/ornith-1.0-9b-Q4_K_M.gguf",
+      "sha256": "5720d1f671b4996481274fffe01868c3c36e87c135cc8538471cc7bd6087b106",
+      "size_bytes": 5629108704
+    },
+    "qwen3.5-9b": {
+      "alias": "Qwen3.5-9B-Q4_K_M",
+      "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+      "path": "models/gguf/Qwen3.5-9B-Q4_K_M.gguf",
+      "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+    },
+    "gemma-4-12b": {
+      "alias": "gemma-4-12b-it-qat-q4_0",
+      "path": "models/gguf/gemma-4-12b/gemma-4-12b-it-qat-q4_0.gguf",
+      "revision": "local-artifact-origin-unresolved",
+      "sha256": "faff1a63667fac17ac5e777f47114688fcefea96e220e211aaa8d62c2c4561f1"
+    }
+  },
+  "qwen38_research": {
+    "official_7b_to_12b_found": false,
+    "community_distill": "empero-ai/Qwen3.8-9B-Distill",
+    "decision": "Not an official Qwen3.8 release; keep Qwen3.5-9B as control"
+  },
+  "runtime_archive_sha256": "sha256:e2d492f50d70f3e01b4b3ae68f670ae6825870d97206fb1bcb5b4376640c0e0c",
+  "output": "/home/foxtrot/local-llm-benchmark/results/practical-selection-7bplus-tool-review-v2"
+}

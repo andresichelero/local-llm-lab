@@ -167,10 +167,12 @@ def classify_failure(record: dict[str, Any]) -> str:
 
 
 def run_current_readiness(*, evidence_dir: Path | None = None,
-                          benchmark_root: Path = DEFAULT_BENCHMARK_ROOT) -> dict[str, Any]:
+                          benchmark_root: Path = DEFAULT_BENCHMARK_ROOT,
+                          model_contracts: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """Run all current controls against the exact bundle used for execution."""
     return campaign_readiness.run_current_readiness(evidence_dir=evidence_dir,
-                                                    benchmark_root=benchmark_root)
+                                                    benchmark_root=benchmark_root,
+                                                    model_contracts=model_contracts)
 
 
 def _port_is_free(port: int) -> bool:
@@ -419,18 +421,43 @@ def _grade_row(workspace: Path, task: str, run_dir: Path) -> dict[str, Any]:
 def _execute_task(row: dict[str, Any], *, install_root: Path, binary: Path,
                   server_log: Path, output_root: Path, experiment: str,
                   session_resource: dict[str, Any] | None = None,
-                  model_api_port: int = SERVER_PORT) -> dict[str, Any]:
+                  model_api_port: int = SERVER_PORT,
+                  model_contract: Mapping[str, Any] | None = None,
+                  profile_override: Mapping[str, Any] | None = None,
+                  generation_policy: Mapping[str, Any] | None = None) -> dict[str, Any]:
     from benchmark.linux_sandbox import BrokerPolicy, SandboxSpec, SandboxSupervisor
     from benchmark.model_quality_paired import MODELS as MODEL_CONTRACTS, build_profile
 
     model_key, task = str(row["model"]), str(row["task"])
-    info = MODEL_CONTRACTS[model_key]
+    custom_inputs = (model_contract, profile_override, generation_policy)
+    if any(value is not None for value in custom_inputs) and not all(value is not None for value in custom_inputs):
+        raise ValueError("custom model execution requires a contract, profile, and generation policy")
+    info = dict(model_contract) if model_contract is not None else MODEL_CONTRACTS[model_key]
     run_name = f"block-{row['block']}-{row['stage']}-{model_key}-{task}-r{row['repeat']}"
     run_dir = output_root / "runs" / run_name
     run_dir.mkdir(parents=True, exist_ok=False)
     workspace = run_dir / "workspace"
     task_file = _seed_workspace(task, workspace)
-    profile = build_profile(model_key)
+    if profile_override is None:
+        profile = build_profile(model_key)
+        frozen_generation = {"temperature": 0, "seed": SEED, "max_tokens": OUTPUT_TOKENS}
+    else:
+        profile = json.loads(json.dumps(profile_override))
+        frozen_generation = dict(generation_policy or {})
+        alias = info.get("alias")
+        configured = profile.get("provider", {}).get("local", {}).get("models", {})
+        if (profile.get("model") != f"local/{alias}" or not isinstance(configured, dict)
+                or set(configured) != {alias}):
+            raise ValueError("custom profile does not pin exactly the contracted local model")
+        profile_options = configured[alias].get("options", {})
+        for option in ("temperature", "top_p", "min_p", "seed"):
+            if option in frozen_generation and profile_options.get(option) != frozen_generation[option]:
+                raise ValueError(f"custom profile does not match frozen {option}")
+        if configured[alias].get("limit", {}).get("output") != frozen_generation.get("max_tokens"):
+            raise ValueError("custom profile output limit does not match frozen max_tokens")
+    output_token_cap = frozen_generation.get("max_tokens")
+    if type(output_token_cap) is not int or output_token_cap < 1:
+        raise ValueError("frozen generation policy must include an integer max_tokens")
     profile["provider"]["local"]["options"]["baseURL"] = f"http://127.0.0.1:{BROKER_PORT}/v1"
     profile_path = run_dir / "opencode.json"
     _json_write(profile_path, profile)
@@ -441,6 +468,7 @@ def _execute_task(row: dict[str, Any], *, install_root: Path, binary: Path,
     manifest = {
         "experiment": experiment, "model": model_key, "model_revision": info["revision"],
         "task": task, "repeat": row["repeat"], "stage": row["stage"],
+        "generation_policy": frozen_generation,
         "grader_protocol_version": GRADER_PROTOCOL_VERSION,
         "candidate_language_contract": GRADER_PROTOCOL_VERSION,
         "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
@@ -459,8 +487,8 @@ def _execute_task(row: dict[str, Any], *, install_root: Path, binary: Path,
     limits = _agent_limits()
     broker = BrokerPolicy(
         upstream_port=model_api_port, model_allowlist=(info["alias"],),
-        output_token_cap=OUTPUT_TOKENS,
-        frozen_generation={"temperature": 0, "seed": SEED, "max_tokens": OUTPUT_TOKENS},
+        output_token_cap=output_token_cap,
+        frozen_generation=frozen_generation,
         deadline_seconds=min(TASK_LIMIT_SECONDS, 60), max_requests=24,
     )
     from benchmark.linux_sandbox import RuntimeBind
@@ -737,7 +765,7 @@ def _agent_limits() -> Any:
 
 
 def _start_server(benchmark_root: Path, model: str, output_root: Path) -> tuple[subprocess.Popen[bytes], Path]:
-    from benchmark.model_quality_paired import MODELS as MODEL_CONTRACTS, RUNTIME_REVISION, _server_command
+    from benchmark.model_quality_paired import MODELS as MODEL_CONTRACTS, RUNTIME_VERSION_PREFIX, _server_command
     from benchmark.opencode_controlled_probe import _assert_server_bundle, require_runtime_revision
 
     if not _port_is_free(SERVER_PORT) or not _port_is_free(BROKER_PORT):
@@ -756,7 +784,7 @@ def _start_server(benchmark_root: Path, model: str, output_root: Path) -> tuple[
                              text=True, timeout=10, check=False)
     if version.returncode != 0:
         raise RuntimeError("pinned llama-server version query failed")
-    require_runtime_revision(version.stdout, version.stderr, RUNTIME_REVISION[:9])
+    require_runtime_revision(version.stdout, version.stderr, RUNTIME_VERSION_PREFIX)
     log_path = output_root / f"llama-server-{model}-{time.time_ns()}.log"
     output = log_path.open("xb")
     try:

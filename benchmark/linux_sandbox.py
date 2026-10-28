@@ -88,6 +88,22 @@ class RuntimeBind:
 
 
 @dataclass(frozen=True)
+class McpPolicy:
+    """Dedicated loopback relay toward the host-side trusted MCP server.
+
+    The candidate namespace reaches the trusted server only through this port,
+    on loopback, forwarded over one dedicated socketpair channel; never through
+    the model broker channel.
+    """
+
+    port: int
+
+    def __post_init__(self) -> None:
+        if type(self.port) is not int or not 1 <= self.port <= 65535:
+            raise ValueError("mcp port must be an explicit TCP port")
+
+
+@dataclass(frozen=True)
 class SandboxSpec:
     argv: tuple[str, ...]
     workspace: Path
@@ -97,6 +113,8 @@ class SandboxSpec:
     limits: ResourceLimits = field(default_factory=ResourceLimits)
     broker: BrokerPolicy | None = None
     broker_transcript_dir: Path | None = None
+    mcp: McpPolicy | None = None
+    mcp_bridge: Any | None = None
 
     def __post_init__(self) -> None:
         argv = tuple(self.argv)
@@ -131,6 +149,13 @@ class SandboxSpec:
         transcript_dir = None if self.broker_transcript_dir is None else Path(self.broker_transcript_dir)
         if transcript_dir is not None and self.broker is None:
             raise ValueError("broker transcript output requires a broker")
+        if (self.mcp is None) != (self.mcp_bridge is None):
+            raise ValueError("mcp channel policy and bridge must be provided together")
+        if self.mcp is not None:
+            if not isinstance(self.mcp, McpPolicy):
+                raise ValueError("mcp must be an McpPolicy")
+            if self.broker is not None and self.mcp.port == self.broker.adapter_port:
+                raise ValueError("mcp relay port must differ from the broker adapter port")
         object.__setattr__(self, "argv", argv)
         object.__setattr__(self, "workspace", workspace)
         object.__setattr__(self, "workspace_exports", exports)
@@ -229,16 +254,37 @@ def _validate_runtime_binds(binds: tuple[RuntimeBind, ...]) -> list[dict[str, st
             raise ValueError("runtime bind cannot expose the repository tree")
         home = Path.home()
         if home in source.parents:
+            # A versioned, cleanly-created benchmark toolchain lives outside the
+            # user's normal ~/.codex/OpenCode/Claude settings tree. Let one
+            # installed harness directory and one pinned managed runtime enter
+            # an episode; arbitrary paths elsewhere in home remain denied.
+            approved_harness_root = home / "local-llm-benchmark/envs/qwen-harness-refresh-20261025"
             allowed_opencode = home / "local-llm-benchmark/envs/node-harnesses/opencode/node_modules/opencode-linux-x64"
+            allowed_node_runtime = home / "local-llm-benchmark/runtimes/node-v22.23.3-linux-x64"
             provider_cache = home / "local-llm-benchmark/cache/opencode-node-modules"
             allowed_provider_paths = {
                 provider_cache,
                 provider_cache.parent / "package.json",
                 provider_cache.parent / "package-lock.json",
             }
+            relative_harness_path = (
+                source.relative_to(approved_harness_root)
+                if source == approved_harness_root or approved_harness_root in source.parents
+                else None
+            )
+            parts = () if relative_harness_path is None else relative_harness_path.parts
+            approved_harness_source = bool(
+                (len(parts) >= 2 and parts[0] == "packages")
+                or (len(parts) >= 2 and parts[0] == "runtimes" and parts[1].startswith("node-v"))
+                or (len(parts) >= 3 and parts[0] == "runtimes" and parts[1] == "python"
+                    and parts[2].startswith("cpython-"))
+                or (len(parts) >= 3 and parts[0] == "homes" and parts[1] == "hermes")
+                or (len(parts) >= 2 and parts[0] == "sources" and parts[1] == "hermes")
+            )
             if (source != allowed_opencode and allowed_opencode not in source.parents
-                    and source not in allowed_provider_paths):
-                raise ValueError("home-directory runtime binds are limited to the installed OpenCode runtime")
+                    and source != allowed_node_runtime and source not in allowed_provider_paths
+                    and not approved_harness_source):
+                raise ValueError("home-directory runtime binds are limited to installed OpenCode and pinned Node runtimes")
             if source == provider_cache and not bind.symlinks_within_source:
                 raise ValueError("the OpenCode provider cache requires in-tree symlink validation")
         if not (os.path.isfile(source) or os.path.isdir(source)):
@@ -364,6 +410,23 @@ def _sample_cgroup_usage(cgroup_dir: Path, stop: threading.Event, samples: list[
 
 def _valid_export_mode(value: Any) -> bool:
     return type(value) is int and 0 <= value <= 0o777
+
+
+def _bootstrap_error_code(message: Mapping[str, Any]) -> str:
+    error_type = message.get("error")
+    if isinstance(error_type, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,63}", error_type):
+        module = message.get("module")
+        if isinstance(module, str) and re.fullmatch(r"[A-Za-z0-9_.]{1,128}", module):
+            return f"sandbox_bootstrap_error:{error_type}:{module}"
+        detail = message.get("detail")
+        if (
+            error_type == "LookupError"
+            and isinstance(detail, str)
+            and re.fullmatch(r"unknown encoding: [A-Za-z0-9_.-]{1,48}", detail)
+        ):
+            return f"sandbox_bootstrap_error:{error_type}:{detail}"
+        return f"sandbox_bootstrap_error:{error_type}"
+    return "sandbox_bootstrap_error"
 
 
 def _export_manifest_matches(export_files: Any, outputs: Mapping[str, bytes], modes: Mapping[str, int]) -> bool:
@@ -532,7 +595,7 @@ def _drain_output(stream: Any, limit: int, result: dict[str, Any]) -> None:
     stored = bytearray()
     observed = 0
     while True:
-        chunk = stream.read(8192)
+        chunk = getattr(stream, 'read1', stream.read)(8192)
         if not chunk:
             break
         observed += len(chunk)
@@ -541,6 +604,7 @@ def _drain_output(stream: Any, limit: int, result: dict[str, Any]) -> None:
             stored.extend(chunk[:remaining])
         if len(chunk) > remaining:
             result["limited"] = True
+        result['output'] = bytes(stored)
     result["output"] = bytes(stored)
     result["observed"] = observed
 
@@ -652,6 +716,16 @@ def _infrastructure_result(error: str, *, timed_out: bool = False, cleanup: bool
     )
 
 
+def watch_policy_deadline(ledger, stop, expire):
+    """Enforce the broker-approved deadline even while tools run without HTTP."""
+    while not stop.is_set():
+        remaining = ledger.remaining_seconds()
+        if remaining <= 0:
+            expire()
+            return
+        stop.wait(min(0.05, remaining))
+
+
 class SandboxSupervisor:
     """Starts one uniquely named, transient systemd user scope per invocation."""
 
@@ -687,6 +761,10 @@ class SandboxSupervisor:
         broker_child: socket.socket | None = None
         if spec.broker is not None:
             broker_host, broker_child = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+        mcp_host: socket.socket | None = None
+        mcp_child: socket.socket | None = None
+        if spec.mcp is not None:
+            mcp_host, mcp_child = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         broker_config = None
         if spec.broker is not None:
             broker_config = {
@@ -699,6 +777,8 @@ class SandboxSupervisor:
                 "deadline_seconds": spec.broker.deadline_seconds,
                 "max_requests": spec.broker.max_requests,
                 "adapter_port": spec.broker.adapter_port,
+                'request_limits': dict(spec.broker.request_limits) if spec.broker.request_limits else None,
+                "unclassified_request_category": spec.broker.unclassified_request_category,
             }
         config = {
             "root": str(Path(temp_root) / "root"),
@@ -713,6 +793,8 @@ class SandboxSupervisor:
             "evidence_fd": control_child.fileno(),
             "broker_fd": broker_child.fileno() if broker_child is not None else -1,
             "broker": broker_config,
+            "mcp_fd": mcp_child.fileno() if mcp_child is not None else -1,
+            "mcp": None if spec.mcp is None else {"port": spec.mcp.port},
         }
         encoded = json.dumps(config, separators=(",", ":"), allow_nan=False).encode("utf-8")
         if len(encoded) > 1024 * 1024:
@@ -722,6 +804,10 @@ class SandboxSupervisor:
                 broker_host.close()
             if broker_child:
                 broker_child.close()
+            if mcp_host:
+                mcp_host.close()
+            if mcp_child:
+                mcp_child.close()
             shutil.rmtree(temp_root)
             return _infrastructure_result("sandbox_configuration_too_large")
 
@@ -737,6 +823,8 @@ class SandboxSupervisor:
         process: subprocess.Popen[bytes] | None = None
         broker: ModelBroker | None = None
         broker_thread: threading.Thread | None = None
+        mcp_thread: threading.Thread | None = None
+        mcp_close_fault: str | None = None
         cgroup_dir: Path | None = None
         resources: dict[str, Any] = {}
         evidence: dict[str, Any] = {}
@@ -747,10 +835,15 @@ class SandboxSupervisor:
         sampler_stop = threading.Event()
         sampler_thread: threading.Thread | None = None
         timed_out = False
+        policy_expired = threading.Event()
+        policy_watch_stop = threading.Event()
+        policy_watch = None
         ready = False
         infra_error: str | None = None
         try:
-            broker = ModelBroker(spec.broker, transcript_dir=transcript_dir) if spec.broker else None
+            from .practical_policy import progress_from_events
+            broker = ModelBroker(spec.broker, transcript_dir=transcript_dir,
+                                 progress_probe=lambda: progress_from_events(output_state['output'])) if spec.broker else None
             process = subprocess.Popen(
                 command,
                 stdin=subprocess.PIPE,
@@ -761,6 +854,7 @@ class SandboxSupervisor:
                     fd for fd in (
                         control_child.fileno(),
                         broker_child.fileno() if broker_child is not None else -1,
+                        mcp_child.fileno() if mcp_child is not None else -1,
                     ) if fd >= 0
                 ),
                 env=_host_command_env(),
@@ -776,6 +870,8 @@ class SandboxSupervisor:
             control_child.close()
             if broker_child is not None:
                 broker_child.close()
+            if mcp_child is not None:
+                mcp_child.close()
             control_host.settimeout(limits.startup_seconds)
             message = _recv_message(control_host)
             if message.get("type") != "READY" or not isinstance(message.get("evidence"), dict):
@@ -792,11 +888,29 @@ class SandboxSupervisor:
             if not _required_sandbox_evidence(evidence, len(runtime_binds)):
                 infra_error = "sandbox_evidence_incomplete"
                 raise SandboxError(infra_error)
+            if spec.mcp is not None and (
+                    evidence.get("network", {}).get("mcp_listener_loopback_only"
+                                                   ) is not True):
+                infra_error = "sandbox_mcp_relay_unavailable"
+                raise SandboxError(infra_error)
             if broker is not None and broker_host is not None:
                 broker_thread = threading.Thread(target=broker.serve_socket, args=(broker_host,), daemon=True)
                 broker_thread.start()
+            if spec.mcp_bridge is not None and mcp_host is not None:
+                mcp_thread = threading.Thread(
+                    target=spec.mcp_bridge.serve_socket, args=(mcp_host,), daemon=True)
+                mcp_thread.start()
             _send_message(control_host, {"type": "GO"})
             ready = True
+            if broker is not None and broker.ledger is not None:
+                def expire_policy():
+                    with broker.ledger._lock:
+                        broker.ledger.limit_reason = 'wall'
+                    policy_expired.set()
+                    _stop_owned_scope(unit, systemctl)
+                policy_watch = threading.Thread(target=watch_policy_deadline,
+                    args=(broker.ledger, policy_watch_stop, expire_policy), daemon=True)
+                policy_watch.start()
             control_host.settimeout(limits.wall_seconds)
             start = time.monotonic()
             while True:
@@ -814,7 +928,7 @@ class SandboxSupervisor:
                     break
                 kind = message.get("type")
                 if kind == "ERROR":
-                    infra_error = "sandbox_bootstrap_error"
+                    infra_error = _bootstrap_error_code(message)
                     break
                 if kind == "FILE":
                     path = message.get("path")
@@ -889,6 +1003,21 @@ class SandboxSupervisor:
             if infra_error is None:
                 infra_error = f"sandbox_supervisor_error:{type(exc).__name__}"
         finally:
+            policy_watch_stop.set()
+            if policy_watch is not None:
+                policy_watch.join(timeout=2)
+            if policy_expired.is_set():
+                timed_out = True
+                if resources.get('exports_valid') is not True:
+                    # FILE frames are provisional until the RESULT manifest and
+                    # workspace audit have both been validated.
+                    outputs.clear()
+                    output_modes.clear()
+                    workspace_audit = {}
+                if infra_error in {None, 'sandbox_wall_timeout',
+                                   'sandbox_supervisor_error:EOFError',
+                                   'sandbox_supervisor_error:ConnectionResetError'}:
+                    infra_error = None
             if process is not None and (process.poll() is None or infra_error is not None):
                 _stop_owned_scope(unit, systemctl)
                 try:
@@ -914,12 +1043,27 @@ class SandboxSupervisor:
                 broker_thread.join(timeout=1.0)
             if broker is not None:
                 broker.close()
+            if mcp_host is not None:
+                try:
+                    mcp_host.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                mcp_host.close()
+            if mcp_thread is not None:
+                mcp_thread.join(timeout=1.0)
+            if spec.mcp_bridge is not None:
+                try:
+                    spec.mcp_bridge.close()
+                except Exception as exc:  # a broken bridge must not lose the run
+                    mcp_close_fault = f"mcp_bridge_close_failed:{type(exc).__name__}"
             if control_host.fileno() >= 0:
                 control_host.close()
             if control_child.fileno() >= 0:
                 control_child.close()
             if broker_child is not None and broker_child.fileno() >= 0:
                 broker_child.close()
+            if mcp_child is not None and mcp_child.fileno() >= 0:
+                mcp_child.close()
             if process is not None and process.stdout is not None:
                 if "output_thread" in locals():
                     output_thread.join(timeout=2.0)
@@ -929,6 +1073,8 @@ class SandboxSupervisor:
                 else:
                     process.stdout.close()
 
+        if mcp_close_fault and infra_error is None:
+            infra_error = mcp_close_fault
         cleanup = process is not None and _wait_for_cleanup_evidence(
             process, cgroup_dir, limits.stop_grace_seconds)
         try:
@@ -937,6 +1083,8 @@ class SandboxSupervisor:
             cleanup = False
             infra_error = infra_error or "sandbox_temp_cleanup_failed"
         if resources:
+            if broker and broker.ledger:
+                resources['budget_ledger'] = broker.ledger.snapshot()
             resources["cgroup_usage_samples"] = cgroup_samples
             resources["cgroup_usage_sample_interval_seconds"] = 1.0
             resources.update({

@@ -42,10 +42,11 @@ from benchmark.provenance import git_provenance  # noqa: E402  # Project-root bo
 from benchmark.pristine_grading import GRADER_PROTOCOL_VERSION  # noqa: E402  # Project-root bootstrap above enables direct module execution.
 from benchmark.safe_execution_guard import block_legacy_execution  # noqa: E402
 
-EXPERIMENT = "model-quality-paired-20261012-r1d"
+EXPERIMENT = "model-quality-paired-20261017-r1a"
 HARNESS = "opencode"
-HARNESS_VERSION = "1.19.0"
-RUNTIME_REVISION = "d81235049384534c167caea52b85a694f6103d14"
+HARNESS_VERSION = "1.19.3"
+RUNTIME_REVISION = "620d2225cc436ab0b001e3200e590e3b286ef9ab"
+RUNTIME_VERSION_PREFIX = RUNTIME_REVISION[:7]  # llama-server --version reports seven commit characters.
 TASKS = ("calculator_division", "whitespace_normalization", "dotenv_line_parser")
 MODELS: dict[str, dict[str, str]] = {
     "qwen3.5-4b": {
@@ -1191,7 +1192,7 @@ def run_series(install_root: Path, output_root: Path, *, single_agent_released: 
                                      text=True, timeout=10)
     if runtime_version.returncode != 0:
         raise RuntimeError("Pinned llama.cpp version command failed")
-    version_text = require_runtime_revision(runtime_version.stdout, runtime_version.stderr, RUNTIME_REVISION[:9])
+    version_text = require_runtime_revision(runtime_version.stdout, runtime_version.stderr, RUNTIME_VERSION_PREFIX)
     output_root.mkdir(parents=True, exist_ok=False)
     if mode == "pilot":
         protocol = frozen_pilot_protocol()

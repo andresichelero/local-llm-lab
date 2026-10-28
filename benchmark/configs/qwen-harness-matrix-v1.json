@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "model": "Qwen3.5-9B-Q4_K_M",
+  "purpose": "harness-refresh-and-qualification-before-inference",
+  "historical_catalog": "config/harnesses.yaml and its complete Git history",
+  "harnesses": [
+    {"id":"pi","kind":"npm","package":"@earendil-works/pi-coding-agent","upstream":"https://github.com/earendil-works/pi","origin":"historical-catalog"},
+    {"id":"opencode","kind":"npm","package":"opencode-ai","upstream":"https://github.com/anomalyco/opencode","origin":"historical-catalog"},
+    {"id":"codex","kind":"npm","package":"@openai/codex","upstream":"https://github.com/openai/codex","origin":"historical-catalog-formerly-incompatible"},
+    {"id":"claude-code","kind":"npm","package":"@anthropic-ai/claude-code","upstream":"https://github.com/anthropics/claude-code","origin":"historical-catalog-not-installed"},
+    {"id":"hermes","kind":"source","upstream":"https://github.com/NousResearch/hermes-agent","origin":"historical-catalog-host-startup-failed"},
+    {"id":"mistral-vibe","kind":"pypi","package":"mistral-vibe","upstream":"https://github.com/mistralai/mistral-vibe","origin":"historical-catalog-deferred"},
+    {"id":"trueforge","kind":"npm","package":"@truefoundry/trueforge","upstream":"https://github.com/truefoundry/trueforge","origin":"historical-catalog-audit-and-tools-blocked"},
+    {"id":"deepseek-harness","kind":"npm","package":"@deepseek-ai/dsh","upstream":"https://github.com/deepseek-ai/deepseek-harness","origin":"historical-catalog-explicitly-excluded"},
+    {"id":"qwen-code","kind":"npm","package":"@qwen-code/qwen-code","upstream":"https://github.com/QwenLM/qwen-code","origin":"current-user-design"},
+    {"id":"aider","kind":"pypi","package":"aider-chat","upstream":"https://github.com/Aider-AI/aider","origin":"methodology-reference-not-historically-measured"},
+    {"id":"openhands","kind":"pypi","package":"openhands","upstream":"https://github.com/OpenHands/OpenHands","origin":"methodology-reference-not-historically-measured"}
+  ],
+  "plugins": [
+    {"id":"headroom","kind":"pypi","package":"headroom-ai","upstream":"https://github.com/headroomlabs-ai/headroom"},
+    {"id":"headroom-opencode","kind":"npm","package":"headroom-opencode","upstream":"https://github.com/headroomlabs-ai/headroom"},
+    {"id":"superpowers","kind":"source","upstream":"https://github.com/obra/superpowers"}
+  ]
+}

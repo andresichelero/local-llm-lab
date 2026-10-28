@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "status": "prepared_not_executed",
+  "gpu_execution_authorized": false,
+  "base_protocol": "practical-agent-limits-skills-v9-m1-independent",
+  "models_source": "corrected-v3 frozen manifest; all five required",
+  "development_tasks": ["M1"],
+  "task_contracts": {"M1": "m1-independent-copy-v1"},
+  "policy_version": "limits-skills-v2",
+  "scored_episodes": 15,
+  "repetition_seeds": [101, 202, 303],
+  "calibration": {
+    "mode": "benchmark",
+    "status": "proposal_only_not_authorized",
+    "task": "B2",
+    "models": ["qwen3.5-9b", "bonsai-2-27b"],
+    "compaction_caps": [2, 4],
+    "episodes": 4,
+    "scaled_dimensions": ["compaction"],
+    "fixed_dimensions": ["main_generations", "wall_seconds", "title_cap", "metadata", "per_call_output_cap", "tool_timeout"],
+    "protocol_rule": "Separate protocol and output per arm; both identities in each arm. No global budget multiplier and no principal score.",
+    "selection_rule": "Freeze the smallest common budget before held-out evaluation that avoids truncating reference development workflows. Publish all cells and failures; never tune a per-model budget to make a candidate pass."
+  },
+  "skills_ablation": {
+    "conditions": ["core_only", "core_plus_selected_skills"],
+    "paired_on": ["task", "model", "seed", "runtime", "budget", "model_profile"],
+    "inference_unit": "task; average repetitions within each task before paired contrasts"
+  },
+  "inference_diagnostics": {
+    "one_factor_at_a_time": true,
+    "kv_precision_candidates": ["q4_0", "q8_0", "f16"],
+    "capacity_gate_required": true,
+    "new_weights": false,
+    "cache": ["off", "on"],
+    "speculation": "off; any later experiment requires a separate protocol and parity check",
+    "native_template_and_history_roundtrip_required": true
+  },
+  "heldout_rule": "Reserve independent, oracle-validated task variants before calibration; do not modify prompts or policy after inspecting held-out results.",
+  "publication_gate": "Exact coverage, versions and effective settings, raw trajectories, graded verdicts, resource envelope, failure taxonomy and denominators must be available. No general winner from M1 alone."
+}

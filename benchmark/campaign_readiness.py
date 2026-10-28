@@ -43,6 +43,7 @@ _CONTROL_PATHS = (
     "benchmark/campaign_e2e_control.py",
     "benchmark/campaign_observer.py", "benchmark/resource_sampler.py", "benchmark/provenance.py",
     "benchmark/summarize_vibe_context_stress.py",
+    "benchmark/configs/granite-4.2-short-screen-v1.json", "benchmark/model_candidate_screen.py",
     "benchmark/visible_feedback.py",
     "benchmark/pristine_grading.py", "benchmark/harness_eval.py", "benchmark/restricted_python.py",
     "benchmark/linux_sandbox.py", "benchmark/sandbox_bootstrap.py", "benchmark/model_broker.py",
@@ -55,7 +56,7 @@ _CONTROL_PATHS = (
     "tests/test_campaign_observer.py", "tests/test_visible_feedback.py",
     "tests/test_vibe_context_stress_summary.py",
     "tests/test_safe_execution_guard.py",
-    "tests/test_campaign_e2e_control.py",
+    "tests/test_campaign_e2e_control.py", "tests/test_model_candidate_screen.py",
 )
 _OUTPUT_LIMIT = 64 * 1024
 
@@ -131,9 +132,24 @@ def _runtime_input_records(benchmark_root: Path | None) -> list[dict[str, Any]]:
         executable = shutil.which(tool)
         records.append(_runtime_file_record(f"runtime/tool/{tool}",
                                             Path(executable) if executable else Path(f"/missing/{tool}")))
-    library_dir = root / "tools/llama-bin"
+    library_link = root / "tools/llama-bin"
     try:
-        if not library_dir.is_dir() or library_dir.is_symlink():
+        tools_dir = root / "tools"
+        if not tools_dir.is_dir() or tools_dir.is_symlink():
+            raise OSError("bundle_tools_directory_unavailable")
+        if library_link.is_symlink():
+            link_target = os.readlink(library_link)
+            library_dir = library_link.resolve(strict=True)
+            if not library_dir.is_dir() or library_dir.parent != tools_dir.resolve(strict=True):
+                raise OSError("bundle_library_root_escapes_tools")
+            link_info = library_link.lstat()
+            link_digest = hashlib.sha256(link_target.encode()).hexdigest()
+            records.append({"path": "runtime/llama-library-root", "size_bytes": link_info.st_size,
+                            "sha256": link_digest, "status": "measured", "type": "symlink",
+                            "link_target": link_target, "link_target_sha256": link_digest})
+        else:
+            library_dir = library_link
+        if not library_dir.is_dir():
             raise OSError("bundle_library_directory_unavailable")
         for current, directories, filenames in os.walk(library_dir, followlinks=False):
             directories.sort()
@@ -529,8 +545,12 @@ class _FakeModelHandler(BaseHTTPRequestHandler):
             delta = {"role": "assistant", "content": message.get("content", "")}
         chunk = {"id": payload["id"], "object": "chat.completion.chunk", "created": 0,
                  "model": payload["model"], "choices": [{"index": 0, "delta": delta,
-                 "finish_reason": choice["finish_reason"]}]}
+                 "finish_reason": None}]}
+        terminal = {"id": payload["id"], "object": "chat.completion.chunk", "created": 0,
+                    "model": payload["model"], "choices": [{"index": 0, "delta": {},
+                    "finish_reason": choice["finish_reason"]}]}
         data = ("data: " + json.dumps(chunk, separators=(",", ":")) + "\n\n"
+                + "data: " + json.dumps(terminal, separators=(",", ":")) + "\n\n"
                 + "data: [DONE]\n\n").encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
@@ -698,10 +718,13 @@ def _loopback_port_is_free(port: int) -> bool:
             return False
 
 
-def _model_bundle_audit(benchmark_root: Path | None = None) -> dict[str, Any]:
+def _model_bundle_audit(benchmark_root: Path | None = None, *,
+                        model_contracts: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """Read-only check of pinned model/server bundle and current resource headroom."""
-    from benchmark.model_quality_paired import MODELS, RUNTIME_REVISION, SERVER_PORT
+    from benchmark.model_quality_paired import MODELS as PINNED_MODELS, HARNESS_VERSION, RUNTIME_VERSION_PREFIX, SERVER_PORT
     from benchmark.opencode_controlled_probe import _assert_server_bundle, require_runtime_revision
+
+    models = PINNED_MODELS if model_contracts is None else model_contracts
 
     root = Path(benchmark_root) if benchmark_root is not None else Path(
         os.environ.get("BENCHMARK_ROOT", "/home/foxtrot/local-llm-benchmark"))
@@ -709,7 +732,12 @@ def _model_bundle_audit(benchmark_root: Path | None = None) -> dict[str, Any]:
     evidence: dict[str, Any] = {"benchmark_root": str(root), "models": {}, "server": {}, "resources": {}}
     if not root.is_dir():
         return {"passed": False, "reason": "benchmark_root_unavailable", "evidence": evidence}
-    for name, model in MODELS.items():
+    if model_contracts is not None and not models:
+        return {"passed": False, "reason": "model_contracts_empty", "evidence": evidence}
+    for name, model in models.items():
+        if not isinstance(model, Mapping) or not all(key in model for key in ("path", "sha256")):
+            evidence["models"][str(name)] = {"status": "unavailable", "reason": "model_contract_incomplete"}
+            continue
         path = root / model["path"]
         try:
             metadata = path.lstat()
@@ -719,9 +747,12 @@ def _model_bundle_audit(benchmark_root: Path | None = None) -> dict[str, Any]:
             evidence["models"][name] = {"status": "unavailable", "reason": "pinned_model_missing"}
             continue
         digest = _sha256_file(path)
-        evidence["models"][name] = {"status": "passed" if digest == model["sha256"] else "failed",
+        size = path.stat().st_size
+        expected_size = model.get("size_bytes")
+        identity_passed = digest == model["sha256"] and (expected_size is None or size == expected_size)
+        evidence["models"][name] = {"status": "passed" if identity_passed else "failed",
                                     "sha256": digest, "expected_sha256": model["sha256"],
-                                    "size_bytes": path.stat().st_size}
+                                    "size_bytes": size, "expected_size_bytes": expected_size}
     binary = root / "envs/node-harnesses/opencode/node_modules/opencode-linux-x64/bin/opencode"
     server = root / "tools/llama-bin/llama-server"
     libdir = root / "tools/llama-bin"
@@ -733,13 +764,13 @@ def _model_bundle_audit(benchmark_root: Path | None = None) -> dict[str, Any]:
         if version.returncode != 0:
             raise RuntimeError(f"llama_server_version_failed:{version.returncode}")
         version_text = require_runtime_revision(version.stdout.decode("utf-8", errors="replace"),
-                                               version.stderr.decode("utf-8", errors="replace"), RUNTIME_REVISION[:9])
+                                               version.stderr.decode("utf-8", errors="replace"), RUNTIME_VERSION_PREFIX)
         evidence["server"]["bundle"] = "passed"
         evidence["server"]["runtime_revision"] = version_text
         opencode = subprocess.run([str(binary), "--version"], env=env, capture_output=True, timeout=15, check=False)
         version_text = opencode.stdout.decode("utf-8", errors="replace").strip()[:200]
         evidence["server"]["opencode_version"] = version_text
-        evidence["server"]["opencode_binary"] = "passed" if binary.is_file() and opencode.returncode == 0 and "1.19.0" in version_text else "failed"
+        evidence["server"]["opencode_binary"] = "passed" if binary.is_file() and opencode.returncode == 0 and HARNESS_VERSION in version_text else "failed"
     except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
         evidence["server"]["status"] = f"unavailable:{type(exc).__name__}"
         evidence["server"]["reason"] = str(exc)[:1000]
@@ -821,7 +852,7 @@ def _workspace_checks() -> dict[str, Any]:
     patterns = ("test_restricted_python.py", "test_pristine_grading.py", "test_harness_eval.py",
                 "test_trusted_task_tests.py", "test_linux_sandbox.py", "test_model_broker.py",
                 "test_safe_campaign.py", "test_campaign_readiness.py", "test_safe_execution_guard.py",
-                "test_campaign_e2e_control.py")
+                "test_campaign_e2e_control.py", "test_model_candidate_screen.py")
     checks: dict[str, Any] = {}
     for pattern in patterns:
         test_path = REPO_ROOT / "tests" / pattern
@@ -1475,7 +1506,8 @@ def _fake_opencode_probe(evidence_dir: Path,
 
 
 def run_current_readiness(*, evidence_dir: Path | None = None,
-                          benchmark_root: Path | None = None) -> dict[str, Any]:
+                          benchmark_root: Path | None = None,
+                          model_contracts: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """Re-run every no-model control and bind the verdict to current exact inputs."""
     started = time.monotonic()
     evidence_dir = _prepare_evidence_root(evidence_dir, benchmark_root=benchmark_root)
@@ -1492,7 +1524,7 @@ def run_current_readiness(*, evidence_dir: Path | None = None,
     trial = _canonical_trial_control(evidence_dir, benchmark_root)
     _set_gate(gates, "canonical_trial_end_to_end", trial.get("passed") is True,
               str(trial.get("reason", "canonical_fake_provider_task_roundtrip")), trial)
-    model = _model_bundle_audit(benchmark_root)
+    model = _model_bundle_audit(benchmark_root, model_contracts=model_contracts)
     _set_gate(gates, "model_bundle_audit", model.get("passed") is True,
               str(model.get("reason", "read_only_bundle_audit")), {"evidence": model.get("evidence")})
     checks = _workspace_checks()

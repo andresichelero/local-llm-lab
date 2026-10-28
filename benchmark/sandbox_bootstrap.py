@@ -6,6 +6,7 @@ namespace.  Candidate processes inherit no control/export descriptors.
 from __future__ import annotations
 
 import ctypes
+import encodings.idna  # noqa: F401 -- socket name resolution runs after chroot
 import errno
 import hashlib
 import json
@@ -26,6 +27,7 @@ from typing import Any
 # Load its one sibling dependency from this trusted, source-bound directory.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from model_broker import BrokerChannelClient, BrokerPolicy, LoopbackAdapter
+from practical_mcp_bridge import NamespaceRelay
 
 
 _LIBC = ctypes.CDLL(None, use_errno=True)
@@ -99,8 +101,12 @@ def _mount_bind_ro(source: str, target: str) -> None:
     if stat.S_ISDIR(info.st_mode):
         _mkdir(target)
     else:
-        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        os.close(fd)
+        try:
+            fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            os.close(fd)
+        except FileExistsError:
+            if not stat.S_ISREG(os.lstat(target).st_mode):
+                raise BootstrapError('existing runtime file target must be regular')
     _mount(source, target, None, _MS_BIND)
     flags = _MS_BIND | _MS_REMOUNT | _MS_RDONLY | _MS_NOSUID
     if stat.S_ISDIR(info.st_mode):
@@ -328,7 +334,7 @@ def _mount_evidence(runtime_targets: list[str], limits: dict[str, int]) -> dict[
     }
 
 
-def _network_evidence(broker_enabled: bool) -> dict[str, Any]:
+def _network_evidence(broker_enabled: bool, mcp_enabled: bool) -> dict[str, Any]:
     links = sorted(name for _index, name in socket.if_nameindex())
     route_devices: set[str] = set()
     ipv6_route_devices: set[str] = set()
@@ -353,6 +359,7 @@ def _network_evidence(broker_enabled: bool) -> dict[str, Any]:
         "routes_only_loopback": routes_only_loopback,
         "external_egress_unavailable": only_loopback and routes_only_loopback,
         "broker_listener_loopback_only": broker_enabled,
+        "mcp_listener_loopback_only": mcp_enabled,
     }
 
 
@@ -433,7 +440,8 @@ def _mount_root(config: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         "staged_workspace_files": staged_files,
         "namespace": limit_evidence,
         "mounts": _mount_evidence(runtime_targets, config["limits"]),
-        "network": _network_evidence(config["broker"] is not None),
+        "network": _network_evidence(config["broker"] is not None,
+                                     config["mcp"] is not None),
     }
 
 
@@ -738,6 +746,7 @@ def _validate_child_request(config: dict[str, Any]) -> None:
     if set(config) != {
         "root", "workspace", "runtime_binds", "argv", "env", "limits", "exports",
         "expected_namespaces", "host_uid", "evidence_fd", "broker_fd", "broker",
+        "mcp_fd", "mcp",
     }:
         raise BootstrapError("sandbox configuration fields do not match the contract")
     if not isinstance(config["argv"], list) or not config["argv"] or any(
@@ -764,6 +773,9 @@ def run(config: dict[str, Any]) -> int:
     broker_socket: socket.socket | None = None
     adapter: LoopbackAdapter | None = None
     adapter_thread: threading.Thread | None = None
+    mcp_socket: socket.socket | None = None
+    relay: NamespaceRelay | None = None
+    relay_thread: threading.Thread | None = None
     candidate: subprocess.Popen[bytes] | None = None
     seed_inventory: list[dict[str, Any]] = []
     workspace_audit: dict[str, Any] = {
@@ -777,6 +789,12 @@ def run(config: dict[str, Any]) -> int:
             broker_socket.set_inheritable(False)
         else:
             os.close(int(config["broker_fd"])) if int(config["broker_fd"]) >= 0 else None
+        if config["mcp"] is not None:
+            mcp_socket = socket.socket(fileno=int(config["mcp_fd"]))
+            mcp_socket.set_inheritable(False)
+        else:
+            if int(config["mcp_fd"]) >= 0:
+                os.close(int(config["mcp_fd"]))
 
         _bring_loopback_up()
         _set_hostname()
@@ -788,11 +806,14 @@ def run(config: dict[str, Any]) -> int:
         keep = {0, 1, 2, evidence.fileno()}
         if broker_socket is not None:
             keep.add(broker_socket.fileno())
+        if mcp_socket is not None:
+            keep.add(mcp_socket.fileno())
         _close_unneeded_fds(keep)
         setup["capabilities"] = caps
         setup["process"] = {"inherited_host_directory_fds": False, "candidate_control_fds": False}
         setup["files"] = _mount_evidence(setup["runtime_targets"], config["limits"])
-        setup["network"] = _network_evidence(config["broker"] is not None)
+        setup["network"] = _network_evidence(config["broker"] is not None,
+                                             config["mcp"] is not None)
         _send_message(evidence, {"type": "READY", "evidence": setup})
         command = _recv_message(evidence)
         if command.get("type") != "GO":
@@ -814,6 +835,13 @@ def run(config: dict[str, Any]) -> int:
             adapter = LoopbackAdapter(client, policy)
             adapter_thread = threading.Thread(target=adapter.serve_forever, args=(_ADAPTER_STOP,), daemon=True)
             adapter_thread.start()
+
+        # The MCP relay runs in-namespace on the dedicated loopback port and
+        # forwards only the registry surface over its own socketpair channel.
+        if mcp_socket is not None:
+            relay = NamespaceRelay(mcp_socket, int(config["mcp"]["port"]))
+            relay_thread = threading.Thread(target=relay.serve_forever, daemon=True)
+            relay_thread.start()
 
         argv = config["argv"]
         try:
@@ -848,8 +876,14 @@ def run(config: dict[str, Any]) -> int:
             adapter.close()
         if adapter_thread is not None:
             adapter_thread.join(timeout=1.0)
+        if relay is not None:
+            relay.close()
+        if relay_thread is not None:
+            relay_thread.join(timeout=1.0)
         if broker_socket is not None:
             broker_socket.close()
+        if mcp_socket is not None:
+            mcp_socket.close()
         export_ok, export_count, export_total = True, 0, 0
         output_metadata: list[dict[str, Any]] = []
         total_limit = config["limits"]["export_total_bytes"]
@@ -893,7 +927,21 @@ def run(config: dict[str, Any]) -> int:
         return 0
     except BaseException as exc:
         try:
-            _send_message(evidence, {"type": "ERROR", "error": type(exc).__name__})
+            _send_message(
+                evidence,
+                {
+                    "type": "ERROR",
+                    "error": type(exc).__name__,
+                    "module": getattr(exc, "name", None),
+                    "detail": (
+                        str(exc.args[0])[:128]
+                        if isinstance(exc, LookupError)
+                        and exc.args
+                        and isinstance(exc.args[0], str)
+                        else None
+                    ),
+                },
+            )
         except OSError:
             pass
         if candidate is not None and candidate.poll() is None:
@@ -904,6 +952,16 @@ def run(config: dict[str, Any]) -> int:
                 broker_socket.close()
             except OSError:
                 pass
+        if relay is not None:
+            try:
+                relay.close()
+            except OSError:
+                pass
+        if mcp_socket is not None:
+            try:
+                mcp_socket.close()
+            except OSError:
+                pass
         return 125
     finally:
         if adapter is not None:
@@ -911,9 +969,19 @@ def run(config: dict[str, Any]) -> int:
                 adapter.close()
             except OSError:
                 pass
+        if relay is not None:
+            try:
+                relay.close()
+            except OSError:
+                pass
         if broker_socket is not None and not broker_socket.fileno() < 0:
             try:
                 broker_socket.close()
+            except OSError:
+                pass
+        if mcp_socket is not None and not mcp_socket.fileno() < 0:
+            try:
+                mcp_socket.close()
             except OSError:
                 pass
         evidence.close()

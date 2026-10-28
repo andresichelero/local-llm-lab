@@ -21,12 +21,49 @@ from benchmark.linux_sandbox import (
     new_scope_unit,
     systemd_scope_command,
     _validate_runtime_tree,
+    _bootstrap_error_code,
 )
 from benchmark.model_broker import BrokerPolicy
 from benchmark import linux_sandbox
 
 
 pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="rootless Linux namespaces are required")
+
+
+def test_bootstrap_error_keeps_a_bounded_safe_error_type():
+    assert _bootstrap_error_code({"error": "RuntimeError"}) == "sandbox_bootstrap_error:RuntimeError"
+    assert _bootstrap_error_code({"error": "../../secret"}) == "sandbox_bootstrap_error"
+
+
+def test_runtime_binds_allow_only_pinned_node_directory_under_home(tmp_path, monkeypatch):
+    home = tmp_path / 'fake-home'
+    node = home / 'local-llm-benchmark/runtimes/node-v22.23.3-linux-x64'
+    node.mkdir(parents=True)
+    (node / 'node').write_text('fixture')
+    monkeypatch.setattr(Path, 'home', classmethod(lambda cls: home))
+    result = linux_sandbox._validate_runtime_binds((RuntimeBind(node, '/opt/node'),))
+    assert result == [{'source': str(node), 'target': '/opt/node'}]
+    for denied in (node.parent, home, home / 'personal'):
+        denied.mkdir(exist_ok=True)
+        with pytest.raises(ValueError):
+            linux_sandbox._validate_runtime_binds((RuntimeBind(denied, '/opt/node'),))
+
+
+def test_runtime_binds_allow_only_the_versioned_local_harness_install(tmp_path, monkeypatch):
+    home=tmp_path/'hosthome'
+    runtime=home/'local-llm-benchmark/envs/qwen-harness-refresh-20261025/packages/pi'
+    runtime.mkdir(parents=True)
+    (runtime/'pi').write_text('offline local CLI')
+    monkeypatch.setattr(Path,'home',classmethod(lambda cls:home))
+    approved=linux_sandbox._validate_runtime_binds((RuntimeBind(runtime,'/opt/pi'),))
+    assert approved==[{'source':str(runtime),'target':'/opt/pi'}]
+    parent=runtime.parent
+    with pytest.raises(ValueError):
+        linux_sandbox._validate_runtime_binds((RuntimeBind(parent,'/opt/packages'),))
+    unmanaged=home/'local-llm-benchmark/envs/unmanaged-cli'
+    unmanaged.mkdir()
+    with pytest.raises(ValueError):
+        linux_sandbox._validate_runtime_binds((RuntimeBind(unmanaged,'/opt/cli'),))
 
 
 @pytest.mark.parametrize("control_file,error", [
@@ -467,3 +504,194 @@ def test_workspace_audit_reports_protected_changes_and_new_paths(tmp_path: Path)
     assert extra["size"] == len("candidate-created")
     assert "sha256" not in extra
     assert "extra.py" in {item["path"] for item in audit["final_inventory"]}
+
+
+# --- dedicated MCP channel contract (Task 7) ---------------------------------
+
+
+def test_mcp_channel_requires_policy_and_bridge_together(tmp_path: Path) -> None:
+    from benchmark.linux_sandbox import McpPolicy
+
+    with pytest.raises(ValueError):
+        SandboxSpec(argv=("python3", "-c", "pass"), workspace=tmp_path,
+                    mcp=McpPolicy(port=29111))
+    with pytest.raises(ValueError):
+        SandboxSpec(argv=("python3", "-c", "pass"), workspace=tmp_path,
+                    mcp_bridge=object())
+    spec = SandboxSpec(argv=("python3", "-c", "pass"), workspace=tmp_path,
+                       mcp=McpPolicy(port=29112), mcp_bridge=object())
+    assert spec.mcp.port == 29112 and spec.mcp_bridge is not None
+
+
+def test_mcp_port_must_be_explicit_and_distinct_from_the_broker_adapter(tmp_path: Path) -> None:
+    from benchmark.linux_sandbox import McpPolicy
+
+    for port in (0, -1, 65536, "29113"):
+        with pytest.raises(ValueError):
+            McpPolicy(port=port)  # type: ignore[arg-type]
+    broker = BrokerPolicy(upstream_port=29999, model_allowlist=("fixture-model",))
+    with pytest.raises(ValueError):
+        SandboxSpec(argv=("python3", "-c", "pass"), workspace=tmp_path,
+                    broker=broker, mcp=McpPolicy(port=broker.adapter_port),
+                    mcp_bridge=object())
+    spec = SandboxSpec(argv=("python3", "-c", "pass"), workspace=tmp_path,
+                       broker=broker, mcp=McpPolicy(port=broker.adapter_port + 1),
+                       mcp_bridge=object())
+    assert spec.mcp.port == broker.adapter_port + 1
+
+
+def test_bootstrap_config_contract_gains_the_mcp_channel_fields() -> None:
+    from benchmark import sandbox_bootstrap
+
+    base = {
+        "root": "/root", "workspace": "/workspace", "runtime_binds": [],
+        "argv": ["python3", "-c", "pass"], "env": {}, "limits": {},
+        "exports": [], "expected_namespaces": {}, "host_uid": 0,
+        "evidence_fd": -1, "broker_fd": -1, "broker": None,
+        "mcp_fd": -1, "mcp": None,
+    }
+    sandbox_bootstrap._validate_child_request(base)  # accepted contract shape
+    for extra, replacement in (("mcp_fd", None), ("mcp", None), ("nope", None)):
+        broken = dict(base)
+        match extra:
+            case "mcp_fd":
+                del broken["mcp_fd"]
+            case "mcp":
+                del broken["mcp"]
+            case _:
+                broken["nope"] = None
+        with pytest.raises(sandbox_bootstrap.BootstrapError):
+            sandbox_bootstrap._validate_child_request(broken)
+
+
+def test_network_evidence_records_both_listeners_loopback_only() -> None:
+    from benchmark import sandbox_bootstrap
+
+    evidence = sandbox_bootstrap._network_evidence(False, True)
+    assert evidence["broker_listener_loopback_only"] is False
+    assert evidence["mcp_listener_loopback_only"] is True
+    both = sandbox_bootstrap._network_evidence(True, True)
+    assert both["broker_listener_loopback_only"] is True
+    assert both["mcp_listener_loopback_only"] is True
+    only_broker = sandbox_bootstrap._network_evidence(True, False)
+    assert only_broker["mcp_listener_loopback_only"] is False
+    # The host supervisor gate consults this key; a missing key must fail the
+    # check rather than silently admitting a missing relay.
+    assert "mcp_listener_loopback_only" in evidence
+
+
+# --- full-circle dedicated MCP channel under the real namespace (Task 7) ------
+
+_FULL_CIRCLE_AGENT = b"""
+import json
+import os
+import socket
+import time
+
+port = int(os.environ["MCP_PORT"])
+result = {
+    "no_source": not os.path.exists("/opt/practical/practical_mcp_v2.py"),
+    "no_state": not os.path.exists("/tmp/practical-mcp-state.json"),
+}
+sock = None
+for _ in range(200):
+    try:
+        sock = socket.create_connection(("127.0.0.1", port), timeout=2)
+        break
+    except OSError:
+        time.sleep(0.05)
+if sock is None:
+    print("RESULT_JSON:" + json.dumps(result))
+    raise SystemExit(0)
+sock.settimeout(30)
+reader = sock.makefile("rb")
+
+
+def call(message):
+    sock.sendall((json.dumps(message) + "\\n").encode())
+    line = reader.readline()
+    return json.loads(line.decode()) if line else None
+
+
+init = call({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+             "params": {"protocolVersion": "2024-11-05"}})
+result["server"] = init["result"]["serverInfo"]["name"]
+# Notifications are fire-and-forget on this channel: no frame comes back.
+sock.sendall(b'{\"jsonrpc\": \"2.0\", \"method\": \"notifications/initialized\"}\\n')
+page = call({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+             "params": {"name": "list_issues", "arguments": {}}})
+data = page["result"]["structuredContent"]["data"]
+result["page_items"] = len(data["items"])
+result["next_cursor"] = data["next_cursor"]
+print("RESULT_JSON:" + json.dumps(result))
+reader.close()
+sock.close()
+"""
+
+
+def _free_loopback_port() -> int:
+    probe = socket.socket()
+    try:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+    finally:
+        probe.close()
+
+
+def test_full_circle_mcp_channel_inside_the_real_namespace(tmp_path: Path) -> None:
+    """One episode's entire dedicated channel: candidate -> namespace relay ->
+    trusted host bridge -> journaled tools/call, with only the source-free
+    surface visible in the sandbox and the trusted journal closing cleanly."""
+    from benchmark.linux_sandbox import McpPolicy
+    from benchmark.practical_mcp_bridge import McpBridge
+
+    if not shutil.which("systemd-run") or not shutil.which("unshare"):
+        pytest.skip("systemd-run or unshare is unavailable")
+
+    port = _free_loopback_port()
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "agent.py").write_bytes(_FULL_CIRCLE_AGENT)
+    journal_path = tmp_path / "mcp-journal.json"
+    instance = McpBridge("C2", journal_path=journal_path)
+    result = SandboxSupervisor().run(SandboxSpec(
+        argv=("/usr/bin/python3.12", "/workspace/agent.py"),
+        workspace=workspace,
+        env={"MCP_PORT": str(port)},
+        runtime_ro=python_runtime(),
+        mcp=McpPolicy(port=port),
+        mcp_bridge=instance,
+    ))
+    assert result.infrastructure_error is None, (
+        result.infrastructure_error, result.output)
+    assert result.network_evidence.get("mcp_listener_loopback_only") is True
+
+    lines = [line for line in result.output.decode().splitlines()
+             if line.startswith("RESULT_JSON:")]
+    assert lines, result.output
+    payload = json.loads(lines[0][len("RESULT_JSON:"):])
+    # The namespace sees loopback initialization, one paged call, and none of
+    # the trusted server source, fixtures, or a marshalled state file.
+    assert payload == {
+        "no_source": True, "no_state": True,
+        "server": "practical-agent-v2", "page_items": 2, "next_cursor": "2"}
+
+    journal = json.loads(journal_path.read_text(encoding="utf-8"))
+    assert journal["schema"] == "practical-mcp-journal-v1"
+    assert journal["task"] == "C2"
+    assert journal["clean_close"] is True and journal["fault"] is None
+    requests = [record for record in journal["records"] if record["kind"] == "request"]
+    assert [record["method"] for record in requests] == [
+        "initialize", "notifications/initialized", "tools/call"]
+    assert requests[-1]["params"] == {"name": "list_issues", "arguments": {}}
+    responses = [record for record in journal["records"] if record["kind"] == "response"]
+    assert [record["id"] for record in responses] == [1, 2]
+    assert responses[0]["envelope"]["result"]["serverInfo"] == {
+        "name": "practical-agent-v2", "version": "2.1.0"}
+    page = responses[1]["envelope"]["result"]["structuredContent"]
+    assert [row["id"] for row in page["data"]["items"]] == [101, 102]
+    assert page["data"]["next_cursor"] == "2"
+    final = journal["final_state"]
+    # Raw trusted server state at close: one episode, zero writes, no leak.
+    assert final["report"] is None and final["reconciliation"] is None
+    assert final["get_change_reads"] == 0 and final["apply_count"] == 0

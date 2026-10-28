@@ -84,7 +84,7 @@ class ModelQualityPairedTests(unittest.TestCase):
     def test_round0_failure_is_persisted_as_an_execution_gate(self) -> None:
         protocol = frozen_protocol()
         self.assertEqual(protocol["experiment"], EXPERIMENT)
-        self.assertTrue(EXPERIMENT.endswith("r1d"))
+        self.assertTrue(EXPERIMENT.endswith("r1a"))
         self.assertEqual(protocol["round0_prerequisite"]["status"], "failed")
         self.assertFalse(protocol["round0_prerequisite"]["measurement_eligible"])
         self.assertTrue(protocol["round0_prerequisite"]["not_a_single_agent_prerequisite"])
@@ -405,14 +405,14 @@ class ModelQualityPairedTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 2)
         runner.assert_not_called()
 
-    def test_pinned_runtime_accepts_exact_reported_nine_character_revision(self) -> None:
-        reported = ("version: 0.6.0-dev (build 1, commit d81235049)\n"
+    def test_pinned_runtime_accepts_exact_reported_seven_character_revision(self) -> None:
+        reported = ("version: 0.7.0-dev (build 1, commit 620d222)\n"
                     "built with GNU 13.3.0 for Linux x86_64")
-        accepted_prefix = paired.RUNTIME_REVISION[:9]
-        self.assertEqual(accepted_prefix, "d81235049")
+        accepted_prefix = paired.RUNTIME_VERSION_PREFIX
+        self.assertEqual(accepted_prefix, "620d222")
         self.assertEqual(paired.require_runtime_revision(reported, "", accepted_prefix), reported)
         with self.assertRaisesRegex(RuntimeError, "Unexpected llama.cpp build"):
-            paired.require_runtime_revision(reported, "", paired.RUNTIME_REVISION[:10])
+            paired.require_runtime_revision(reported, "", paired.RUNTIME_REVISION[:8])
 
     def test_failed_effective_profile_blocks_compatibility_child_call(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

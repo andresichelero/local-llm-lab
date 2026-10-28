@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import http.client
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import hashlib
 import json
 import os
@@ -20,6 +21,11 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Iterator, Mapping
 
+try:
+    from .practical_policy import BudgetLedger, BudgetPolicy, PolicyLimit, classify_request, validate_history
+except ImportError:  # trusted isolated namespace bootstrap imports this sibling directly
+    from practical_policy import BudgetLedger, BudgetPolicy, PolicyLimit, classify_request, validate_history
+
 
 class BrokerError(ValueError):
     """Raised when a broker policy or framed request is invalid."""
@@ -30,6 +36,7 @@ _CHUNK_BYTES = 16 * 1024
 _GENERATION_FIELDS = {
     "frequency_penalty",
     "max_tokens",
+    "min_p",
     "presence_penalty",
     "seed",
     "stop",
@@ -63,6 +70,8 @@ class BrokerPolicy:
     deadline_seconds: float = 60.0
     max_requests: int = 32
     adapter_port: int = 18888
+    request_limits: Mapping[str, Any] | None = None
+    unclassified_request_category: str | None = None
 
     def __post_init__(self) -> None:
         models = tuple(self.model_allowlist)
@@ -80,13 +89,17 @@ class BrokerPolicy:
             raise BrokerError("invalid model identifier")
         if not 1 <= self.output_token_cap <= 1_000_000:
             raise BrokerError("output_token_cap is outside the supported range")
+        if self.unclassified_request_category not in {None, "main", "title", "compaction"}:
+            raise BrokerError("unclassified request category is unsupported")
         generation = dict(self.frozen_generation)
         if not generation or set(generation) - _GENERATION_FIELDS:
             raise BrokerError("frozen_generation contains an unsupported option")
-        if set(generation) != {"temperature", "seed", "max_tokens"}:
+        if not {"temperature", "seed", "max_tokens"} <= set(generation):
             raise BrokerError("generation policy must freeze temperature, seed, and max_tokens")
-        if generation["temperature"] != 0 or type(generation["seed"]) is not int:
-            raise BrokerError("temperature must be zero and seed must be an integer")
+        if (type(generation["temperature"]) not in (int, float)
+                or not 0 <= float(generation["temperature"]) <= 2
+                or type(generation["seed"]) is not int):
+            raise BrokerError("temperature must be in [0, 2] and seed must be an integer")
         max_tokens = generation.get("max_tokens")
         if type(max_tokens) is not int or max_tokens != self.output_token_cap:
             raise BrokerError("frozen max_tokens must equal the output token cap")
@@ -102,8 +115,14 @@ class BrokerPolicy:
             elif key in {"max_tokens"}:
                 if type(value) is not int:
                     raise BrokerError("frozen max_tokens must be an integer")
-            elif type(value) not in (int, float) or not -2 <= float(value) <= 2:
+            elif type(value) not in (int, float):
                 raise BrokerError(f"invalid frozen generation option: {key}")
+            elif key in {"top_p", "min_p"} and not 0 <= float(value) <= 1:
+                raise BrokerError(f"{key} must be in [0, 1]")
+            elif key in {"frequency_penalty", "presence_penalty"} and not -2 <= float(value) <= 2:
+                raise BrokerError(f"{key} must be in [-2, 2]")
+            elif key == "temperature" and not 0 <= float(value) <= 2:
+                raise BrokerError("temperature must be in [0, 2]")
         if not 1 <= self.max_request_bytes <= _MAX_FRAME_BYTES - 1024:
             raise BrokerError("max_request_bytes is outside the supported range")
         if not 1 <= self.max_response_bytes <= 256 * 1024 * 1024:
@@ -114,6 +133,11 @@ class BrokerPolicy:
             raise BrokerError("max_requests is outside the supported range")
         object.__setattr__(self, "model_allowlist", models)
         object.__setattr__(self, "frozen_generation", MappingProxyType(generation))
+        if self.request_limits is not None:
+            limits = BudgetPolicy(**dict(self.request_limits))
+            if self.max_requests != limits.max_model_requests:
+                raise BrokerError('model request ceiling differs from category budgets')
+            object.__setattr__(self, 'request_limits', MappingProxyType(limits.as_dict()))
 
 
 @dataclass(frozen=True)
@@ -130,6 +154,7 @@ class BrokerEvent:
     completed_utc: str | None = None
     upstream_first_response_byte_seconds: float | None = None
     first_response_chunk_seconds: float | None = None
+    rejected_fields: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -312,7 +337,8 @@ class _BrokerTranscript:
         with self._lock:
             if self._closed:
                 raise BrokerError("broker transcript is closed")
-            if self._next >= self.policy.max_requests + 1:
+            transcript_cap = self.policy.max_requests + (int(self.policy.request_limits['metadata']) if self.policy.request_limits else 0)
+            if self._next >= transcript_cap + 1:
                 raise BrokerError("broker transcript request-count limit exceeded")
             self._next += 1
             index = self._next
@@ -339,7 +365,7 @@ class _BrokerTranscript:
         with self._lock:
             if self._closed:
                 raise BrokerError("broker transcript is closed")
-            metadata_limit = (self.policy.max_requests + 1) * 8192
+            metadata_limit = (self.policy.max_requests + 1 + (int(self.policy.request_limits['metadata']) if self.policy.request_limits else 0)) * 8192
             if self._metadata_bytes + len(data) > metadata_limit:
                 raise BrokerError("broker transcript metadata aggregate limit exceeded")
             view = memoryview(data)
@@ -480,7 +506,7 @@ class BrokerChannelClient:
 class ModelBroker:
     """Host-side fixed-target HTTP client and socketpair protocol handler."""
 
-    def __init__(self, policy: BrokerPolicy, *, transcript_dir: Path | None = None):
+    def __init__(self, policy: BrokerPolicy, *, transcript_dir: Path | None = None, progress_probe=None):
         self.policy = policy
         self._events: list[BrokerEvent] = []
         self._events_lock = threading.Lock()
@@ -489,6 +515,23 @@ class ModelBroker:
         self._active_connections: set[http.client.HTTPConnection] = set()
         self._connections_lock = threading.Lock()
         self._cancelled = False
+        # First proven terminal budget limit for this episode, kept in the
+        # budget_exhausted:<category> form so downstream attribution is stable.
+        self._terminal_limit: str | None = None
+        self.ledger = (BudgetLedger(BudgetPolicy(**dict(policy.request_limits)), progress_probe=progress_probe)
+                       if policy.request_limits else None)
+
+    @property
+    def terminal_limit(self) -> str | None:
+        return self._terminal_limit
+
+    def _note_terminal_limit(self, exc: PolicyLimit) -> bool:
+        """Terminal generation limits halt the episode, never housekeeping reads."""
+        terminal = getattr(exc, 'category', None)
+        if self._terminal_limit is None and terminal in ('main', 'wall', 'title', 'compaction'):
+            self._terminal_limit = str(exc)
+            return True
+        return False
 
     @property
     def events(self) -> tuple[BrokerEvent, ...]:
@@ -519,6 +562,12 @@ class ModelBroker:
         with self._events_lock:
             self._events.append(event)
 
+    def _record_categorized_attempt(self, category: str) -> None:
+        """Count a locally rejected request without consuming its budget."""
+        if self.ledger is not None and category in self.ledger.attempted:
+            with self.ledger._lock:
+                self.ledger.attempted[category] += 1
+
     def handle(self, method: str, path: str, body: bytes, *,
                _transcript: _TranscriptExchange | None = None) -> tuple[int, str, Iterator[bytes], str | None, int]:
         started = time.monotonic()
@@ -528,19 +577,31 @@ class ModelBroker:
         response_type = "application/json"
         response_bytes = 0
         outcome = "rejected"
+        category: str | None = None
+        rejected_fields: tuple[str, ...] = ()
+        ledger_attempt_recorded = False
         try:
             self._request_count += 1
-            if self._request_count > self.policy.max_requests:
+            if self.ledger is None and self._request_count > self.policy.max_requests:
                 status, data = 429, _error_body("request budget exceeded")
                 outcome = "request_budget"
                 return status, response_type, iter((data,)), model_id, len(data)
             if method == "GET" and path == "/v1/models":
+                if self.ledger:
+                    category = 'metadata'
                 if body:
                     status, data = 400, _error_body("GET requests cannot include a body")
                     outcome = "invalid_body"
                     return status, response_type, iter((data,)), model_id, len(data)
                 if _transcript is not None:
                     _transcript.set_upstream_request(b"")
+                if self.ledger:
+                    ledger_attempt_recorded = True
+                    try:
+                        self.ledger.admit(category)
+                    except PolicyLimit as exc:
+                        status, data, outcome = 429, _error_body(str(exc)), str(exc)
+                        return status, response_type, iter((data,)), model_id, len(data)
                 status, response_type, chunks, response_bytes = self._upstream(
                     "GET", "/v1/models", b"", streaming=False, model_list=True, started=started,
                     transcript=_transcript,
@@ -560,6 +621,22 @@ class ModelBroker:
                 status, data = 400, _error_body("chat request must be an object")
                 outcome = "invalid_json_shape"
                 return status, response_type, iter((data,)), model_id, len(data)
+            if self.ledger:
+                category = classify_request(request)
+                if category == "unknown" and self.policy.unclassified_request_category:
+                    category = self.policy.unclassified_request_category
+                history_error = validate_history(request.get('messages', []))
+                if category == 'unknown' or history_error:
+                    status, data = 400, _error_body(history_error or 'unclassified model request')
+                    outcome = 'contract_error:' + (history_error or 'request_category')
+                    return status, response_type, iter((data,)), model_id, len(data)
+                if self._terminal_limit is not None:
+                    # First terminal limit already proved: no further generation
+                    # is forwarded, and locally rejected attempts stay counted
+                    # without borrowing budget from any other category.
+                    status, data = 400, _error_body(self._terminal_limit)
+                    outcome = self._terminal_limit
+                    return status, response_type, iter((data,)), model_id, len(data)
             model_id = request.get("model") if isinstance(request.get("model"), str) else None
             if model_id not in self.policy.model_allowlist:
                 status, data = 403, _error_body("model is not allowed")
@@ -575,6 +652,7 @@ class ModelBroker:
                 return status, response_type, iter((data,)), model_id, len(data)
             allowed = _CHAT_FIELDS | set(self.policy.frozen_generation)
             if set(request) - allowed:
+                rejected_fields = tuple(sorted(set(request) - allowed))
                 status, data = 400, _error_body("request contains an unsupported option")
                 outcome = "unknown_option"
                 return status, response_type, iter((data,)), model_id, len(data)
@@ -593,7 +671,11 @@ class ModelBroker:
                     return status, response_type, iter((data,)), model_id, len(data)
             forwarded = dict(request)
             for key, value in self.policy.frozen_generation.items():
-                if key in request and (type(request[key]) is not type(value) or request[key] != value):
+                requested = request.get(key)
+                numeric_equal = (type(requested) in (int, float) and type(value) in (int, float)
+                                 and float(requested) == float(value))
+                if key in request and not (numeric_equal or
+                                           (type(requested) is type(value) and requested == value)):
                     status, data = 400, _error_body(f"{key} differs from the frozen generation policy")
                     outcome = "generation_policy_denied"
                     return status, response_type, iter((data,)), model_id, len(data)
@@ -605,6 +687,16 @@ class ModelBroker:
                 return status, response_type, iter((data,)), model_id, len(data)
             if _transcript is not None:
                 _transcript.set_upstream_request(wire)
+            if self.ledger:
+                # admit() records the outbound attempt and debits the category
+                # immediately before the request crosses the upstream boundary.
+                ledger_attempt_recorded = True
+                try:
+                    self.ledger.admit(category)
+                except PolicyLimit as exc:
+                    self._note_terminal_limit(exc)
+                    status, data, outcome = 400, _error_body(str(exc)), str(exc)
+                    return status, response_type, iter((data,)), model_id, len(data)
             status, response_type, chunks, response_bytes = self._upstream(
                 "POST", "/v1/chat/completions", wire, streaming=stream,
                 model_list=False, started=started, transcript=_transcript,
@@ -612,10 +704,13 @@ class ModelBroker:
             outcome = "allowed"
             return status, response_type, chunks, model_id, response_bytes
         finally:
+            if (self.ledger is not None and category in self.ledger.attempted
+                    and not ledger_attempt_recorded):
+                self._record_categorized_attempt(category)
             # The response byte count is refined by the framed server after streaming.
             elapsed = max(0.0, time.monotonic() - started)
             self._record(BrokerEvent(method, path, status, model_id, len(body), response_bytes, elapsed, outcome,
-                                     started_utc))
+                                     started_utc, rejected_fields=rejected_fields))
 
     def _upstream(
         self,
@@ -628,7 +723,7 @@ class ModelBroker:
         started: float,
         transcript: _TranscriptExchange | None = None,
     ) -> tuple[int, str, Iterator[bytes], int]:
-        remaining = self.policy.deadline_seconds - (time.monotonic() - started)
+        remaining = self.ledger.remaining_seconds() if self.ledger else self.policy.deadline_seconds - (time.monotonic() - started)
         if remaining <= 0:
             data = _error_body("broker deadline exceeded")
             return 504, "application/json", iter((data,)), len(data)
@@ -695,7 +790,7 @@ class ModelBroker:
         total = 0
         try:
             while True:
-                remaining = self.policy.deadline_seconds - (time.monotonic() - started)
+                remaining = self.ledger.remaining_seconds() if self.ledger else self.policy.deadline_seconds - (time.monotonic() - started)
                 if remaining <= 0:
                     raise TimeoutError("broker response deadline exceeded")
                 if connection.sock is not None:
@@ -717,7 +812,7 @@ class ModelBroker:
         chunks = bytearray()
         try:
             while True:
-                remaining = self.policy.deadline_seconds - (time.monotonic() - started)
+                remaining = self.ledger.remaining_seconds() if self.ledger else self.policy.deadline_seconds - (time.monotonic() - started)
                 if remaining <= 0:
                     raise TimeoutError("broker response deadline exceeded")
                 if connection.sock is not None:
@@ -840,6 +935,7 @@ class ModelBroker:
                     event.request_started_utc, datetime.now(timezone.utc).isoformat(),
                     None if exchange is None else exchange._elapsed(exchange.upstream_first_byte),
                     None if exchange is None else exchange._elapsed(exchange.first_chunk),
+                    event.rejected_fields,
                 )
 
 
@@ -847,8 +943,6 @@ class LoopbackAdapter:
     """HTTP listener placed inside the network namespace and bound only to loopback."""
 
     def __init__(self, client: BrokerChannelClient, policy: BrokerPolicy):
-        from http.server import BaseHTTPRequestHandler, HTTPServer
-
         class Handler(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
 

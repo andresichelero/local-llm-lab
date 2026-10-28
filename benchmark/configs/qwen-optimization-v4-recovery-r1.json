@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "protocol_id": "qwen-quant-harness-optimization-v4-recovery-r1",
+  "models": [
+    "4B",
+    "9B"
+  ],
+  "priorities": [
+    "correctness_floor",
+    "completion",
+    "speed",
+    "useful_context"
+  ],
+  "finalists_per_model": 2,
+  "contexts": [
+    16384,
+    32768,
+    65536,
+    131072
+  ],
+  "performance_repeats": 3,
+  "seeds": [
+    101,
+    202
+  ],
+  "qualification_minimum": 10,
+  "qualification_total": 12,
+  "generation": {
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0,
+    "presence_penalty": 0,
+    "repeat_penalty": 1,
+    "enable_thinking": true
+  },
+  "initial_output_tokens": 8192,
+  "limits": {
+    "main": 120,
+    "compaction": 8,
+    "title": 1,
+    "metadata": 20,
+    "tools": 240,
+    "wall_seconds": 1800,
+    "tool_seconds": 60,
+    "test_seconds": 180
+  },
+  "resource_limits": {
+    "ext4_free_bytes": 8589934592,
+    "cache_bytes": 64424509440,
+    "gpu_free_floor_mib": 7000,
+    "gpu_reserve_mib": 512,
+    "ram_reserve_mib": 1536,
+    "swap_growth_mib": 512
+  },
+  "harnesses": [
+    "pi",
+    "opencode",
+    "codex",
+    "claude-code",
+    "hermes",
+    "mistral-vibe",
+    "trueforge",
+    "deepseek-harness",
+    "qwen-code",
+    "aider",
+    "openhands"
+  ],
+  "triage_tasks": [
+    "python_fix",
+    "javascript_fix",
+    "authored_tests",
+    "mcp",
+    "continuation",
+    "tool_recovery"
+  ],
+  "deep_tasks": 12,
+  "deep_harness_finalists": 3,
+  "parameter_profile_limit": 8,
+  "plugin_arms": [
+    "base",
+    "superpowers",
+    "headroom",
+    "combined"
+  ],
+  "confirmation_tasks": 6,
+  "network": "loopback-only-during-measurement",
+  "fresh_protocol_on_input_change": true,
+  "automatic_monitor_creation": false
+}

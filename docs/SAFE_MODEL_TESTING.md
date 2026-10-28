@@ -1,5 +1,26 @@
 # Testes controlados dos modelos locais
 
+## Seleção prática atual
+
+A escolha do agente local passa a usar o [pipeline prático](PRACTICAL_SELECTION.md):
+seis tarefas novas, ferramentas MCP reais e CPython isolado. A suíte antiga
+abaixo permanece como histórico e regressão. Entrada: `scripts/run-practical-selection.sh`.
+
+## Resultado da execução de 2026-10-15
+
+A campanha v2 concluiu 48 medições em oito sessões: Qwen3.5-4B passou em 21/24 e
+Qwen3.5-9B em 24/24. As três falhas foram funcionais e ocorreram na normalização de
+entrada vazia pelo 4B. Não houve falhas de infraestrutura na campanha corrigida.
+Consulte o [relatório com a análise e os limites](../results/reports/campaign-v2-results-20261015.md)
+e o [status atualizado](../results/reports/status.md). A execução usou a fonte
+`4577aeb921587feaee8518c656a32a64d593ea9c`; os resultados não são evidência de
+capacidade geral ou de tarefas inéditas.
+
+A [auditoria de 2026-10-17](../research/reviews/qwen9b-evaluation-bias-audit-20261017.md)
+confirmou saturação e lacunas de cobertura nesta suíte. Para selecionar entre
+candidatos fortes, use tarefas novas com critérios congelados antes de observar
+suas respostas; registre aprovação funcional e conclusão do fluxo separadamente.
+
 ## Liberação verificada em 2026-10-15
 
 O código `6133bb6bd2af2daed6c1678b88ff61570df92464` obteve `READY` nos 20
@@ -49,7 +70,31 @@ Use Ubuntu-24.04 no WSL, com fonte, trabalho e resultados ativos em ext4 no SSD 
 O checkout em D: serve para edição e exportação; E: permanece arquivo frio. Use o
 Python já existente em
 `/home/foxtrot/local-llm-benchmark/envs/lab-validation/bin/python`.
-Não são necessários novos pacotes, alterações de driver ou downloads de modelos.
+
+No início de cada dia de execução, atualize primeiro o llama.cpp e os aplicativos
+isolados usados como harnesses:
+
+```sh
+bash /mnt/d/Usuario/Downloads/LLM/local-llm-lab/scripts/00_update_runtime.sh
+```
+
+O atualizador consulta a versão estável mais recente, compila o llama.cpp em uma
+pasta separada, preserva o runtime anterior e atualiza OpenCode, Pi, TrueForge e
+Mistral Vibe. Registra versões e commit em `versions.lock` e em
+`results/system-audit/runtime-updates/`. Ele executa uma vez por dia no fuso de
+São Paulo; falha antes de qualquer teste se a atualização não terminar. Não
+atualiza driver NVIDIA, CUDA, ferramentas de treino ou modelos.
+
+No estado verificado em 2026-10-17, a campanha segura usa llama.cpp v0.7.0
+(commit `620d2225cc436ab0b001e3200e590e3b286ef9ab`) e OpenCode 1.19.3. O
+`npm audit` do TrueForge 0.179.2 encontrou oito alertas `high` e nenhum
+`critical`; ele fica fora dos testes até revisão dos alertas. O experimento
+ativo usa OpenCode.
+
+Inicie cada comando de preparação ou teste com `scripts/daily-run.sh`; ele faz
+essa verificação antes de executar o comando solicitado e pula a atualização se
+já foi concluída no mesmo dia. Assim, chamadas diretas aos scripts de teste não
+devem ser usadas para iniciar uma nova execução.
 
 O pré-voo verifica os dois arquivos GGUF fixados, o conjunto local do llama.cpp,
 o OpenCode instalado, portas, memória, armazenamento, GPU e isolamento. Não se
@@ -65,12 +110,12 @@ inofensivas e provedores simulados; não leem credenciais reais.
 
 ## Preparação sem inferência
 
-No snapshot local final em ext4, execute:
+No snapshot local final em ext4, execute a preparação pelo wrapper diário:
 
 ```sh
-cd /home/foxtrot/local-llm-benchmark/repos/safe-model-campaign-20261014
-/home/foxtrot/local-llm-benchmark/envs/lab-validation/bin/python -m benchmark.safe_campaign --dry-run
-/home/foxtrot/local-llm-benchmark/envs/lab-validation/bin/python -m benchmark.safe_campaign --readiness --evidence-root /home/foxtrot/local-llm-benchmark/results/readiness-NOVO-ID
+cd /home/foxtrot/local-llm-benchmark/repos/safe-model-campaign-20261017
+bash /mnt/d/Usuario/Downloads/LLM/local-llm-lab/scripts/daily-run.sh /home/foxtrot/local-llm-benchmark/envs/lab-validation/bin/python -m benchmark.safe_campaign --dry-run
+bash /mnt/d/Usuario/Downloads/LLM/local-llm-lab/scripts/daily-run.sh /home/foxtrot/local-llm-benchmark/envs/lab-validation/bin/python -m benchmark.safe_campaign --readiness --evidence-root /home/foxtrot/local-llm-benchmark/results/readiness-NOVO-ID
 ```
 
 Use um diretório novo de evidências. Uma preparação válida exige todos os controles
@@ -87,13 +132,34 @@ OpenCode contra um provedor simulado. A suíte do projeto e o linter também pre
 passar. Ausência de um verificador estático de tipos configurado deve ser registrada
 como tal, sem fingir uma verificação equivalente.
 
-## Próxima campanha com inferência
+## Triagem curta executada: Granite 4.2 8B
+
+A comparação pareada terminou com 4/6 aprovações estritas para Granite 4.2 8B
+Q4_K_M e 6/6 para o controle Qwen3.5-9B Q4_K_M. O código final passou no
+avaliador em 6/6 nos dois modelos; a diferença estrita veio do fluxo de testes.
+Foram três tarefas, duas
+repetições por modelo, quatro sessões ABBA e aquecimentos excluídos; contexto 16K,
+KV Q4_0, temperatura zero, seed 1234, limite de saída 1.024, OpenCode 1.19.3 e
+llama.cpp v0.7.0. As duas falhas do Granite foram classificadas como falhas do
+agente em `whitespace_normalization`: ele escreveu expectativas de teste erradas
+e não completou a correção antes do limite de etapas. A chamada de testes estava
+correta. Não há falhas de infraestrutura, protocolo ou recurso, e não se repetiu
+a medição sem alterar as condições.
+
+O resultado é uma triagem preliminar, não admissão final nem ranking preciso. O
+relatório, com tempos por tarefa e caminhos para as evidências brutas, está em
+[granite-4.2-8b-short-screen-20261017-r1](../results/reports/granite-4.2-8b-short-screen-20261017-r1.md).
+O Gemma 4 12B QAT já possui campanha concluída; a procedência do arquivo local
+continua sem correspondência com a revisão oficial pretendida, portanto seus
+resultados não devem ser atribuídos a essa revisão upstream.
+
+## Campanha pareada completa: Qwen 4B/9B
 
 Depois de concluir a preparação e decidir iniciar a medição:
 
 ```sh
-cd /home/foxtrot/local-llm-benchmark/repos/safe-model-campaign-20261014
-/home/foxtrot/local-llm-benchmark/envs/lab-validation/bin/python -m benchmark.safe_campaign --execute --output-root /home/foxtrot/local-llm-benchmark/results/safe-campaign-NOVO-ID
+cd /home/foxtrot/local-llm-benchmark/repos/safe-model-campaign-20261017
+bash /mnt/d/Usuario/Downloads/LLM/local-llm-lab/scripts/daily-run.sh /home/foxtrot/local-llm-benchmark/envs/lab-validation/bin/python -m benchmark.safe_campaign --execute --output-root /home/foxtrot/local-llm-benchmark/results/safe-campaign-NOVO-ID
 ```
 
 Esse comando carrega modelos e realiza inferência. Não faz parte da preparação.

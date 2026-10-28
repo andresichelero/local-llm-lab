@@ -51,8 +51,8 @@ class CampaignReadinessTests(unittest.TestCase):
                 patch.object(opencode_controlled_probe, "_assert_server_bundle"),
                 patch.object(campaign_readiness.shutil, "which", return_value=None),
                 patch.object(campaign_readiness.subprocess, "run", side_effect=[
-                    Mock(stdout=b"version: 0.6.0-dev (build 1, commit d81235049)", stderr=b"", returncode=0),
-                    Mock(stdout=b"1.19.0", stderr=b"", returncode=0),
+                    Mock(stdout=b"version: 0.7.0-dev (build 1, commit 620d222)", stderr=b"", returncode=0),
+                    Mock(stdout=b"1.19.3", stderr=b"", returncode=0),
                 ]),
             ):
                 evidence = campaign_readiness._model_bundle_audit(root)
@@ -63,7 +63,7 @@ class CampaignReadinessTests(unittest.TestCase):
                 patch.object(opencode_controlled_probe, "_assert_server_bundle"),
                 patch.object(campaign_readiness.shutil, "which", return_value=None),
                 patch.object(campaign_readiness.subprocess, "run", return_value=
-                             Mock(stdout=b"commit d81235049", stderr=b"", returncode=1)),
+                             Mock(stdout=b"commit 620d222", stderr=b"", returncode=1)),
             ):
                 evidence = campaign_readiness._model_bundle_audit(root)
             self.assertFalse(evidence["passed"])
@@ -77,6 +77,48 @@ class CampaignReadinessTests(unittest.TestCase):
             ):
                 evidence = campaign_readiness._model_bundle_audit(root)
             self.assertEqual(evidence["evidence"]["server"]["reason"], "synthetic invalid bundle")
+
+    def test_bundle_audit_can_check_one_explicit_candidate_contract(self) -> None:
+        from benchmark import model_quality_paired, opencode_controlled_probe
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            model_path = root / "models/minicpm/candidate.gguf"
+            model_path.parent.mkdir(parents=True)
+            model_path.write_bytes(b"pinned candidate weights")
+            digest = hashlib.sha256(b"pinned candidate weights").hexdigest()
+            binary = root / "envs/node-harnesses/opencode/node_modules/opencode-linux-x64/bin/opencode"
+            binary.parent.mkdir(parents=True)
+            binary.write_text("synthetic executable", encoding="utf-8")
+            contract = {"path": "models/minicpm/candidate.gguf", "sha256": digest,
+                        "size_bytes": len(b"pinned candidate weights")}
+            with (
+                patch.object(model_quality_paired, "MODELS", {}),
+                patch.object(opencode_controlled_probe, "_assert_server_bundle"),
+                patch.object(campaign_readiness.shutil, "which", return_value=None),
+                patch.object(campaign_readiness.subprocess, "run", side_effect=[
+                    Mock(stdout=b"version: 0.7.0-dev (build 1, commit 620d222)", stderr=b"", returncode=0),
+                    Mock(stdout=b"1.19.3", stderr=b"", returncode=0),
+                ]),
+            ):
+                evidence = campaign_readiness._model_bundle_audit(
+                    root, model_contracts={"minicpm5-2b": contract})
+            self.assertEqual(evidence["evidence"]["models"]["minicpm5-2b"]["status"], "passed")
+            self.assertEqual(evidence["evidence"]["models"]["minicpm5-2b"]["sha256"], digest)
+
+            contract["size_bytes"] += 1
+            with (
+                patch.object(model_quality_paired, "MODELS", {}),
+                patch.object(opencode_controlled_probe, "_assert_server_bundle"),
+                patch.object(campaign_readiness.shutil, "which", return_value=None),
+                patch.object(campaign_readiness.subprocess, "run", side_effect=[
+                    Mock(stdout=b"version: 0.7.0-dev (build 1, commit 620d222)", stderr=b"", returncode=0),
+                    Mock(stdout=b"1.19.3", stderr=b"", returncode=0),
+                ]),
+            ):
+                evidence = campaign_readiness._model_bundle_audit(
+                    root, model_contracts={"minicpm5-2b": contract})
+            self.assertEqual(evidence["evidence"]["models"]["minicpm5-2b"]["status"], "failed")
 
     def test_fake_probe_binds_private_temporary_profile_outside_durable_evidence(self) -> None:
         from benchmark import linux_sandbox
@@ -231,6 +273,48 @@ class CampaignReadinessTests(unittest.TestCase):
             server.server_close()
             thread.join(timeout=1)
 
+    def test_fake_endpoint_streams_terminal_finish_reason_in_its_own_chunk(self) -> None:
+        server, thread, _state = campaign_readiness._fake_endpoint("readiness-model")
+        endpoint = f"http://127.0.0.1:{server.server_address[1]}/v1/chat/completions"
+        tools = [
+            {"type": "function", "function": {"name": "bash", "parameters": {
+                "type": "object", "properties": {"command": {"type": "string"}},
+                "required": ["command"],
+            }}},
+            {"type": "function", "function": {"name": "edit", "parameters": {
+                "type": "object", "properties": {
+                    "filePath": {"type": "string"}, "oldString": {"type": "string"},
+                    "newString": {"type": "string"},
+                }, "required": ["filePath", "oldString", "newString"],
+            }}},
+        ]
+
+        def post(payload: dict[str, object]) -> list[dict[str, object]]:
+            request = urllib.request.Request(
+                endpoint, data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(request, timeout=2) as response:
+                lines = response.read().decode("utf-8").splitlines()
+            return [json.loads(line[6:]) for line in lines if line.startswith("data: {")]
+
+        try:
+            tool_chunks = post({"model": "readiness-model", "tools": tools, "stream": True})
+            self.assertEqual(len(tool_chunks), 2)
+            self.assertIsNone(tool_chunks[0]["choices"][0]["finish_reason"])
+            self.assertEqual(tool_chunks[1]["choices"][0]["delta"], {})
+            self.assertEqual(tool_chunks[1]["choices"][0]["finish_reason"], "tool_calls")
+
+            final_chunks = post({"model": "readiness-model", "tools": tools, "stream": True})
+            self.assertEqual(len(final_chunks), 2)
+            self.assertIsNone(final_chunks[0]["choices"][0]["finish_reason"])
+            self.assertEqual(final_chunks[1]["choices"][0]["delta"], {})
+            self.assertEqual(final_chunks[1]["choices"][0]["finish_reason"], "stop")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=1)
+
     def test_pytest_gate_counts_skips_as_unavailable_outcomes(self) -> None:
         passed = campaign_readiness._pytest_summary_counts("8 passed, 2 subtests passed in 0.31s")
         self.assertEqual(passed["passed"], 8)
@@ -262,6 +346,37 @@ class CampaignReadinessTests(unittest.TestCase):
             record = campaign_readiness._runtime_file_record("runtime/test-python", link)
 
         self.assertEqual(record["status"], "unavailable")
+
+    def test_runtime_input_hashes_versioned_llama_bundle_root_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            tools = root / "tools"
+            versioned = tools / "llama-bin-v0.7.0-620d2225c"
+            versioned.mkdir(parents=True)
+            (versioned / "libllama.so").write_bytes(b"trusted library fixture")
+            (tools / "llama-bin").symlink_to(versioned.name, target_is_directory=True)
+
+            records = campaign_readiness._runtime_input_records(root)
+
+        by_path = {record["path"]: record for record in records}
+        self.assertEqual(by_path["runtime/llama-library-root"]["status"], "measured")
+        self.assertEqual(by_path["runtime/llama-library-root"]["link_target"], versioned.name)
+        self.assertEqual(by_path["runtime/llama-library/libllama.so"]["status"], "measured")
+
+    def test_runtime_input_rejects_llama_bundle_root_symlink_outside_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            tools = root / "tools"
+            external = root / "external-runtime"
+            tools.mkdir()
+            external.mkdir()
+            (external / "libllama.so").write_bytes(b"untrusted library fixture")
+            (tools / "llama-bin").symlink_to(external, target_is_directory=True)
+
+            records = campaign_readiness._runtime_input_records(root)
+
+        library_root = next(record for record in records if record["path"] == "runtime/llama-library")
+        self.assertEqual(library_root["status"], "unavailable")
 
     def test_current_task_prompt_sources_are_in_the_input_manifest(self) -> None:
         from benchmark.harness_runner import TASK_PATHS

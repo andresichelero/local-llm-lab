@@ -591,7 +591,7 @@ def main() -> int:
         "LANG": "C.UTF-8",
     }
     version = _run_checked([str(binary), "--version"], version_env, 10)
-    if "1.19.0" not in version.stdout:
+    if "1.19.3" not in version.stdout:
         raise RuntimeError(f"Unexpected OpenCode version: {version.stdout.strip()}")
     with socket.socket() as probe_socket:
         if probe_socket.connect_ex(("127.0.0.1", 8080)) == 0:
@@ -609,7 +609,7 @@ def main() -> int:
         "LANG": "C.UTF-8",
     }
     runtime_version = _run_checked([str(server), "--version"], server_env, 10)
-    runtime_version_text = require_runtime_revision(runtime_version.stdout, runtime_version.stderr, "d81235049")
+    runtime_version_text = require_runtime_revision(runtime_version.stdout, runtime_version.stderr, "620d222")
     _write_json(output_root / "preflight.json", {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "source_git_sha": git_provenance(REPO_ROOT)[0],

@@ -18,8 +18,8 @@ wsl.git: 2.43.0
 wsl.node: unavailable
 wsl.cuda_driver_api: 13.3
 wsl.cuda_toolkit_nvcc: 13.0.88
-runtime.llama_cpp: v0.6.0-dev; llama-cli and llama-server built successfully
-runtime.llama_cpp_target: v0.6.0; exact tag checkout=d81235049384534c167caea52b85a694f6103d14
+runtime.llama_cpp: v0.7.0; llama-cli and llama-server built successfully; commit=620d2225cc436ab0b001e3200e590e3b286ef9ab
+runtime.llama_cpp_target: v0.7.0; exact tag checkout=620d2225cc436ab0b001e3200e590e3b286ef9ab
 runtime.exllamav3: v1.6.1; official CPython 3.12 CUDA 12.8 / Torch 2.10 wheel sha256=8ff5e579afae47773cbedbf03f174d7696d4ea6f258ec6e8579bde92fc52e39e; SHA confirmed from GitHub release API 2026-10-11 after release page listed stale digest
 runtime.exllamav3.python: 3.12.3
 runtime.exllamav3.torch: 2.10.0+cu128
@@ -79,10 +79,10 @@ model.ornith_1_0_9b_gguf.runtime: llama.cpp d81235049384534c167caea52b85a694f610
 model.ornith_1_0_9b_gguf.path: /home/foxtrot/local-llm-benchmark/models/gguf/ornith-1.0-9b/ornith-1.0-9b-Q4_K_M.gguf
 model.ornith_1_0_9b_gguf.install_script: scripts/27_download_ornith_ssd.sh
 runtime.node_wsl: 22.23.3 linux-x64; npm=10.9.9; sha256=df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de; path=/home/foxtrot/local-llm-benchmark/runtimes/node-v22.23.3-linux-x64
-harness.pi: @earendil-works/pi-coding-agent 1.1.0; npm isolated under envs/node-harnesses/pi
-harness.opencode: opencode-ai 1.19.0; npm isolated under envs/node-harnesses/opencode
-harness.mistral_vibe: mistral-vibe 2.26.1; Python 3.12.3; isolated venv at envs/mistral-vibe
-harness.trueforge: @truefoundry/trueforge 0.178.0; npm isolated under envs/node-harnesses/trueforge; local text smoke passed; sandbox tools unavailable (bubblewrap and socat missing)
+harness.pi: @earendil-works/pi-coding-agent 1.4.0; npm isolated under envs/node-harnesses/pi
+harness.opencode: opencode-ai 1.19.4; npm isolated under envs/node-harnesses/opencode
+harness.mistral_vibe: mistral-vibe 3.0.2; isolated venv at envs/mistral-vibe
+harness.trueforge: @truefoundry/trueforge 0.179.2; npm isolated under envs/node-harnesses/trueforge
 harness.codex_host: 0.162.0-alpha.17.2; installed on Windows; local endpoint validation pending
 model.qwen35_4b_gguf.repo: bartowski/Qwen_Qwen3.5-4B-GGUF
 model.qwen35_4b_gguf.revision: 4168f45a16a1290d65a4ec0fa312ae917a4c15d6
@@ -101,7 +101,7 @@ archive.qwen35_4b.env_parser: E:\LocalLLMLabArchive\2026-10-11\qwen35-4b-env-par
 archive.model.qwen35_4b: E:\LocalLLMLabArchive\models\bartowski-Qwen_Qwen3.5-4B-GGUF\4168f45a16a1290d65a4ec0fa312ae917a4c15d6\Qwen_Qwen3.5-4B-Q4_K_M.gguf; 3013027808 bytes; sha256=13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983; copied from C-backed SSD after all measurements and checksum verified
 
 audit.continuation_20261011: results/reports/audit-continuation-20261011.md; machine/model/runtime rechecked; snapshots are not continuous monitoring
-audit.llama_cpp_ssd_bundle: /home/foxtrot/local-llm-benchmark/tools/llama-bin; requires explicit LD_LIBRARY_PATH to this directory; SSD library preflight passed; build 1 d81235049
+audit.llama_cpp_ssd_bundle: /home/foxtrot/local-llm-benchmark/tools/llama-bin; verified v0.7.0 commit 620d2225cc436ab0b001e3200e590e3b286ef9ab; previous runtime preserved
 audit.opencode_effective_profile: OpenCode 1.19.0 confirmed by isolated absolute executable; exact profile SHA256=1c9a852168ea3df6ff2afef26dacee19bc160efe56989b4120157b5fa5abdef3; effective local endpoint/task allowlist and child edit/bash denies inspected
 validation.python: 3.12.3; isolated WSL ext4 envs/lab-validation; pytest=9.1.1; pluggy=1.6.0; iniconfig=2.3.0; packaging=24.2; Pygments=2.20.0
 validation.baseline: clean source db190b0620c1688c2bf8a3ebf2f6aaba6ee7b0f7 on SSD ext4; 73 tests and 3 subtests passed; no project lint/typecheck configuration
@@ -126,3 +126,9 @@ model.granite_4_1_8b_gguf.archive: E:\LocalLLMLabArchive\models\granite-4.1-8b\g
 benchmark.model_switch_bench: results/reports/routing-governance-20261012.md; 5 cycles measured; unload=0.20-0.45s, 4B-load=3.0-3.1s, 9B-load=3.9-4.4s, total-switch=3.4-4.9s
 routing.matrix: Tier 0 CPU deterministic; Tier 1 Qwen3.5-4B cache+MTP (~17s-22s, <=4.87 GiB); Tier 2 Qwen3.5-9B cache (~40s-47s, <=7.33 GiB); cascade switch 4.5s
 governance.backlog: QLoRA deferred until persistent non-harness failure classes and 120 verified episodes; Vibe harness deferred; models >16K archived on E: drive
+audit.daily_runtime_update: /mnt/d/Usuario/Downloads/LLM/.worktrees/practical-agent-v2/results/system-audit/runtime-updates/daily-2026-10-22.json; 2026-10-22; exact app versions recorded; no model inference
+audit.trueforge_npm_2026-10-17: results/system-audit/runtime-updates/trueforge-npm-audit-2026-10-17.json; 8 high, 0 critical; excluded from active safe campaign pending review
+benchmark.safe_campaign_2026-10-17: OpenCode 1.19.3; llama.cpp v0.7.0 commit 620d2225cc436ab0b001e3200e590e3b286ef9ab; new protocol model-quality-paired-20261017-r1a; historical measurements unchanged
+audit.safe_campaign_readiness_2026-10-17-r2: /home/foxtrot/local-llm-benchmark/results/readiness-20261017-runtime-update-r2/readiness-report.json; input hashes passed; blocked only by Qwen3.5-4B asset absent from active root (archived per line 101) and 6875 MiB free VRAM < 7168 MiB; no model loaded or inference
+candidate.granite_4_2_8b_q4_k_m: /home/foxtrot/local-llm-benchmark/models/gguf/granite-4.2-8b/granite-4.2-8b-Q4_K_M.gguf; 5347917952 bytes; sha256=16a9369d0805f80b7377d25d87f937a90c05dc04ad79173a52001e42c9aab311; source=ibm-granite/granite-4.2-8b-GGUF@3b36e977bf3dbbf2143c5ead4029290e94637084; local SHA-256 matches official Q4_K_M file; short screen complete 4/6 strict vs Qwen3.5-9B 6/6; context=16384; KV=Q4_0; temp=0; seed=1234; OpenCode=1.19.3; llama.cpp=v0.7.0; report=results/reports/granite-4.2-8b-short-screen-20261017-r1.md
+candidate.gemma_4_12b_it_qat_q4_0: /home/foxtrot/local-llm-benchmark/models/gguf/gemma-4-12b/gemma-4-12b-it-qat-q4_0.gguf; 6975877728 bytes; sha256=faff1a63667fac17ac5e777f47114688fcefea96e220e211aaa8d62c2c4561f1; intended source=google/gemma-4-12B-it-qat-q4_0-gguf@ef7b15515d7ed7f34305a08edb5717e7989d6dc9, but local file hash/size do not match that revision (official=93567e57a8fe10b23569b9d9ec38cd005deedf71e29477c421a4b83f418a538b/6975879296); local artifact source unresolved; existing campaign result=10/12 strict vs Qwen3.5-9B 12/12 and applies only to this local SHA-256; see results/reports/gemma4-12b-qat-failure-analysis-20261016.md

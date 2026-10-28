@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "experiment": "granite-4.2-8b-short-screen-20261017-r1",
+  "screen_scope": "preliminary local coding-agent comparison; not a full admission benchmark",
+  "candidate_model": "granite-4.2-8b",
+  "reference_model": "qwen3.5-9b",
+  "models": {
+    "granite-4.2-8b": {
+      "role": "candidate",
+      "alias": "Granite-4.2-8B-Q4_K_M",
+      "revision": "3b36e977bf3dbbf2143c5ead4029290e94637084",
+      "path": "models/gguf/granite-4.2-8b/granite-4.2-8b-Q4_K_M.gguf",
+      "size_bytes": 5347917952,
+      "sha256": "16a9369d0805f80b7377d25d87f937a90c05dc04ad79173a52001e42c9aab311"
+    },
+    "qwen3.5-9b": {
+      "role": "reference",
+      "alias": "Qwen3.5-9B-Q4_K_M",
+      "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+      "path": "models/gguf/Qwen3.5-9B-Q4_K_M.gguf",
+      "size_bytes": 5680522464,
+      "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+    }
+  },
+  "tasks": [
+    "calculator_division",
+    "whitespace_normalization",
+    "dotenv_line_parser"
+  ],
+  "schedule": {
+    "seed": 1234,
+    "block_models": [
+      "granite-4.2-8b",
+      "qwen3.5-9b",
+      "qwen3.5-9b",
+      "granite-4.2-8b"
+    ],
+    "repeats_per_model_task": 2,
+    "task_order": "fixed identical task order in every ABBA model block",
+    "warmup_count_per_model_session": 1,
+    "warmup_excluded_from_denominator": true
+  },
+  "generation": {
+    "temperature": 0,
+    "seed": 1234,
+    "max_output_tokens": 1024,
+    "context_tokens": 16384,
+    "kv_cache": "q4_0",
+    "flash_attention": true,
+    "reasoning": "off",
+    "prompt_cache": false,
+    "mtp": false,
+    "parallel_slots": 1
+  },
+  "resource_requirements": {
+    "minimum_free_vram_mib": 7168,
+    "minimum_total_vram_mib": 8192,
+    "maximum_initial_gpu_utilization_percent": 10,
+    "minimum_available_memory_bytes": 5368709120,
+    "minimum_free_swap_bytes": 3221225472,
+    "minimum_benchmark_disk_bytes": 8589934592
+  },
+  "runtime": {
+    "harness": "opencode",
+    "harness_version": "1.19.3",
+    "llama_cpp_revision": "620d2225cc436ab0b001e3200e590e3b286ef9ab",
+    "host_server": "127.0.0.1:8080",
+    "agent_broker": "127.0.0.1:18888"
+  },
+  "round_limit_seconds": 5400,
+  "failure_categories": [
+    "unsupported_language",
+    "resource",
+    "agent",
+    "protocol",
+    "grade",
+    "infrastructure"
+  ],
+  "claims": {
+    "general_model_admission": false,
+    "statistically_precise_ranking": false,
+    "cp_python_generality": false,
+    "security_proof": false
+  }
+}
