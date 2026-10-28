@@ -288,7 +288,7 @@ class _socket_pair:
 
 
 def run_development(client, category, output):
-    from benchmark.practical_runtime_v2 import _phase_grade, _grader_result
+    from benchmark.practical_runtime_v2 import _grader_result, _phase_grade
 
     task = TASK_MAP[category]
     output = Path(output)

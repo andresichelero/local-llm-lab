@@ -15,16 +15,16 @@ from __future__ import annotations
 
 import argparse
 import ast
-from dataclasses import dataclass
-from enum import Enum
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import stat
 import sys
 import tempfile
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
 
 SYNTAX_LEAK_PATTERNS = [
     re.compile(r"\(End of file.*\)", re.IGNORECASE),
@@ -197,9 +197,7 @@ def _extract_definitions(source: str) -> set[str]:
 
     defs: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            defs.add(node.name)
-        elif isinstance(node, ast.ClassDef):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             defs.add(node.name)
     return defs
 

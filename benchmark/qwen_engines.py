@@ -31,7 +31,6 @@ class ResourceUnavailable(RuntimeError):
 class CapacityUnsupported(ResourceUnavailable):
     """The requested fixed configuration did not fit; not a model verdict."""
 
-    pass
 
 
 class EngineCompatibilityError(RuntimeError):
