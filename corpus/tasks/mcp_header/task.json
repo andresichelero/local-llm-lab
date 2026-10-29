@@ -1,0 +1,19 @@
+{
+  "id": "mcp_header",
+  "class": "mcp",
+  "host": "bottle-0.13.2",
+  "objective": "Inspect the deterministic tool output, then repair Bottle header-name normalization to satisfy its reported interoperability contract.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium",
+  "stub": "corpus/stubs/mcp_header/tool.py",
+  "adaptation": "A deterministic tool response supplies the external evidence for an edit in Bottle; no live MCP service is required."
+}

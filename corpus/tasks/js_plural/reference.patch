@@ -1,0 +1,10 @@
+--- a/index.js
++++ b/index.js
+@@ -157,6 +157,6 @@
+  */
+ 
+ function plural(ms, msAbs, n, name) {
+-  var isPlural = msAbs >= n * 2;
++  var isPlural = msAbs >= n * 1.5;
+   return Math.round(ms / n) + ' ' + name + (isPlural ? 's' : '');
+ }

@@ -1,0 +1,11 @@
+--- a/index.js
++++ b/index.js
+@@ -56,7 +56,7 @@
+   if (!match) {
+     return;
+   }
+-  var n = Math.abs(parseFloat(match[1]));
++  var n = parseFloat(match[1]);
+   var type = (match[2] || 'ms').toLowerCase();
+   switch (type) {
+     case 'years':

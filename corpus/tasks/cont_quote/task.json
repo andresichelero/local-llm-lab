@@ -1,0 +1,19 @@
+{
+  "id": "cont_quote",
+  "class": "continuation",
+  "host": "bottle-0.13.2",
+  "objective": "First delivery: preserve HTML metacharacter escaping.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium",
+  "phase": 1,
+  "visible_test": "verify_phase1.py"
+}

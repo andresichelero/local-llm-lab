@@ -1,0 +1,18 @@
+{
+  "id": "tests_range",
+  "class": "authored_tests",
+  "host": "bottle-0.13.2",
+  "objective": "Write tests for Bottle HTTP byte ranges that detect inclusive-end and suffix-range regressions. Do not change implementation.",
+  "relevant_files": [
+    "bottle.py",
+    "test"
+  ],
+  "writable_files": [
+    "test/test_tests_range.py"
+  ],
+  "invariants": [
+    "Do not modify bottle.py or existing tests.",
+    "Tests must pass on the original implementation."
+  ],
+  "difficulty": "medium"
+}
