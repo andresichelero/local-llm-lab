@@ -6,6 +6,20 @@ import pytest
 from benchmark import opencode_baseline as baseline
 
 
+@pytest.mark.parametrize('failure, oracle, visible, expected', [
+    # v5 bug: phase 1 hit the step cap, the oracle could not grade, and the unit was retried.
+    ('model_phase1_incomplete', {'passed': None, 'status': 'infrastructure'}, {'passed': False}, 'model'),
+    ('model_wall_timeout', {'passed': None, 'status': 'infrastructure'}, {'passed': False}, 'model'),
+    ('grader_infrastructure', {'passed': None, 'status': 'infrastructure'}, {'passed': True}, 'infrastructure'),
+    ('server_http_error', {'passed': False, 'status': 'fail'}, {'passed': False}, 'infrastructure'),
+    ('harness_session_mismatch', {'passed': True, 'status': 'pass'}, {'passed': True}, 'harness'),
+    ('model_oracle_failed', {'passed': False, 'status': 'fail'}, {'passed': True}, 'model'),
+    (None, {'passed': True, 'status': 'pass'}, {'passed': True}, 'success'),
+])
+def test_classify_only_retries_real_infrastructure(failure, oracle, visible, expected):
+    assert baseline.classify(failure, oracle, visible) == expected
+
+
 def test_bwrap_denies_host_paths_with_runner_mounts(tmp_path):
     config = baseline.load_config()
     workspace = tmp_path / 'workspace'

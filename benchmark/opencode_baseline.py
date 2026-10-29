@@ -106,6 +106,22 @@ def phase_failure(phase, server_log, server_alive):
     return classify_failure(code, evidence, server_alive)
 
 
+INFRASTRUCTURE_FAILURES = {'server_exited', 'server_http_error', 'harness_configuration_error',
+                           'grader_infrastructure'}
+
+
+def classify(failure, oracle, visible):
+    # Only the failure decides infrastructure: an ungradable workspace after a model
+    # failure (e.g. phase 1 never finished) is the model's outcome and is not retried.
+    if not failure and oracle['passed'] and visible['passed']:
+        return 'success'
+    if failure in INFRASTRUCTURE_FAILURES:
+        return 'infrastructure'
+    if failure in {'harness_missing_session', 'harness_session_mismatch'}:
+        return 'harness'
+    return 'model'
+
+
 def retry_infrastructure(attempt):
     result = attempt()
     if result['category'] == 'infrastructure':
@@ -437,12 +453,7 @@ def run_attempt(config, unit, output, server, port, log_path):
             failure = 'model_oracle_failed'
         if failure is None and not visible['passed']:
             failure = 'model_visible_failed'
-        category = 'infrastructure' if failure in {'server_exited', 'server_http_error',
-            'harness_configuration_error'} or oracle['status'] == 'infrastructure' else 'model'
-        if failure in {'harness_missing_session', 'harness_session_mismatch'} and category != 'infrastructure':
-            category = 'harness'
-        if not failure and oracle['passed'] and visible['passed']:
-            category = 'success'
+        category = classify(failure, oracle, visible)
         result = {'unit': unit, 'category': category, 'failure': failure,
                   'visible': visible, 'phase1_visible': visible_phase, 'oracle': oracle,
                   'continuation_released': phases['released'],
