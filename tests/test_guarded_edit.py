@@ -660,3 +660,30 @@ def test_batch_rolls_back_if_interrupted_after_replace(tmp_path, monkeypatch):
     with pytest.raises(TimeoutError):
         apply_edit_batch(tmp_path, output, {'a.txt': digest}, ['a.txt'])
     assert target.read_text() == 'one\n'
+
+
+def test_overlapping_search_is_ambiguous_and_never_written(tmp_path):
+    from benchmark.guarded_edit import EditStatus, apply_edit_batch
+    target = tmp_path / 'a.py'
+    original = b'a = 1\na = 1\na = 1\n'
+    target.write_bytes(original)
+    digest = hashlib.sha256(original).hexdigest()
+    output = ('FILE: a.py\n<<<<<<< SEARCH\na = 1\na = 1\n=======\n'
+              'a = 2\n>>>>>>> REPLACE\n')
+    result = apply_edit_batch(tmp_path, output, {'a.py': digest}, ['a.py'])
+    assert result.status == EditStatus.MULTIPLE_OCCURRENCES
+    assert target.read_bytes() == original
+
+
+@pytest.mark.parametrize('statement', ['return', 'break'])
+def test_uncompilable_python_is_rejected_before_write(tmp_path, statement):
+    from benchmark.guarded_edit import EditStatus, apply_edit_batch
+    target = tmp_path / 'a.py'
+    original = b'value = 1\n'
+    target.write_bytes(original)
+    digest = hashlib.sha256(original).hexdigest()
+    output = (f'FILE: a.py\n<<<<<<< SEARCH\nvalue = 1\n=======\n'
+              f'value = 2\n{statement}\n>>>>>>> REPLACE\n')
+    result = apply_edit_batch(tmp_path, output, {'a.py': digest}, ['a.py'])
+    assert result.status == EditStatus.INVALID_SYNTAX
+    assert target.read_bytes() == original

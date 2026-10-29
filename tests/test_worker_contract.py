@@ -88,3 +88,23 @@ def test_reject_prefix_that_is_not_frozen_host_prefix(tmp_path):
     secret = (root / 'oracles' / 'py_range' / 'oracle.py').read_bytes()
     with pytest.raises(ValueError, match='prefix'):
         build_package(root, 'py_range', tmp_path, 'rev', prefix=secret)
+
+
+def test_packages_exclude_nontrivial_private_oracle_lines():
+    root = Path(__file__).resolve().parents[1] / 'corpus'
+    checked = 0
+    for task_file in (root / 'tasks').glob('*/task.json'):
+        task = json.loads(task_file.read_text(encoding='utf-8'))
+        package = build_package(root, task['id'], root / 'hosts' / task['host'], 'rev')
+        rendered = package.markdown + json.dumps(package.to_dict(), ensure_ascii=False)
+        # Some identical assertions are deliberately public in the visible test.
+        public_lines = {line.strip() for line in package.readonly_context['visible_test'].splitlines()}
+        for private in (root / 'oracles' / task['id']).rglob('*'):
+            if private.is_file() and private.suffix == '.py':
+                for line in private.read_text(encoding='utf-8').splitlines():
+                    fragment = line.strip()
+                    if (len(fragment) >= 35 and fragment not in public_lines
+                            and not fragment.startswith(('#', 'import ', 'from '))):
+                        checked += 1
+                        assert fragment not in rendered, (task['id'], fragment)
+    assert checked > 0

@@ -168,3 +168,153 @@ def test_rendered_input_budget_rejects_before_generation(tmp_path):
     result = WorkerRunner(tmp_path, tmp_path / 'journal.jsonl', client).run(
         p, lambda: VisibleResult(True, ''), lambda: True)
     assert result.state == 'rejected' and result.reason == 'input_budget' and not client.messages
+
+
+def test_terminal_persistence_interrupted_after_append(tmp_path, monkeypatch):
+    import time
+    from dataclasses import replace
+    p = package(tmp_path)
+    p = replace(p, budgets={**p.budgets, 'wall_seconds': 1})
+    runner = WorkerRunner(tmp_path, tmp_path / 'journal.jsonl', FakeClient([patch('x = 1', 'x = 2')]))
+    record = runner._record
+    def slow_record(state, **fields):
+        record(state, **fields)
+        if state == 'accepted':
+            time.sleep(2)
+    monkeypatch.setattr(runner, '_record', slow_record)
+    result = runner.run(p, lambda: VisibleResult(True, ''), lambda: True)
+    entries = [json.loads(line) for line in (tmp_path / 'journal.jsonl').read_text().splitlines()]
+    terminal = [e for e in entries if e['state'] in {'accepted', 'rejected', 'blocked', 'infrastructure_error'}]
+    assert len(terminal) == 1
+    assert terminal[0]['state'] == result.state
+    assert terminal[0]['oracle_passed'] == result.oracle_passed
+
+
+def test_private_oracle_swallows_timeout_without_acceptance(tmp_path):
+    import time
+    from dataclasses import replace
+    p = package(tmp_path)
+    p = replace(p, budgets={**p.budgets, 'wall_seconds': 1})
+    runner = WorkerRunner(tmp_path, tmp_path / 'journal.jsonl', FakeClient([patch('x = 1', 'x = 2')]))
+    captured = []
+    def private_oracle():
+        try:
+            time.sleep(2)
+            return True
+        except Exception as error:  # noqa: BLE001 - reproduce the private wrapper swallowing timeout
+            captured.append(type(error).__name__)
+            return False
+    result = runner.run(p, lambda: VisibleResult(True, ''), private_oracle)
+    entries = [json.loads(line) for line in (tmp_path / 'journal.jsonl').read_text().splitlines()]
+    assert captured == ['TimeoutError']
+    assert result.state == 'infrastructure_error' and result.reason == 'TimeoutError'
+    assert result.oracle_passed is None
+    assert all(e['state'] != 'accepted' for e in entries)
+
+
+def test_repair_prompt_excludes_private_oracle_fragments_and_stderr(tmp_path, capsys):
+    import sys
+    root = Path(__file__).resolve().parents[1] / 'corpus'
+    lines = (root / 'oracles' / 'py_range' / 'oracle.py').read_text().splitlines()
+    fragments = [line.strip() for line in lines if len(line.strip()) >= 35]
+    assert fragments
+    p = package(tmp_path)
+    client = FakeClient([patch('x = 1', 'x = 2'), patch('x = 2', 'x = 3')])
+    visible = iter([VisibleResult(False, 'visible assertion: expected 3'), VisibleResult(True, '')])
+    def oracle():
+        print(fragments[0], file=sys.stderr)
+        return False
+    result = WorkerRunner(tmp_path, tmp_path / 'journal.jsonl', client).run(p, lambda: next(visible), oracle)
+    assert result.oracle_passed is False
+    assert fragments[0] in capsys.readouterr().err
+    prompt = '\n'.join(message['content'] for messages in client.messages for message in messages)
+    assert all(fragment not in prompt for fragment in fragments)
+
+
+def test_terminal_write_failure_has_no_unsafe_retry(tmp_path, monkeypatch):
+    import pytest
+
+    from benchmark.worker_runner import JournalPersistenceError
+    p = package(tmp_path)
+    runner = WorkerRunner(tmp_path, tmp_path / 'journal.jsonl', FakeClient([patch('x = 1', 'x = 2')]))
+    record = runner._record
+    def failed_write(state, **fields):
+        if state == 'accepted':
+            raise OSError('write failed')
+        record(state, **fields)
+    monkeypatch.setattr(runner, '_record', failed_write)
+    with pytest.raises(JournalPersistenceError):
+        runner.run(p, lambda: VisibleResult(True, ''), lambda: True)
+    entries = [json.loads(line) for line in (tmp_path / 'journal.jsonl').read_text().splitlines()]
+    assert not any(e['state'] in {'accepted', 'rejected', 'blocked', 'infrastructure_error'} for e in entries)
+    with pytest.raises(JournalPersistenceError):
+        runner.finalize('infrastructure_error')
+
+
+def test_terminal_completed_before_io_error_is_recovered_without_second_terminal(tmp_path, monkeypatch):
+    p = package(tmp_path)
+    runner = WorkerRunner(tmp_path, tmp_path / 'journal.jsonl', FakeClient([patch('x = 1', 'x = 2')]))
+    record = runner._record
+    def failed_after_write(state, **fields):
+        record(state, **fields)
+        if state == 'accepted':
+            raise OSError('close failed after append')
+    monkeypatch.setattr(runner, '_record', failed_after_write)
+    result = runner.run(p, lambda: VisibleResult(True, ''), lambda: True)
+    entries = [json.loads(line) for line in (tmp_path / 'journal.jsonl').read_text().splitlines()]
+    terminal = [e for e in entries if e['state'] in {'accepted', 'rejected', 'blocked', 'infrastructure_error'}]
+    assert len(terminal) == 1 and terminal[0]['state'] == result.state == 'accepted'
+    assert runner.finalize('infrastructure_error') == result
+
+
+def test_timeout_after_prepared_is_terminal_infrastructure_error(tmp_path, monkeypatch):
+    import time
+    from dataclasses import replace
+    p = package(tmp_path)
+    p = replace(p, budgets={**p.budgets, 'wall_seconds': 1})
+    runner = WorkerRunner(tmp_path, tmp_path / 'journal.jsonl', FakeClient([]))
+    record = runner._record
+    def delayed_prepared(state, **fields):
+        record(state, **fields)
+        if state == 'prepared':
+            time.sleep(2)
+    monkeypatch.setattr(runner, '_record', delayed_prepared)
+    result = runner.run(p, lambda: VisibleResult(True, ''), lambda: True)
+    entries = [json.loads(line) for line in (tmp_path / 'journal.jsonl').read_text().splitlines()]
+    assert result.state == 'infrastructure_error' and result.reason == 'TimeoutError'
+    assert [e['state'] for e in entries] == ['prepared', 'infrastructure_error']
+
+
+def test_incomplete_terminal_line_is_not_accepted_or_retried(tmp_path, monkeypatch):
+    import pytest
+
+    from benchmark.worker_runner import JournalPersistenceError
+    p = package(tmp_path)
+    journal = tmp_path / 'journal.jsonl'
+    runner = WorkerRunner(tmp_path, journal, FakeClient([patch('x = 1', 'x = 2')]))
+    record = runner._record
+    def partial_terminal(state, **fields):
+        if state == 'accepted':
+            with journal.open('a', encoding='utf-8') as stream:
+                stream.write(json.dumps({'attempt_id': runner.attempt_id, 'state': state, **fields}))
+            raise OSError('missing line ending')
+        record(state, **fields)
+    monkeypatch.setattr(runner, '_record', partial_terminal)
+    with pytest.raises(JournalPersistenceError):
+        runner.run(p, lambda: VisibleResult(True, ''), lambda: True)
+    assert not journal.read_bytes().endswith(b'\n')
+    with pytest.raises(JournalPersistenceError):
+        runner.finalize('infrastructure_error')
+
+
+def test_journal_with_non_object_record_stops_without_terminal(tmp_path):
+    import pytest
+
+    from benchmark.worker_runner import JournalPersistenceError
+    p = package(tmp_path)
+    journal = tmp_path / 'journal.jsonl'
+    journal.write_text('[]\n')
+    runner = WorkerRunner(tmp_path, journal, FakeClient([patch('x = 1', 'x = 2')]))
+    with pytest.raises(JournalPersistenceError):
+        runner.run(p, lambda: VisibleResult(True, ''), lambda: True)
+    assert not any('"state": "accepted"' in line for line in journal.read_text().splitlines())

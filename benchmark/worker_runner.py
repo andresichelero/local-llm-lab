@@ -57,6 +57,10 @@ class RunResult:
     reason: str = ''
 
 
+class JournalPersistenceError(RuntimeError):
+    """The journal write is ambiguous or failed; do not retry this attempt."""
+
+
 class WorkerRunner:
     def __init__(self, workspace: Path, journal: Path, client):
         self.workspace, self.journal, self.client = workspace, journal, client
@@ -66,21 +70,93 @@ class WorkerRunner:
         self.input_tokens = 0
         self.task_id = None
         self._visible_accepted = False
+        self._deadline = None
+        self._expired = False
+        self._timer_owned = False
+        self._journal_failed = False
 
     def _record(self, state, **fields):
+        if self._journal_failed:
+            raise JournalPersistenceError('journal persistence previously failed')
+        try:
+            with self.journal.open('a', encoding='utf-8') as stream:
+                stream.write(json.dumps({'attempt_id': self.attempt_id, 'state': state, **fields}, ensure_ascii=False) + '\n')
+        except OSError as err:
+            self._journal_failed = True
+            raise JournalPersistenceError('journal append failed; attempt cannot be retried') from err
         self.state = state
-        with self.journal.open('a', encoding='utf-8') as stream:
-            stream.write(json.dumps({'attempt_id': self.attempt_id, 'state': state, **fields}, ensure_ascii=False) + '\n')
+
+    def _persisted_terminal(self):
+        terminals = {'accepted', 'rejected', 'blocked', 'infrastructure_error'}
+        try:
+            if not self.journal.exists():
+                return None
+            with self.journal.open(encoding='utf-8') as stream:
+                events = []
+                for line in stream:
+                    if not line.endswith('\n'):
+                        raise ValueError('incomplete JSONL record')
+                    event = json.loads(line)
+                    if not isinstance(event, dict):
+                        raise TypeError('journal record must be an object')
+                    events.append(event)
+        except (OSError, ValueError, TypeError) as err:
+            self._journal_failed = True
+            raise JournalPersistenceError('journal cannot be read unambiguously') from err
+        matches = [event for event in events
+                   if event.get('attempt_id') == self.attempt_id and event.get('state') in terminals]
+        if len(matches) > 1:
+            self._journal_failed = True
+            raise JournalPersistenceError('multiple terminal records already exist')
+        if not matches:
+            return None
+        event = matches[0]
+        return RunResult(self.attempt_id, event['state'], self.input_tokens,
+                         event.get('oracle_passed'), event.get('reason', ''))
+
+    def _check_deadline(self):
+        if self._expired or (self._deadline is not None and time.monotonic() >= self._deadline):
+            self._expired = True
+            raise TimeoutError('wall budget exceeded')
 
     def finalize(self, state, oracle_passed=None, reason=''):
-        if self.result is None:
+        if self.result is not None:
+            return self.result
+        previous_mask = None
+        try:
+            if self._timer_owned:
+                previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGALRM})
+                signal.setitimer(signal.ITIMER_REAL, 0)
+                if signal.sigtimedwait({signal.SIGALRM}, 0) is not None:
+                    self._expired = True
+            existing = self._persisted_terminal()
+            if existing is not None:
+                self.state = existing.state
+                self.result = existing
+                return existing
+            if self._journal_failed:
+                raise JournalPersistenceError('journal persistence previously failed')
+            if self._expired or (self._deadline is not None and time.monotonic() >= self._deadline):
+                state, oracle_passed, reason = 'infrastructure_error', None, 'TimeoutError'
             if state not in {'accepted', 'rejected', 'blocked', 'infrastructure_error'}:
                 raise ValueError('invalid terminal state')
             if state == 'accepted' and not self._visible_accepted:
                 raise ValueError('acceptance requires successful visible verification')
-            self._record(state, reason=reason, oracle_passed=oracle_passed)
+            try:
+                self._record(state, reason=reason, oracle_passed=oracle_passed)
+            except Exception as err:
+                existing = self._persisted_terminal()
+                if existing is not None:
+                    self.state = existing.state
+                    self.result = existing
+                    return existing
+                self._journal_failed = True
+                raise JournalPersistenceError('terminal append failed; no retry is safe') from err
             self.result = RunResult(self.attempt_id, state, self.input_tokens, oracle_passed, reason)
-        return self.result
+            return self.result
+        finally:
+            if previous_mask is not None:
+                signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
 
     def followup_package(self, corpus_root, package, **kwargs):
         if (self.result is None or self.result.state != 'accepted'
@@ -97,8 +173,11 @@ class WorkerRunner:
             if signal.getitimer(signal.ITIMER_REAL) != (0.0, 0.0):
                 raise RuntimeError('process timer already in use')
             def expired(_signum, _frame):
+                self._expired = True
                 raise TimeoutError('wall budget exceeded')
             signal.signal(signal.SIGALRM, expired)
+            self._deadline = time.monotonic() + package.budgets['wall_seconds']
+            self._timer_owned = True
             signal.setitimer(signal.ITIMER_REAL, package.budgets['wall_seconds'])
         except (AttributeError, ValueError, RuntimeError) as err:
             self._record('prepared', task_id=package.task_id, mode=mode)
@@ -107,15 +186,16 @@ class WorkerRunner:
             return self._run(package, visible, private_oracle, mode=mode, prefix=prefix)
         finally:
             signal.setitimer(signal.ITIMER_REAL, 0)
+            self._timer_owned = False
             signal.signal(signal.SIGALRM, previous_handler)
 
     def _run(self, package: WorkerPackage, visible, private_oracle, *, mode='W16', prefix=None):
         if self.state is not None:
             raise RuntimeError('runner is single-use')
         self.task_id = package.task_id
-        self._record('prepared', task_id=package.task_id, mode=mode)
         started = time.monotonic()
         try:
+            self._record('prepared', task_id=package.task_id, mode=mode)
             if mode not in ('W16', 'WL'):
                 raise ValueError('invalid mode')
             messages = []
@@ -161,6 +241,7 @@ class WorkerRunner:
                     raise TimeoutError('wall budget exceeded')
                 if check.passed:
                     score = None if package.verification_profile == 'phase1' else private_oracle()
+                    self._check_deadline()
                     if score is not None and not isinstance(score, bool):
                         raise TypeError('private oracle must return a boolean')
                     if score is None and package.verification_profile != 'phase1':
@@ -173,5 +254,7 @@ class WorkerRunner:
                 messages.extend([{'role': 'assistant', 'content': output},
                                  {'role': 'user', 'content': 'Visible verification failed:\n' + diagnostic}])
             return self.finalize('rejected', reason='repair_exhausted')
+        except JournalPersistenceError:
+            raise
         except Exception as err:  # noqa: BLE001 - isolate injected infrastructure failures
             return self.finalize('infrastructure_error', reason=type(err).__name__)

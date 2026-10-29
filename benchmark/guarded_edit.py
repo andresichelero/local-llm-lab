@@ -465,10 +465,11 @@ def apply_edit_batch(workspace_root: Path, output: str, input_hashes: dict[str, 
                 return reject(EditStatus.EMPTY_SEARCH, name)
             contents[name] = replacement
         else:
-            count = contents[name].count(search)
-            if count != 1:
-                return reject(EditStatus.ZERO_OCCURRENCES if count == 0 else
-                              EditStatus.MULTIPLE_OCCURRENCES, name)
+            first = contents[name].find(search)
+            if first < 0:
+                return reject(EditStatus.ZERO_OCCURRENCES, name)
+            if contents[name].find(search, first + 1) >= 0:
+                return reject(EditStatus.MULTIPLE_OCCURRENCES, name)
             contents[name] = contents[name].replace(search, replacement, 1)
         counts[name] += 1
         applied[name].append({"search": search, "replace": replacement})
@@ -476,7 +477,7 @@ def apply_edit_batch(workspace_root: Path, output: str, input_hashes: dict[str, 
     for name, content in contents.items():
         if targets[name].suffix == ".py":
             try:
-                ast.parse(content)
+                compile(content, str(targets[name]), "exec", dont_inherit=True)
             except SyntaxError as err:
                 return reject(EditStatus.INVALID_SYNTAX, str(err))
             if not check_helper_preservation(original[name].decode(), content)[0]:
