@@ -1,0 +1,18 @@
+{
+  "protocol_id": "qwen-4b-prefix-cache-v2",
+  "output": "/home/foxtrot/local-llm-benchmark/results/qwen-4b-prefix-cache-v2",
+  "server": "/home/foxtrot/local-llm-benchmark/tools/llama-bin/llama-server",
+  "server_sha256": "da1068f30d898c10c02c754ebef3b5b877073213989ff5ef9dfb2d4332e265f0",
+  "node": "/home/foxtrot/.nvm/versions/node/v25.5.0/bin/node",
+  "models": {
+    "q4": {"path": "/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf", "sha256": "13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983"}
+  },
+  "tasks": ["cont_path", "cont_quote", "js_plural", "js_sign", "mcp_header", "mcp_params", "py_query", "py_range", "recover_date", "recover_decode", "tests_query", "tests_range"],
+  "repair_reserve_tokens": 4096,
+  "sampling": {"off": {"temperature": 0}},
+  "arms": {
+    "P-W16": {"model": "q4", "context": 16384, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false},
+    "P-WL-cold": {"model": "q4", "context": 65536, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false},
+    "P-WL-warm": {"model": "q4", "context": 65536, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false}
+  }
+}

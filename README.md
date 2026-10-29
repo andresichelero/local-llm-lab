@@ -1,6 +1,6 @@
 # Benchmark de LLM local: Qwen3.5-4B em RTX 3070 (8 GB)
 
-> **English summary.** This repository is a reproducible, single-machine benchmark of a local coding agent. Qwen3.5-4B runs on llama.cpp v0.8.0 (CUDA 13.0) on an NVIDIA RTX 3070 8 GB under WSL2, driven by OpenCode 1.19.5 inside a bubblewrap sandbox. A 12-task pilot corpus (Bottle 0.13.2 and ms 2.1.3) is graded by private oracles, and each runtime factor (context, KV cache type, weight quantization, prompt cache, thinking mode) is varied one at a time from a control arm. Stages 1 to 3 (132 episodes: 12 per arm and 24 for the control) show no statistically significant difference between arms. Prompt caching is essential for latency, and thinking mode had the highest success rate (11/12) at about three times the time per task. Stage 4 is configured, and no stage 4 results are part of this change. Campaigns before 2026-10-28 were removed from this tree and remain in the git history.
+> **English summary.** This repository is a reproducible, single-machine benchmark of a local coding agent. Qwen3.5-4B runs on llama.cpp v0.8.0 (CUDA 13.0) on an NVIDIA RTX 3070 8 GB under WSL2, driven by OpenCode 1.19.5 inside a bubblewrap sandbox. A 12-task pilot corpus (Bottle 0.13.2 and ms 2.1.3) is graded by private oracles, and each runtime factor (context, KV cache type, weight quantization, prompt cache, thinking mode) is varied one at a time from a control arm. Stages 1 to 3 (132 episodes: 12 per arm and 24 for the control) show no statistically significant difference between arms. Prompt caching is essential for latency. Stage 4 replicated the control (25/36) and Q6_K (27/36), did not confirm the stage 3 thinking gain, and showed that MTP speculative decoding (+55% decode) and context checkpoints cut task time by about a third. Stage 5 found that a cascade that retries a visibly failed attempt with thinking enabled lifted 7/12 to 11/12, while the RTK output filter hurt (6/12). Long-task marathons favoured a large context over compaction or resets, and a cached 46K-token repository prefix cut time to first token from 16 s to 0.16 s. Campaigns before 2026-10-28 were removed from this tree and remain in the git history.
 
 ## Resumo
 
@@ -39,17 +39,22 @@ Leitura, com cautela:
 - **Cache de prompt:** sem cache, o TTFT mediano sobe de 296 ms para cerca de 7,5 s e o tempo mediano dos episódios vai de 42 s para 115 s. A taxa de acerto não mudou de forma detectável (9 de 12, pareado p = 1,0).
 - **Thinking:** 11 de 12 (92%), contra 16 de 24 no controle. O tempo mediano dos sucessos foi 109 s, contra 36 s. O pareamento dá 3 vitórias e nenhuma derrota (p = 0,25). Na replicação da etapa 4, o thinking acertou 16 de 24 (67%). Somando as duas, são 27 de 36 (75%), dentro do ruído do controle.
 - **Etapa 4 (replicação e servidor):** controle 25/36, Q6_K 27/36, MTP com decode 55% mais rápido, checkpoints de contexto com tempo dos sucessos 34% menor. Tabela completa em [docs/RESULTS.md](docs/RESULTS.md), seção 7.
+- **Etapa 5 (pesos, ferramentas e cascatas):** a cascata que repete com thinking ligado quando a verificação visível falha passou de 7/12 para 11/12 (4 de 4 resgates). A cascata para o 9B resgatou 1 de 3. O plugin RTK piorou (6/12). LSP, Q6_K_L, UD-Q6_K_XL e UD-Q4_K_XL ficaram entre 9 e 10/12, sem diferença significativa. Ver [docs/RESULTS.md](docs/RESULTS.md), seção 8.
+- **Tarefas longas (T2):** em maratonas de 5 a 6 objetivos, o contexto grande passou em 9/9 oráculos. Headroom ficou em 7/9, a compactação do OpenCode em 6/9 e o reset com `PROGRESS.md` em 5/9. Ver seção 9.
+- **Prefixo do repositório em cache (T3b):** com cerca de 46 mil tokens já no cache, o TTFT cai de 16,1 s para 0,16 s. A qualidade não pôde ser medida por defeitos de desenho; ver seção 10.
 - **Significância:** nenhuma comparação atinge p < 0,05. No braço de 16K, com 5 derrotas e nenhuma vitória, o p bilateral é 0,0625, que é o menor valor possível com cinco pares discordantes na mesma direção. Use estes números como sinais para a próxima etapa, não como ranking.
 
 ## Configuração recomendada
 
-Estas recomendações saem das etapas 1 a 4 (detalhes da etapa 4 em [docs/RESULTS.md](docs/RESULTS.md), seção 7).
+Estas recomendações saem das etapas 1 a 5 e das campanhas T2 e T3b (detalhes em [docs/RESULTS.md](docs/RESULTS.md), seções 7 a 10).
 
 - **Contexto:** 32K é o mínimo, e 64K dá margem. Com OpenCode, 16K não serve neste corpus.
 - **KV cache:** q4_0. Não houve perda mensurável e é o de menor VRAM.
 - **Pesos:** Q4_K_M ou Q6_K. Somando as etapas, Q6_K teve 77% (37/48) e Q4_K_M 68% (41/60), diferença não significativa. Q6_K usa cerca de 550 MiB a mais. O Q4_K_M da unsloth não foi melhor que o do bartowski (7/12).
 - **Cache de prompt:** ligado. Sem ele, a latência cresce cerca de 25 vezes.
-- **Thinking:** desligado. A vantagem da etapa 3 (11/12) não se repetiu na etapa 4 (16/24), e o tempo cresce cerca de 3,3 vezes.
+- **Thinking:** desligado na primeira tentativa e ligado só na escalada. Ligado sempre, a vantagem da etapa 3 (11/12) não se repetiu na etapa 4 (16/24), e o tempo cresce cerca de 3,3 vezes. Como cascata, quando a verificação visível falha, resgatou 4 de 4 casos na etapa 5, com cerca de 116 s extras por resgate.
+- **Ferramentas:** sem RTK, que piorou o acerto (6/12). O LSP é neutro; o modelo nunca chamou a ferramenta `lsp` por conta própria.
+- **Tarefas longas:** contexto grande com cache, enquanto couber na VRAM (pico de 5,4 GB). Se for preciso limitar o contexto, Headroom foi melhor que a compactação nativa e que o reset.
 - **Servidor:** MTP (`--spec-type draft-mtp --spec-draft-n-max 2`) aumenta o decode de 74 para 115 tok/s (aceitação 91%). Checkpoints de contexto (`--ctx-checkpoints 64 --checkpoint-min-step 1024`) reduzem o tempo dos sucessos de 37 para 25 s. Nenhum dos dois teve efeito mensurável no acerto.
 - **Amostragem:** temperatura 0. A amostragem recomendada pela Qwen teve 6/12.
 - **Passos do OpenCode:** 40. Com 80 o resultado foi 10/12, sem ganho claro.
@@ -122,7 +127,7 @@ benchmark/
 corpus/                   12 tarefas: hosts (Bottle 0.13.2 e ms 2.1.3), tarefas, oráculos,
                           stubs, suporte, prefixos e manifesto de hashes
 tests/                    16 arquivos de teste dos módulos mantidos
-results/3070-benchmark/   agregados das etapas 1 a 3 (CSV e Markdown)
+results/3070-benchmark/   agregados das etapas 1 a 5, T2 e T3b
 reports/                  relatórios das etapas F0, F1, F3 e T1, copiados sem logs nem snapshots
 ```
 
@@ -136,7 +141,9 @@ reports/                  relatórios das etapas F0, F1, F3 e T1, copiados sem l
 - **TTFT por proxy.** O TTFT mede o tempo até o primeiro conteúdo, reasoning ou chamada de ferramenta, visto pelo proxy local. Pode estar indisponível para algumas requisições.
 - **Campos ausentes nos resultados v5 e v6.** A taxonomia automática de término e as métricas de qualidade do diff (linhas, escopo, testes enfraquecidos) foram adicionadas depois. Os resultados das etapas 1 a 3 trazem esses campos vazios ou nulos. As causas de falha vêm dos rótulos `failure` gravados pelo runner.
 - **Retentativas por infraestrutura.** Duas unidades de v6 tiveram a primeira tentativa anulada por falha do avaliador. A segunda tentativa, que passou, entrou no acerto. Isso segue o protocolo. Em v5, uma falha do modelo foi classificada como infraestrutura e repetida. Essa classificação foi corrigida em v6.
-- **Etapa 4 com uma repetição na maioria dos braços.** Os braços `S-*` têm 12 episódios e só detectam diferenças acima de cerca de 25 pontos.
+- **Etapas 4 e 5 com uma repetição na maioria dos braços.** Os braços `S-*`, `Q5-*`, `T5-*` e `X-*` têm 12 episódios e só detectam diferenças acima de cerca de 25 pontos. As maratonas do T2 têm uma repetição cada.
+- **T3b mede só a cópia exata na primeira tentativa.** O prefixo comum mascara as linhas das tarefas, e o modelo copia o marcador para o bloco SEARCH. O worker F3 também não oferece reparo quando a edição não aplica. Com temperatura 0, as três repetições saíram idênticas.
+- **Landlock em drvfs.** O sandbox Landlock do verificador não funciona em `/mnt/d`. O T3b roda de uma cópia do repositório no ext4 do WSL.
 - **Corpus piloto.** As 12 tarefas não foram calibradas com o modelo nem são um conjunto de confirmação. O `bottle.py` tem cerca de 51 mil tokens, estimados por caracteres.
 - **Reprodução em outra máquina.** O config tem caminhos e SHA-256 do laboratório. Para outra máquina, é preciso um novo `protocol_id`, pois o manifesto recusa misturar protocolos.
 
@@ -144,10 +151,12 @@ reports/                  relatórios das etapas F0, F1, F3 e T1, copiados sem l
 
 Fonte da etapa 4: [relatório T1](reports/analise-estrategia-4b-2026-10-28/execucao/F1/T1-coleta-e-etapa4.md). O plano estratégico v2 e o backlog de 29/10/2026 ficam fora desta árvore; a ordem abaixo segue o que foi combinado neles.
 
-1. **Etapa 4:** 168 episódios, com 3 repetições de controle e Q6_K, 2 repetições de thinking e uma repetição de cada variação de amostragem, passos, contexto, checkpoints, MTP e Q4_K_M do unsloth. Só roda com autorização explícita para usar a GPU.
-2. **Tarefas longas (T2).** Tarefas mais longas que o corpus piloto.
-3. **Prefixo grande em cache e cascata 4B para 9B (T3).** Contexto de 40 a 100 mil tokens reaproveitado no cache, e escalada para um modelo maior quando o 4B falhar.
-4. **LSP, MCP e quantizações novas.**
+Concluídos em 29/10/2026: etapa 4, etapa 5 (pesos, LSP, RTK e cascatas), tarefas longas (T2) e prefixo em cache (T3b).
+
+1. **Confirmar as direções fortes:** replicar a cascata com thinking e o RTK em 3 repetições, e o T2 (contexto grande contra Headroom) em 3 repetições.
+2. **T3b v3:** trecho real no pacote WL, reparo também após edição rejeitada e 1 repetição por tarefa, para medir se o contexto longo melhora a qualidade.
+3. **Campanha combinada:** MTP, checkpoints e a cascata com thinking, com Q4_K_M e com Q6_K.
+4. **MCP** e quantizações novas, conforme forem lançadas.
 5. **Backlog P1:** consolidar a configuração de uso; ampliar o corpus de 12 para 24 a 36 tarefas inéditas; comparar ExLlamaV3 com TabbyAPI contra llama.cpp, depois de verificar as tool calls do Qwen3.5 híbrido; comparar o custo com um modelo grande no mesmo corpus.
 6. **Backlog P2:** mistral.rs com o mesmo GGUF; trabalhador delimitado em escala; llama.cpp nativo no Windows contra WSL2; recompilar com `GGML_CUDA_FA_QUANTS` para KV misto.
 7. **Backlog P3, fora do escopo do 4B:** vLLM ou LMDeploy com AWQ e GPTQ-Marlin; offload de MoE maior que a VRAM; modelos de 7 a 14B; LoRA de agente.

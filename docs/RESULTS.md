@@ -144,3 +144,70 @@ Dados brutos: `qwen-4b-opencode-baseline-bwrap-v7` (168 episódios, protocolo v7
 Agregando as etapas 1 a 4 (IC 95% de Wilson): Q4_K_M 41/60 = 68% (56%–79%); Q6_K 37/48 = 77% (63%–87%); thinking 27/36 = 75% (59%–86%). No pareamento C4-q4 × C4-q6, por tarefa e repetição, há 4 casos só do Q4 e 6 só do Q6, sem significância.
 
 Leitura: a vantagem do thinking na etapa 3 (92%) não se repetiu, e ele custa cerca de 3,3 vezes mais tempo. MTP (+55% de decode) e checkpoints de contexto reduzem o tempo mediano dos sucessos em cerca de um terço, sem efeito mensurável no acerto. Q6_K continua sendo o melhor peso, sem diferença significativa. Com o protocolo v7 e a etapa 4, o teste `test_schedule_matches_matrix` espera 300 unidades, igual ao config.
+
+## 8. Etapa 5: pesos, ferramentas e cascatas (protocolo stage5-v2)
+
+Os dados brutos estão em `qwen-4b-opencode-stage5-v2`: 96 episódios (8 braços × 12 tarefas × 1 repetição), sem nenhuma falha de infraestrutura.
+
+- Agregado: [stage5-detail.txt](../results/3070-benchmark/stage5-detail.txt).
+- Análise: [B-etapa5-pesos-ferramentas-cascatas.md](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/B-etapa5-pesos-ferramentas-cascatas.md).
+
+Conta a primeira tentativa.
+
+| Braço | Mudança | Acertos | IC 95% (Wilson) | Tempo mediano (s) |
+| --- | --- | --- | --- | --- |
+| `Q5-Q6KL` | Q6_K_L (bartowski) | 10/12 | 55%–95% | 56.1 |
+| `Q5-UDQ6XL` | UD-Q6_K_XL (unsloth) | 10/12 | 55%–95% | 40.1 |
+| `T5-lsp-tool` | LSP + ferramenta `lsp` (0 chamadas) | 10/12 | 55%–95% | 37.8 |
+| `Q5-UDQ4XL` | UD-Q4_K_XL (unsloth) | 9/12 | 47%–91% | 34.2 |
+| `T5-lsp` | diagnósticos Pyright | 9/12 | 47%–91% | 67.0 |
+| `X-9b` (1ª tentativa) | igual ao controle | 8/12 | 39%–86% | 37.3 |
+| `X-think` (1ª tentativa) | igual ao controle | 7/12 | 32%–81% | 44.4 |
+| `T5-rtk` | plugin RTK | 6/12 | 25%–75% | 44.2 |
+
+As cascatas só escalam quando há falha visível ou falha do modelo:
+
+| Cascata | 1ª tentativa | Escalonamentos | Resultado final | Tempo extra |
+| --- | --- | --- | --- | --- |
+| `X-think`: 2ª tentativa com thinking ligado | 7/12 | 4 | 11/12 | 465 s |
+| `X-9b`: 2ª tentativa com o 9B Q4_K_M | 8/12 | 3 | 9/12 | 813 s |
+
+Leitura:
+- Nenhum braço difere do controle de forma significativa.
+- A cascata com thinking resgatou todos os casos escalados, sem trocar de modelo.
+- O RTK reescreve o pytest para `rtk pytest`, o que resume a saída. Foi o pior braço e o que mais gastou prompt.
+
+## 9. Tarefas longas (T2, protocolo long-tasks-v2)
+
+Os dados brutos estão em `qwen-4b-opencode-long-tasks-20261029-v2`: 8 maratonas (4 braços × 2 maratonas × 1 repetição), sem nenhuma falha de infraestrutura.
+
+- Agregado: [t2-long-tasks-summary.txt](../results/3070-benchmark/t2-long-tasks-summary.txt).
+- Análise: [T2-resultados-tarefas-longas.md](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/T2-resultados-tarefas-longas.md).
+
+| Braço | M1 (de 4 oráculos) | M2 (de 5 oráculos) | Total | Tokens de prompt | VRAM pico (MiB) |
+| --- | --- | --- | --- | --- | --- |
+| `L-bigctx` | 4 | 5 | 9/9 | 7,87 M | 5432 |
+| `L-headroom` | 2 | 5 | 7/9 | 2,41 M | 4077 |
+| `L-compact` | 3 | 3 | 6/9 | 1,52 M | 4103 |
+| `L-reset` | 3 | 2 | 5/9 | 2,01 M | 4077 |
+
+Não houve regressão nem OOM. A instrumentação registra o pedido de compactação, mas não confirma que ela terminou.
+
+## 10. Prefixo do repositório em cache (T3b, protocolo prefix-cache-v2)
+
+Os dados brutos estão em `qwen-4b-prefix-cache-v2`: 108 unidades (3 braços × 12 tarefas × 3 repetições), sem nenhuma falha de infraestrutura. As repetições saíram idênticas com temperatura 0, então a amostra efetiva é de 12 tarefas por braço.
+
+- Agregado: [t3b-prefix-cache-summary.json](../results/3070-benchmark/t3b-prefix-cache-summary.json).
+- Análise: [T3b-prefixo-em-cache.md](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/T3b-prefixo-em-cache.md).
+
+| Braço | Tarefas aprovadas | TTFT mediano | Tokens do cache | Tempo mediano (s) | VRAM pico (MiB) |
+| --- | --- | --- | --- | --- | --- |
+| `P-W16`: trechos de até 16K | 2/12 | 82 ms | 2.844 | 8.3 | 3871 |
+| `P-WL-cold`: prefixo de cerca de 46K, cache frio | 1/12 | 16,1 s | 0 | 22.1 | 4510 |
+| `P-WL-warm`: o mesmo prefixo, já no cache | 2/12 | 158 ms | 45.455 | 9.2 | 4508 |
+
+Conclusões:
+- O cache torna viável um prefixo de 46 mil tokens na 3070.
+- A qualidade é inconclusiva, por dois motivos:
+  - o prefixo mascarado induz o marcador `# task-specific line withheld` no bloco SEARCH;
+  - o worker F3 não repara edições rejeitadas.

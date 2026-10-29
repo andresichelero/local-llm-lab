@@ -511,7 +511,18 @@ def grade(config, task_id, workspace, output, timeout=120):
         return {'passed': True, 'status': 'pass'}
     if proc.returncode == 1 and evidence.get('assertions', 0) > 0 and evidence.get('errors') == 0:
         return {'passed': False, 'status': 'fail'}
+    # The probe counts any non-assertion exception as an error, including one raised by the
+    # candidate code inside the test body. Pytest reports those as "failed"; setup and
+    # collection problems are reported as "error" and stay infrastructure.
+    if proc.returncode == 1 and candidate_exception_only(proc.stdout):
+        return {'passed': False, 'status': 'fail'}
     return {'passed': None, 'status': 'infrastructure'}
+
+
+def candidate_exception_only(pytest_output):
+    lines = [line for line in pytest_output.strip().splitlines() if line.strip()]
+    summary = lines[-1] if lines else ''
+    return bool(re.search(r'\b\d+ failed\b', summary)) and not re.search(r'\b\d+ errors?\b', summary)
 
 
 def write_json(path, value):

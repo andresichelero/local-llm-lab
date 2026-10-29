@@ -351,3 +351,15 @@ def test_request_metrics_and_resource_summary():
                                           'windows_available_mib': None, 'vram_mib': 5}])
     assert summary['cpu_percent']['mean'] == 50
     assert summary['windows_available_mib']['mean'] is None
+
+
+@pytest.mark.parametrize('output, expected', [
+    # Candidate code raised TypeError inside the test body: a model failure, not infrastructure.
+    ('F   [100%]\nE   TypeError: bad keyword\nFAILED oracle.py::test_private_contract\n1 failed in 0.16s\n', True),
+    ('1 failed, 1 passed in 0.20s\n', True),
+    ('E   ImportError while loading conftest\n1 error in 0.05s\n', False),
+    ('1 failed, 1 error in 0.10s\n', False),
+    ('', False),
+])
+def test_candidate_exception_only(output, expected):
+    assert baseline.candidate_exception_only(output) is expected
