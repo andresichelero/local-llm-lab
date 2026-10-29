@@ -115,3 +115,36 @@ def test_outcomes_require_assertion_failure_not_infrastructure_error(
 ):
     validator = load_validator()
     assert validator.valid_outcomes(bug, reference, visible, original) is expected
+
+def test_detect_node_prefers_override_and_finds_latest_nvm(tmp_path, monkeypatch):
+    validator = load_validator()
+    monkeypatch.delenv('CORPUS_NODE', raising=False)
+    monkeypatch.setenv('PATH', '')
+    monkeypatch.setattr(validator.Path, 'home', lambda: tmp_path)
+    for version in ('v9.0.0', 'v25.5.0'):
+        node = tmp_path / '.nvm' / 'versions' / 'node' / version / 'bin' / 'node'
+        node.parent.mkdir(parents=True)
+        node.write_text('node')
+        node.chmod(0o755)
+    assert 'v25.5.0' in validator.detect_node()
+    override = tmp_path / 'custom-node'
+    override.write_text('node')
+    override.chmod(0o755)
+    monkeypatch.setenv('CORPUS_NODE', str(override))
+    assert validator.detect_node() == str(override)
+
+
+def test_detect_node_missing_has_clear_error(tmp_path, monkeypatch):
+    validator = load_validator()
+    monkeypatch.delenv('CORPUS_NODE', raising=False)
+    monkeypatch.setenv('PATH', '')
+    monkeypatch.setattr(validator.Path, 'home', lambda: tmp_path)
+    with pytest.raises(RuntimeError, match='Node.*CORPUS_NODE'):
+        validator.detect_node()
+
+
+def test_detect_node_reports_invalid_override(tmp_path, monkeypatch):
+    validator = load_validator()
+    monkeypatch.setenv('CORPUS_NODE', str(tmp_path / 'missing-node'))
+    with pytest.raises(RuntimeError, match='CORPUS_NODE.*executable'):
+        validator.detect_node()

@@ -15,11 +15,14 @@ from __future__ import annotations
 
 import argparse
 import ast
+import difflib
 import hashlib
 import json
 import os
 import re
+import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -47,6 +50,10 @@ class EditStatus(str, Enum):
     SYNTAX_LEAK = "syntax_leak"
     HELPER_DELETION_VIOLATION = "helper_deletion_violation"
     INVALID_SYNTAX = "invalid_syntax"
+    MALFORMED_OUTPUT = "malformed_output"
+    OUTSIDE_ALLOWLIST = "outside_allowlist"
+    PROTECTED_FILE = "protected_file"
+    VALIDATOR_UNAVAILABLE = "validator_unavailable"
 
 
 @dataclass(frozen=True)
@@ -369,6 +376,188 @@ def apply_guarded_edit(
         status=EditStatus.APPLIED,
         new_sha256=new_sha,
     )
+
+
+@dataclass(frozen=True)
+class BatchFileReceipt:
+    path: str
+    before_sha256: str
+    after_sha256: str
+    diff: str
+    blocks_applied: tuple[dict[str, str], ...]
+
+
+@dataclass(frozen=True)
+class BatchResult:
+    success: bool
+    status: EditStatus
+    original_output: str
+    files: tuple[BatchFileReceipt, ...] = ()
+    error_message: str = ""
+
+
+def apply_edit_batch(workspace_root: Path, output: str, input_hashes: dict[str, str],
+                     writable_files: list[str], *,
+                     authored_tests: tuple[str, ...] = ()) -> BatchResult:
+    """Apply exact blocks; format: FILE: path, SEARCH marker, text, separator, text, REPLACE marker.
+
+    Every marker occupies its own LF-terminated line; blocks concatenate without
+    fences or prose. Empty SEARCH creates an absent allowlisted file only.
+    """
+    def reject(status: EditStatus, message: str) -> BatchResult:
+        return BatchResult(False, status, output, error_message=message)
+
+    pattern = re.compile(
+        r"FILE: ([^\r\n]+)\n<<<<<<< SEARCH\n(.*?)^=======\n(.*?)^>>>>>>> REPLACE\n",
+        re.DOTALL | re.MULTILINE,
+    )
+    blocks = []
+    pos = 0
+    while pos < len(output):
+        match = pattern.match(output, pos)
+        if not match:
+            return reject(EditStatus.MALFORMED_OUTPUT, "Invalid SEARCH/REPLACE grammar")
+        path, search, replacement = match.groups()
+        if any(marker in search or marker in replacement for marker in
+               ("<<<<<<< SEARCH", "=======", ">>>>>>> REPLACE", "FILE: ")):
+            return reject(EditStatus.MALFORMED_OUTPUT, "Reserved marker in block")
+        blocks.append((path, search, replacement))
+        pos = match.end()
+    if not blocks:
+        return reject(EditStatus.MALFORMED_OUTPUT, "No blocks")
+    root = Path(workspace_root).resolve()
+    original: dict[str, bytes] = {}
+    contents: dict[str, str] = {}
+    targets: dict[str, Path] = {}
+    counts: dict[str, int] = {}
+    applied: dict[str, list[dict[str, str]]] = {}
+    existed: dict[str, bool] = {}
+    for name, search, replacement in blocks:
+        try:
+            target = _resolve_workspace_path(Path(name), root)
+        except _WorkspacePathError as err:
+            return reject(err.status, str(err))
+        canonical = target.relative_to(root).as_posix()
+        if name != canonical or name not in writable_files:
+            return reject(EditStatus.OUTSIDE_ALLOWLIST, name)
+        is_test = (any(part in {"test", "tests"} for part in target.parts)
+                   or target.name.startswith("test_") or target.name.endswith("_test.py"))
+        if "oracles" in target.parts or (is_test and target.exists() and name not in authored_tests):
+            return reject(EditStatus.PROTECTED_FILE, name)
+        if name not in contents:
+            existed[name] = target.exists()
+            if existed[name] and not target.is_file():
+                return reject(EditStatus.FILE_NOT_FOUND, name)
+            raw = target.read_bytes() if existed[name] else b""
+            digest = hashlib.sha256(raw).hexdigest()
+            if input_hashes.get(name) != digest:
+                return reject(EditStatus.STALE_SHA, name)
+            try:
+                contents[name] = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                return reject(EditStatus.INVALID_SYNTAX, "Target is not UTF-8")
+            original[name], targets[name], counts[name] = raw, target, 0
+            applied[name] = []
+        if check_syntax_leak(replacement):
+            return reject(EditStatus.SYNTAX_LEAK, name)
+        if not search:
+            if existed[name] or counts[name]:
+                return reject(EditStatus.EMPTY_SEARCH, name)
+            contents[name] = replacement
+        else:
+            first = contents[name].find(search)
+            if first < 0:
+                return reject(EditStatus.ZERO_OCCURRENCES, name)
+            if contents[name].find(search, first + 1) >= 0:
+                return reject(EditStatus.MULTIPLE_OCCURRENCES, name)
+            contents[name] = contents[name].replace(search, replacement, 1)
+        counts[name] += 1
+        applied[name].append({"search": search, "replace": replacement})
+    receipts = []
+    for name, content in contents.items():
+        if targets[name].suffix == ".py":
+            try:
+                compile(content, str(targets[name]), "exec", dont_inherit=True)
+            except SyntaxError as err:
+                return reject(EditStatus.INVALID_SYNTAX, str(err))
+            if not check_helper_preservation(original[name].decode(), content)[0]:
+                return reject(EditStatus.HELPER_DELETION_VIOLATION, name)
+        elif targets[name].suffix in {".js", ".cjs", ".mjs"}:
+            node = os.environ.get("CORPUS_NODE") or shutil.which("node")
+            if not node:
+                versions = []
+                for candidate in (Path.home() / ".nvm/versions/node").glob("v*/bin/node"):
+                    try:
+                        version = tuple(int(part) for part in candidate.parent.parent.name[1:].split("."))
+                    except ValueError:
+                        continue
+                    if candidate.is_file() and os.access(candidate, os.X_OK):
+                        versions.append((version, candidate))
+                if versions:
+                    node = str(max(versions)[1])
+            if not node:
+                return reject(EditStatus.VALIDATOR_UNAVAILABLE, "Node is required to check JavaScript")
+            try:
+                command = [node, "--check"]
+                if targets[name].suffix == ".mjs":
+                    command.append("--input-type=module")
+                checked = subprocess.run([*command, "-"], input=content, text=True,
+                                         capture_output=True, timeout=10, check=False)
+            except TimeoutError:
+                raise
+            except (OSError, subprocess.TimeoutExpired) as err:
+                return reject(EditStatus.VALIDATOR_UNAVAILABLE, str(err))
+            if checked.returncode:
+                return reject(EditStatus.INVALID_SYNTAX, "JavaScript syntax check failed")
+        before = original[name].decode()
+        receipts.append(BatchFileReceipt(name, hashlib.sha256(original[name]).hexdigest(),
+                         hashlib.sha256(content.encode()).hexdigest(),
+                         "".join(difflib.unified_diff(before.splitlines(True),
+                                 content.splitlines(True), fromfile="a/" + name,
+                                 tofile="b/" + name)), tuple(applied[name])))
+    # All validation precedes writes. Roll back any already replaced files on I/O failure.
+    staged: dict[str, Path] = {}
+    backups: dict[str, Path] = {}
+    written: list[str] = []
+    retain_backups = False
+    try:
+        for name, target in targets.items():
+            fd, temp = tempfile.mkstemp(dir=target.parent, prefix=".worker-", suffix=".tmp")
+            staged[name] = Path(temp)
+            with os.fdopen(fd, "wb") as f:
+                f.write(contents[name].encode())
+            if existed[name]:
+                os.chmod(temp, stat.S_IMODE(target.stat().st_mode))
+                backup_fd, backup_name = tempfile.mkstemp(
+                    dir=target.parent, prefix=".worker-backup-", suffix=".tmp")
+                backups[name] = Path(backup_name)
+                with os.fdopen(backup_fd, "wb") as backup:
+                    backup.write(original[name])
+                os.chmod(backup_name, stat.S_IMODE(target.stat().st_mode))
+        for name, target in targets.items():
+            written.append(name)
+            os.replace(staged[name], target)
+    except BaseException as failure:
+        rollback_errors = []
+        for name in reversed(written):
+            try:
+                if existed[name]:
+                    os.replace(backups[name], targets[name])
+                else:
+                    targets[name].unlink(missing_ok=True)
+            except OSError as err:
+                rollback_errors.append(f"{name}: {err}")
+        if rollback_errors:
+            retain_backups = True
+            raise RuntimeError("Rollback failed; backups retained: " + "; ".join(rollback_errors)) from failure
+        raise
+    finally:
+        for temp in staged.values():
+            temp.unlink(missing_ok=True)
+        if not retain_backups:
+            for backup in backups.values():
+                backup.unlink(missing_ok=True)
+    return BatchResult(True, EditStatus.APPLIED, output, tuple(receipts))
 
 
 def main(argv: list[str] | None = None) -> int:
