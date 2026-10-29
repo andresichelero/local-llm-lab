@@ -232,7 +232,16 @@ class WorkerRunner:
                 edit = apply_edit_batch(self.workspace, output, hashes, package.writable_files,
                                         authored_tests=authored)
                 if not edit.success:
+                    if package.budgets.get('repair_rejected_edits', False):
+                        self._record('edit_rejected', turn=turn, status=edit.status.value)
                     state = 'infrastructure_error' if edit.status == EditStatus.VALIDATOR_UNAVAILABLE else 'rejected'
+                    if (state == 'rejected' and package.budgets.get('repair_rejected_edits', False)
+                            and turn < package.budgets['repairs']):
+                        messages.extend([{'role': 'assistant', 'content': output},
+                                         {'role': 'user', 'content': f'Edit rejected ({edit.status.value}): '
+                                          f'{edit.error_message}. Copy each SEARCH block exactly from the '
+                                          'current file text shown above and resend the complete edit.'}])
+                        continue
                     return self.finalize(state, reason=edit.status.value)
                 hashes.update({item.path: item.after_sha256 for item in edit.files})
                 self._record('verifying', turn=turn, receipts=[vars(item) for item in edit.files])
@@ -251,6 +260,8 @@ class WorkerRunner:
                 diagnostic = check.diagnostic.strip()
                 if turn >= package.budgets['repairs'] or not diagnostic or diagnostic in package.markdown:
                     return self.finalize('rejected', reason='no_new_visible_diagnostic')
+                if package.budgets.get('repair_rejected_edits', False):
+                    self._record('visible_repair', turn=turn)
                 messages.extend([{'role': 'assistant', 'content': output},
                                  {'role': 'user', 'content': 'Visible verification failed:\n' + diagnostic}])
             return self.finalize('rejected', reason='repair_exhausted')

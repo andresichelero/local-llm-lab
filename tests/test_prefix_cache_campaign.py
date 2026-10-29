@@ -1,5 +1,65 @@
 """Offline tests for the prefix-cache campaign planner."""
-from benchmark.prefix_cache_campaign import estimate_tokens, schedule, terminate_last_marker
+from benchmark.prefix_cache_campaign import (
+    estimate_tokens,
+    schedule,
+    terminate_last_marker,
+)
+
+
+def test_v3_schedule_and_marker_detection():
+    from benchmark.prefix_cache_campaign import marker_in_search
+
+    assert len(schedule([{'id': 'a', 'host': 'h'}], 1)) == 3
+    assert marker_in_search('<<<<<<< SEARCH\n# task-specific line withheld\n=======\nx\n>>>>>>> REPLACE\n')
+    assert not marker_in_search('<<<<<<< SEARCH\nx\n=======\n# task-specific line withheld\n>>>>>>> REPLACE\n')
+
+
+def test_withheld_alignment_after_insertions():
+    from benchmark.prefix_cache_campaign import withheld_section
+
+    prefix = 'a\nb\n# task-specific line withheld\nd\ne\nf\n'
+    current = 'new\na\nb\nchanged\nd\ne\nf\n'
+    section = withheld_section(prefix, current, 'bottle.py')
+    assert '4: changed' in section
+    assert '2: a' in section and '6: e' in section
+    assert section == withheld_section(prefix, current, 'bottle.py')
+
+
+def test_withheld_alignment_fails_when_marker_has_no_current_line():
+    import pytest
+
+    from benchmark.prefix_cache_campaign import withheld_section
+
+    with pytest.raises(ValueError, match='cannot align'):
+        withheld_section('a\n# task-specific line withheld\nb\n', 'a\nb\n', 'bottle.py')
+
+
+def test_wl_package_contains_current_withheld_lines_only_for_wl(tmp_path):
+    import json
+
+    from benchmark import prefix_cache_campaign as campaign
+
+    task = json.loads((campaign.CORPUS / 'tasks/py_range/task.json').read_text())
+    source = campaign.CORPUS / 'hosts' / task['host'] / 'bottle.py'
+    (tmp_path / 'bottle.py').write_bytes(source.read_bytes())
+    w16 = campaign.make_package(task, tmp_path, 'P-W16')
+    cold = campaign.make_package(task, tmp_path, 'P-WL-cold')
+    warm = campaign.make_package(task, tmp_path, 'P-WL-warm')
+    assert 'withheld_prefix_lines' not in w16.readonly_context
+    section = cold.readonly_context['withheld_prefix_lines']
+    assert section == warm.readonly_context['withheld_prefix_lines']
+    assert section in cold.markdown and 'never from a marker line' in section
+
+
+def test_summary_counts_repair_episodes_and_last_rejection():
+    from benchmark.prefix_cache_campaign import summarize
+
+    rows = [{'arm': 'P-W16', 'task': 'a', 'repetition': 1, 'success': False,
+             'category': 'model', 'edit_repair': True, 'visible_repair': True,
+             'last_edit_rejection': 'zero_occurrences'}]
+    arm = summarize(rows)['arms']['P-W16']
+    assert arm['edit_repair_episodes'] == arm['visible_repair_episodes'] == 1
+    assert arm['last_edit_rejection_statuses'] == {'zero_occurrences': 1}
 
 
 def test_schedule_pairs_each_task_and_repetition():
@@ -125,6 +185,8 @@ def test_real_runner_repair_then_private_grade(monkeypatch, tmp_path):
     row = campaign.run_episode({}, task, unit, server, None, tmp_path / 'episode')
     assert events == ['visible', 'visible', 'private']
     assert row['success'] and row['repairs'] == 1
+    assert row['visible_repair'] and not row['edit_repair']
+    assert row['last_edit_rejection'] is None and not row['marker_in_search']
     assert row['prompt_n'] == 20 and row['cache_n'] == 10 and row['generated_tokens'] == 8
 
 

@@ -26,6 +26,40 @@ def patch(old, new):
     return f'FILE: bottle.py\n<<<<<<< SEARCH\n{old}\n=======\n{new}\n>>>>>>> REPLACE\n'
 
 
+def test_rejected_edit_repair_is_opt_in(tmp_path):
+    from dataclasses import replace
+
+    p = package(tmp_path)
+    bad, good = patch('missing', 'x = 2'), patch('x = 1', 'x = 2')
+    client = FakeClient([bad, good])
+    result = WorkerRunner(tmp_path, tmp_path / 'first.jsonl', client).run(
+        p, lambda: VisibleResult(True, ''), lambda: True)
+    assert result.reason == 'zero_occurrences' and len(client.messages) == 1
+    p = replace(p, budgets={**p.budgets, 'repair_rejected_edits': True})
+    client = FakeClient([bad, good])
+    journal = tmp_path / 'second.jsonl'
+    result = WorkerRunner(tmp_path, journal, client).run(p, lambda: VisibleResult(True, ''), lambda: True)
+    assert result.state == 'accepted'
+    assert 'Edit rejected (zero_occurrences)' in str(client.messages[1])
+    assert any(json.loads(line)['state'] == 'edit_rejected' for line in journal.read_text().splitlines())
+
+
+def test_validator_unavailable_is_never_repaired(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from benchmark import worker_runner
+    from benchmark.guarded_edit import BatchResult, EditStatus
+
+    p = package(tmp_path)
+    p = replace(p, budgets={**p.budgets, 'repair_rejected_edits': True})
+    monkeypatch.setattr(worker_runner, 'apply_edit_batch', lambda *a, **kw:
+                        BatchResult(False, EditStatus.VALIDATOR_UNAVAILABLE, '', error_message='unavailable'))
+    client = FakeClient(['bad'])
+    result = WorkerRunner(tmp_path, tmp_path / 'journal.jsonl', client).run(
+        p, lambda: VisibleResult(True, ''), lambda: True)
+    assert result.state == 'infrastructure_error' and len(client.messages) == 1
+
+
 def package(tmp_path, prefix=None):
     (tmp_path / 'bottle.py').write_text('x = 1\n')
     root = Path(__file__).resolve().parents[1] / 'corpus'
