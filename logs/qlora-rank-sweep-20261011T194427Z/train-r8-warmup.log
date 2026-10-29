@@ -1,20 +1,0 @@
-{"adapter_output": "/home/foxtrot/local-llm-benchmark/results/qlora-rank-20261011T194427Z/adapters/qwen25-coder-05b-qlora-nf4-r8-a16-20261011T194427Z-seed42", "dataset": "/home/foxtrot/local-llm-benchmark/worktrees/qlora-rank-clean/benchmark/data/qlora-smoke.jsonl", "lora_alpha": 16, "lora_rank": 8, "max_seq_length": 192, "method": "qlora", "model": "Qwen/Qwen2.5-Coder-0.5B-Instruct", "model_dir": "/home/foxtrot/local-llm-benchmark/models/Qwen2.5-Coder-0.5B-Instruct", "model_parameters": "0.49B", "optimizer": "adamw32", "result_jsonl": "/home/foxtrot/local-llm-benchmark/results/raw/qlora-rank-20261011T194427Z/train-r8-warmup.jsonl", "seed": 42, "steps": 16}
-Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:00<00:51,  5.57it/s]Loading weights:   1%|          | 3/290 [00:00<00:24, 11.62it/s]Loading weights:  14%|█▍        | 40/290 [00:00<00:01, 144.56it/s]Loading weights:  32%|███▏      | 93/290 [00:00<00:00, 277.17it/s]Loading weights:  51%|█████▏    | 149/290 [00:00<00:00, 363.09it/s]Loading weights:  72%|███████▏  | 208/290 [00:00<00:00, 434.43it/s]Loading weights:  93%|█████████▎| 269/290 [00:00<00:00, 484.47it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 355.19it/s]
-trainable params: 1,081,344 || all params: 495,114,112 || trainable%: 0.2184
-step=1/16 loss=0.295435
-step=2/16 loss=0.476395
-step=3/16 loss=0.090052
-step=4/16 loss=0.253651
-step=5/16 loss=0.117178
-step=6/16 loss=0.235869
-step=7/16 loss=0.033158
-step=8/16 loss=0.198947
-step=9/16 loss=0.026079
-step=10/16 loss=0.102760
-step=11/16 loss=0.032398
-step=12/16 loss=0.062364
-step=13/16 loss=0.023865
-step=14/16 loss=0.009554
-step=15/16 loss=0.003278
-step=16/16 loss=0.008147
-{"adapter_bytes": 4350392, "adapter_path": "/home/foxtrot/local-llm-benchmark/results/qlora-rank-20261011T194427Z/adapters/qwen25-coder-05b-qlora-nf4-r8-a16-20261011T194427Z-seed42", "adapter_sha256": "3b44d863b9c8d4f12f5da84545c7c0b15deb448f8e53654be7553ce993c8c965", "baseline_probe": "```python\ndef add(a, b):\n    return a + b\n```", "baseline_probe_seconds": 1.565, "batch_size": 1, "bitsandbytes_version": "0.50.2", "compute_dtype": "float16", "dataset": "benchmark/data/qlora-smoke.jsonl", "dataset_rows": 8, "dataset_sha256": "4ff85d0585fc875f41b0506e0a890feadcbb892fcb63a78e1c767e14283f2193", "experiment": "qlora-smoke", "final_loss": 0.00814670231193304, "git_sha": "131eabe84616db25710f28125e0f20246b111328", "gpu": "NVIDIA GeForce RTX 3070", "gradient_accumulation_steps": 1, "gradient_checkpointing": true, "gradient_checkpointing_kwargs": {"use_reentrant": false}, "import_seconds": 5.251, "initial_loss": 0.29543477296829224, "learning_rate": 0.0002, "lora_alpha": 16, "lora_rank": 8, "lora_target_modules": ["q_proj", "k_proj", "v_proj", "o_proj"], "losses": [0.29543477296829224, 0.47639524936676025, 0.09005197882652283, 0.2536511719226837, 0.1171780526638031, 0.23586854338645935, 0.03315802663564682, 0.19894655048847198, 0.026078596711158752, 0.10275987535715103, 0.03239849582314491, 0.06236446648836136, 0.023864632472395897, 0.009554032236337662, 0.0032778684981167316, 0.00814670231193304], "max_seq_length": 192, "max_steps": 16, "method": "QLoRA", "model": "Qwen/Qwen2.5-Coder-0.5B-Instruct", "model_load_seconds": 1.467, "model_parameters": "0.49B", "model_revision": "ea3f2471cf1b1f0db85067f1ef93848e38e88c25", "optimizer": "torch.optim.AdamW (32-bit states)", "peft_version": "0.21.2", "post_training_probe_seconds": 0.519, "quantization": "bitsandbytes NF4 with double quantization", "runtime": "Transformers + PEFT + bitsandbytes", "seed": 42, "source_tree_dirty": false, "steps_completed": 16, "storage_profile": "ssd-wsl-ext4-c", "success": true, "timestamp": "2026-10-11T19:44:40.366449+00:00", "torch_version": "2.10.0+cu128", "total_parameters": 495114112, "total_seconds": 12.873, "trainable_parameters": 1081344, "trained_probe": "def add(a, b):\n    return a + b", "trained_probe_static_add_ast_pass": true, "training_seconds": 3.996, "transformers_version": "5.19.0", "vram_peak_allocated_mib": 886.0, "vram_peak_reserved_mib": 1008.0}
