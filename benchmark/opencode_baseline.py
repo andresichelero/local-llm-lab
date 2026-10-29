@@ -20,7 +20,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import urlopen
 
-from benchmark.harness_runner import _isolated_environment, summarize_usage
+from benchmark.harness_runner import summarize_usage
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / 'corpus'
@@ -61,8 +61,8 @@ def profile(config, arm, port):
     base.update(autoupdate=False, model='local/local-qwen', subagent_depth=0)
     base['agent'] = {'build': {'mode': 'primary', 'steps': config['steps'], 'permission': {
         'task': {'*': 'deny'}, 'bash': {'*': 'allow'}, 'edit': {'*': 'allow'},
-        'external_directory': {'*': 'deny'}, 'webfetch': {'*': 'deny'},
-        'websearch': {'*': 'deny'}}}}
+        'external_directory': {'*': 'deny'}, 'webfetch': 'deny',
+        'websearch': 'deny'}}}
     provider = base['provider']['local']
     provider['options']['baseURL'] = f'http://127.0.0.1:{port}/v1'
     sampling = config['sampling']['on' if arm['thinking'] else 'off']
@@ -85,12 +85,25 @@ def ensure_manifest(path, value):
 def classify_failure(code, output, server_alive):
     if not server_alive:
         return 'server_exited'
+    if code == 0:
+        return None
     lower = output.lower()
+    if 'configuration is invalid' in lower:
+        return 'harness_configuration_error'
     if re.search(r'(invalid|pars|malformed|truncat|unexpected).*tool|tool.{0,120}(invalid|pars|malformed|truncat|json|error)', lower):
         return 'model_protocol_error'
     if code and ('http 500' in lower or 'status code: 500' in lower):
         return 'server_http_error'
     return 'model_cli_failure' if code else None
+
+
+def phase_failure(phase, server_log, server_alive):
+    errors = [event for event in phase['events'] if event.get('type') == 'error']
+    code = phase['code'] or (1 if errors else 0)
+    evidence = phase['stderr'] + json.dumps(errors)
+    if code:
+        evidence += server_log[-16000:]
+    return classify_failure(code, evidence, server_alive)
 
 
 def retry_infrastructure(attempt):
@@ -219,14 +232,52 @@ class Proxy:
         self.thread.join()
 
 
-def run_cli(config, workspace, env, prompt, session, timeout):
-    args = [config['opencode'], 'run', '--format', 'json', '--pure', '--agent', 'build',
-            '--model', 'local/local-qwen', '--dir', str(workspace)]
+def sandbox_environment():
+    return {'HOME': '/episode-home', 'XDG_CONFIG_HOME': '/episode-home/.config',
+            'XDG_DATA_HOME': '/episode-home/.local/share', 'XDG_CACHE_HOME': '/episode-home/.cache',
+            'XDG_RUNTIME_DIR': '/tmp', 'TMPDIR': '/tmp', 'PWD': '/workspace',
+            'PATH': '/opt/node/bin:/usr/local/bin:/usr/bin:/bin', 'LANG': 'C.UTF-8',
+            'OPENCODE_DISABLE_AUTOUPDATE': 'true', 'DO_NOT_TRACK': '1',
+            'CORPUS_NODE': '/opt/node/bin/node'}
+
+
+def bwrap_command(config, workspace, home, command):
+    executable = Path(config['opencode']).resolve(strict=True)
+    node = Path(config['node']).resolve(strict=True)
+    return [config['bwrap'], '--die-with-parent', '--unshare-pid', '--ro-bind', '/usr', '/usr',
+            '--symlink', 'usr/lib', '/lib', '--symlink', 'usr/lib64', '/lib64',
+            '--symlink', 'usr/bin', '/bin', '--proc', '/proc', '--dev', '/dev',
+            '--tmpfs', '/tmp', '--dir', '/opt', '--ro-bind', str(executable.parent), '/opt/opencode',
+            '--ro-bind', str(node.parent.parent), '/opt/node', '--bind', str(workspace), '/workspace',
+            '--bind', str(home), '/episode-home', '--chdir', '/workspace', '--', *command]
+
+
+def verify_isolation(config, workspace, home, task_id):
+    oracle = str(CORPUS / 'oracles' / task_id / 'oracle.py')
+    script = ('test -r /workspace/TASK.md || exit 10; '
+              'cat "$1" >/dev/null 2>&1 && exit 11; '
+              'ls /mnt/d >/dev/null 2>&1 && exit 12; '
+              'ls /home >/dev/null 2>&1 && exit 13; '
+              'printf "workspace_readable oracle_denied mnt_d_denied home_denied\\n"')
+    command = bwrap_command(config, workspace, home, ['/bin/sh', '-c', script, 'probe', oracle])
+    proc = subprocess.run(command, env=sandbox_environment(), capture_output=True, text=True,
+                          timeout=30, check=False)
+    words = proc.stdout.split()
+    return {'command': command, 'returncode': proc.returncode, 'stdout': proc.stdout,
+            'stderr': proc.stderr, **{key: key in words for key in
+            ('workspace_readable', 'oracle_denied', 'mnt_d_denied', 'home_denied')}}
+
+
+def run_cli(config, workspace, home, prompt, session, timeout):
+    args = ['/opt/opencode/' + Path(config['opencode']).resolve(strict=True).name,
+            'run', '--format', 'json', '--pure', '--agent', 'build',
+            '--model', 'local/local-qwen', '--dir', '/workspace']
     if session:
         args += ['--session', session]
     args.append(prompt)
     start = time.monotonic()
-    process = subprocess.Popen(args, cwd=workspace, env=env, stdin=subprocess.DEVNULL,
+    command = bwrap_command(config, workspace, home, args)
+    process = subprocess.Popen(command, cwd=workspace, env=sandbox_environment(), stdin=subprocess.DEVNULL,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
     try:
         stdout, stderr = process.communicate(timeout=max(0.01, timeout))
@@ -338,15 +389,17 @@ def run_attempt(config, unit, output, server, port, log_path):
                 source = cache.parent / name
                 if source.is_file():
                     shutil.copy2(source, home / '.config/opencode' / name)
-        env = _isolated_environment('opencode', output, LAB, workspace)
-        env.update(OPENCODE_DISABLE_AUTOUPDATE='true', DO_NOT_TRACK='1',
-                   CORPUS_NODE=config['node'], PATH=str(Path(config['node']).parent) + ':' + env['PATH'])
+        proof = verify_isolation(config, workspace, home, unit['task'])
+        write_json(output / 'isolation-probe.json', proof)
+        if proof['returncode'] or not all(proof[key] for key in
+                                        ('workspace_readable', 'oracle_denied', 'mnt_d_denied', 'home_denied')):
+            raise RuntimeError('bubblewrap isolation probe failed')
         offset = log_path.stat().st_size
         with Proxy(port) as proxy:
             port_proxy = proxy.server.server_address[1]
             write_json(home / '.config/opencode/opencode.json', profile(config, config['arms'][unit['arm']], port_proxy))
             def run(prompt, session):
-                return run_cli(config, workspace, env, prompt, session,
+                return run_cli(config, workspace, home, prompt, session,
                                deadline - time.monotonic() - 90)
             visible_phase = []
             def phase_check():
@@ -366,11 +419,8 @@ def run_attempt(config, unit, output, server, port, log_path):
                                 timeout=min(30, deadline - time.monotonic() - 60))
         oracle = grade(config, unit['task'], workspace, output,
                        timeout=min(60, deadline - time.monotonic()))
-        failures = [classify_failure(p['code'], p['stderr'] + json.dumps(p['events']) + raw, server.poll() is None)
-                    for p in phases['phases']]
+        failures = [phase_failure(p, raw, server.poll() is None) for p in phases['phases']]
         failure = next((x for x in failures if x), None)
-        if failure is None and any(event.get('type') == 'error' for event in events):
-            failure = classify_failure(1, json.dumps(events) + raw, server.poll() is None)
         if failure != 'model_protocol_error' and any(
             row.get('error') or row.get('status', 0) >= 500 for row in proxy.rows
         ):
@@ -387,7 +437,8 @@ def run_attempt(config, unit, output, server, port, log_path):
             failure = 'model_oracle_failed'
         if failure is None and not visible['passed']:
             failure = 'model_visible_failed'
-        category = 'infrastructure' if failure in {'server_exited', 'server_http_error'} or oracle['status'] == 'infrastructure' else 'model'
+        category = 'infrastructure' if failure in {'server_exited', 'server_http_error',
+            'harness_configuration_error'} or oracle['status'] == 'infrastructure' else 'model'
         if failure in {'harness_missing_session', 'harness_session_mismatch'} and category != 'infrastructure':
             category = 'harness'
         if not failure and oracle['passed'] and visible['passed']:
@@ -399,7 +450,7 @@ def run_attempt(config, unit, output, server, port, log_path):
                   'usage': summarize_usage('opencode', events), 'server_metrics': parse_server_metrics(raw),
                   'proxy_requests': proxy.rows, 'oom_evidence': bool(re.search(
                       r'out of memory|cudamalloc failed|failed to allocate cuda', raw, re.I))}
-    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+    except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
         result.update(error=f'{type(exc).__name__}: {exc}')
     finally:
         stop.set()
@@ -498,9 +549,9 @@ def manifest(config):
         raise RuntimeError('OpenCode version mismatch')
     return {'protocol_id': config['protocol_id'], 'config': config, 'files_sha256': hashes,
             'provider_cache_sha256': cache_hashes, 'node_sha256': digest(config['node']),
-            'python_sha256': digest(sys.executable),
+            'python_sha256': digest(sys.executable), 'bwrap_sha256': digest(config['bwrap']),
             'schedule': schedule(config), 'server_lifecycle': 'one process per arm; not restarted between episodes',
-            'isolation': 'isolated HOME/XDG and workspace; bash and network confinement not established'}
+            'isolation': 'bubblewrap filesystem and PID namespace; external network is not blocked'}
 
 
 def execute(config, selected, smoke=False):

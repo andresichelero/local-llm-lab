@@ -1,10 +1,37 @@
 import json
-import os
-import sys
+import subprocess
 import urllib.request
 import pytest
 
 from benchmark import opencode_baseline as baseline
+
+
+def test_bwrap_denies_host_paths_with_runner_mounts(tmp_path):
+    config = baseline.load_config()
+    workspace = tmp_path / 'workspace'
+    home = tmp_path / 'home'
+    workspace.mkdir()
+    home.mkdir()
+    (workspace / 'TASK.md').write_text('visible')
+    proof = baseline.verify_isolation(config, workspace, home, 'cont_path')
+    assert proof['returncode'] == 0
+    assert proof['workspace_readable'] is True
+    assert proof['oracle_denied'] is True
+    assert proof['mnt_d_denied'] is True
+    assert proof['home_denied'] is True
+    assert '--unshare-net' not in proof['command']
+
+
+def test_real_opencode_accepts_sandbox_profile(tmp_path):
+    config = baseline.load_config()
+    workspace, home = tmp_path / 'workspace', tmp_path / 'home'
+    workspace.mkdir()
+    config_dir = home / '.config/opencode'
+    config_dir.mkdir(parents=True)
+    (config_dir / 'opencode.json').write_text(json.dumps(baseline.profile(config, config['arms']['B0'], 1234)))
+    command = baseline.bwrap_command(config, workspace, home, ['/opt/opencode/opencode.exe', 'debug', 'config'])
+    result = subprocess.run(command, env=baseline.sandbox_environment(), capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
 
 
 def test_schedule_matches_matrix():
@@ -25,6 +52,8 @@ def test_server_and_profile_follow_arm_config():
     assert profile['agent']['build']['steps'] == 20
     assert profile['provider']['local']['models']['local-qwen']['options']['temperature'] == 0.6
     assert '--no-cache-prompt' in baseline.server_command(config, config['arms']['B-nocache'], 1234)
+    assert profile['agent']['build']['permission']['webfetch'] == 'deny'
+    assert profile['agent']['build']['permission']['websearch'] == 'deny'
 
 
 def test_continuation_releases_after_visible_success_and_reuses_session(tmp_path):
@@ -52,12 +81,23 @@ def test_manifest_rejects_different_protocol(tmp_path):
 
 def test_parser_errors_are_model_failures_and_do_not_retry():
     assert baseline.classify_failure(1, 'HTTP 500: invalid tool call JSON', True) == 'model_protocol_error'
+    assert baseline.classify_failure(1, 'Error: Configuration is invalid at /episode-home', True) == 'harness_configuration_error'
+    assert baseline.classify_failure(0, 'ordinary output: invalid tool call JSON', True) is None
     attempts = []
     result = baseline.retry_infrastructure(lambda: attempts.append(1) or {'category': 'model'})
     assert result['category'] == 'model' and len(attempts) == 1
     attempts.clear()
     baseline.retry_infrastructure(lambda: attempts.append(1) or {'category': 'infrastructure'})
     assert len(attempts) == 2
+
+
+def test_successful_phase_does_not_classify_tool_output_as_parser_error():
+    phase = {'code': 0, 'stderr': '', 'events': [
+        {'type': 'tool_use', 'part': {'state': {'output': 'invalid tool call JSON'}}}
+    ]}
+    assert baseline.phase_failure(phase, 'parser output in server log', True) is None
+    phase['events'].append({'type': 'error', 'error': 'invalid tool call JSON'})
+    assert baseline.phase_failure(phase, '', True) == 'model_protocol_error'
 
 
 def test_prepare_hides_private_and_followup(tmp_path):
@@ -123,15 +163,18 @@ def test_execute_retries_infrastructure_once_without_restarting_live_server(tmp_
 def test_fake_opencode_emits_session_and_continues(tmp_path):
     executable = tmp_path / 'opencode'
     executable.write_text(
-        '#!' + sys.executable + '\n'
+        '#!/usr/bin/python3\n'
         'import json,sys\n'
         'session = sys.argv[sys.argv.index("--session")+1] if "--session" in sys.argv else "s-fake"\n'
         'print(json.dumps({"type":"step_finish","sessionID":session,"part":{"tokens":{"input":5,"output":2}}}))\n'
     )
     executable.chmod(0o755)
-    config = {'opencode': str(executable)}
-    first = baseline.run_cli(config, tmp_path, dict(os.environ), 'first', None, 5)
-    second = baseline.run_cli(config, tmp_path, dict(os.environ), 'followup', first['session'], 5)
+    config = baseline.load_config()
+    config['opencode'] = str(executable)
+    home = tmp_path / 'home'
+    home.mkdir()
+    first = baseline.run_cli(config, tmp_path, home, 'first', None, 5)
+    second = baseline.run_cli(config, tmp_path, home, 'followup', first['session'], 5)
     assert first['code'] == second['code'] == 0
     assert first['session'] == second['session'] == 's-fake'
     assert baseline.summarize_usage('opencode', first['events'])['prompt_tokens'] == 5
@@ -140,7 +183,7 @@ def test_fake_opencode_emits_session_and_continues(tmp_path):
 def test_fake_server_and_proxy(tmp_path):
     server = tmp_path / 'server'
     server.write_text(
-        '#!' + sys.executable + '\n'
+        '#!/usr/bin/python3\n'
         'import sys\n'
         'from http.server import HTTPServer,BaseHTTPRequestHandler\n'
         'class H(BaseHTTPRequestHandler):\n'
@@ -168,7 +211,7 @@ def test_fake_server_and_proxy(tmp_path):
 def test_fake_continuation_attempt_grades_only_after_followup(tmp_path, monkeypatch):
     executable = tmp_path / 'opencode'
     executable.write_text(
-        '#!' + sys.executable + '\n'
+        '#!/usr/bin/python3\n'
         'import json,sys\n'
         's=sys.argv[sys.argv.index("--session")+1] if "--session" in sys.argv else "continuation-session"\n'
         'print(json.dumps({"type":"step_finish","sessionID":s,"part":{"tokens":{"input":7,"output":1}}}))\n'
