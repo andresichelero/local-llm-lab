@@ -751,8 +751,11 @@ def manifest(config):
     files = [CONFIG, Path(__file__), ROOT / 'benchmark/harness_runner.py',
              ROOT / 'benchmark/configs/harnesses/opencode.json', CORPUS / 'manifest.json',
              CORPUS / 'validate_corpus.py']
+    # Bytecode caches are not corpus content; a stray `python` run without
+    # PYTHONDONTWRITEBYTECODE must not make the frozen-manifest check fail.
     files += [p for sub in ('hosts', 'tasks', 'oracles', 'stubs', 'support', 'prefixes')
-              for p in (CORPUS / sub).rglob('*') if p.is_file() and not p.is_symlink()]
+              for p in (CORPUS / sub).rglob('*') if p.is_file() and not p.is_symlink()
+              and '__pycache__' not in p.parts and p.suffix != '.pyc']
     hashes = {str(p.relative_to(ROOT)): digest(p) for p in sorted(files)}
     frozen = json.loads((CORPUS / 'manifest.json').read_text())
     actual = {name.removeprefix('corpus/'): sha for name, sha in hashes.items()
