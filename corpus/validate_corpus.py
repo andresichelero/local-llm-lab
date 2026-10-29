@@ -18,6 +18,28 @@ ROOT = Path(__file__).resolve().parent
 CLASSES = {"python_fix", "javascript_fix", "authored_tests", "continuation", "mcp", "tool_recovery"}
 
 
+def detect_node():
+    override = os.environ.get("CORPUS_NODE")
+    if override:
+        if not shutil.which(override):
+            raise RuntimeError("CORPUS_NODE does not point to an executable Node")
+        return override
+    found = shutil.which("node")
+    if found:
+        return found
+    candidates = []
+    for node in (Path.home() / ".nvm/versions/node").glob("v*/bin/node"):
+        try:
+            version = tuple(int(part) for part in node.parent.parent.name[1:].split("."))
+        except ValueError:
+            continue
+        if node.is_file() and os.access(node, os.X_OK):
+            candidates.append((version, node))
+    if candidates:
+        return str(max(candidates)[1])
+    raise RuntimeError("Node not found; set CORPUS_NODE or install Node in PATH or ~/.nvm")
+
+
 def hash_tree(root):
     root = Path(root)
     return {
@@ -156,9 +178,14 @@ def validate_task(task_dir, node):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--task")
-    parser.add_argument("--node", default=os.environ.get("CORPUS_NODE", "node"))
+    parser.add_argument("--node")
     parser.add_argument("--write-manifest", action="store_true")
     args = parser.parse_args()
+    if args.node is None:
+        try:
+            args.node = detect_node()
+        except RuntimeError as err:
+            parser.error(str(err))
     manifest = ROOT / "manifest.json"
     if args.write_manifest:
         prefix_dir = ROOT / "prefixes"
