@@ -15,6 +15,7 @@ import socket
 import statistics
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -116,6 +117,17 @@ def phase_failure(phase, server_log, server_alive):
     return classify_failure(code, evidence, server_alive)
 
 
+def timeout_failure(failure, timed_out, reason):
+    if timed_out and failure not in {'server_exited', 'server_http_error'}:
+        return reason
+    return failure
+
+
+def first_failure(failures):
+    return next((f for f in failures if f in {'server_exited', 'server_http_error'}),
+                next((f for f in failures if f), None))
+
+
 INFRASTRUCTURE_FAILURES = {'server_exited', 'server_http_error', 'harness_configuration_error',
                            'grader_infrastructure'}
 
@@ -196,6 +208,10 @@ def parse_server_metrics(log):
             for key in ('prompt_n', 'cache_n')}
 
 
+def safe_content_type(value):
+    return 'text/event-stream' if value.lower().startswith('text/event-stream') else 'application/json'
+
+
 class Proxy:
     """Forward only to the local llama server and retain per-request timings."""
     def __init__(self, target):
@@ -217,7 +233,7 @@ class Proxy:
                     response = conn.getresponse()
                     row['status'] = response.status
                     self.send_response(response.status)
-                    self.send_header('Content-Type', response.getheader('Content-Type', 'application/json'))
+                    self.send_header('Content-Type', safe_content_type(response.getheader('Content-Type', 'application/json')))
                     self.send_header('Connection', 'close')
                     self.end_headers()
                     while True:
@@ -482,9 +498,9 @@ def request_metrics(rows):
     return result
 
 
-def check_visible(config, task_id, workspace, phase1=False, timeout=120):
-    script = CORPUS / 'tasks' / task_id / ('verify_phase1.py' if phase1 else 'verify.py')
-    env = {'PATH': str(Path(config['node']).parent) + ':/usr/bin:/bin', 'HOME': str(workspace.parent / 'home'),
+def _check_visible(config, task_id, workspace, phase1=False, timeout=120, script=None):
+    script = script or CORPUS / 'tasks' / task_id / ('verify_phase1.py' if phase1 else 'verify.py')
+    env = {'PATH': str(Path(config['node']).parent) + ':/usr/bin:/bin', 'HOME': os.environ.get('HOME', '/tmp'),
            'PYTHONDONTWRITEBYTECODE': '1', 'CORPUS_NODE': config['node']}
     result = subprocess.run([sys.executable, str(script)], cwd=workspace, env=env,
                             capture_output=True, text=True, timeout=max(0.01, timeout), check=False)
@@ -492,15 +508,16 @@ def check_visible(config, task_id, workspace, phase1=False, timeout=120):
             'stdout': result.stdout, 'stderr': result.stderr}
 
 
-def grade(config, task_id, workspace, output, timeout=120):
+def _grade(config, task_id, workspace, output, timeout=120, oracle_path=None, support_path=None):
     report = output / 'oracle-probe.json'
-    env = {'PATH': str(Path(config['node']).parent) + ':/usr/bin:/bin', 'HOME': str(workspace.parent / 'home'),
+    support = support_path or CORPUS / 'support'
+    env = {'PATH': str(Path(config['node']).parent) + ':/usr/bin:/bin', 'HOME': os.environ.get('HOME', '/tmp'),
            'PYTHONDONTWRITEBYTECODE': '1', 'CORPUS_NODE': config['node'],
-           'PYTHONPATH': os.pathsep.join([str(workspace), str(CORPUS / 'support')]),
-           'CORPUS_SUPPORT': str(CORPUS / 'support'), 'CORPUS_PROBE_REPORT': str(report)}
-    oracle = CORPUS / 'oracles' / task_id / 'oracle.py'
+           'PYTHONPATH': os.pathsep.join([str(workspace), str(support)]),
+           'CORPUS_SUPPORT': str(support), 'CORPUS_PROBE_REPORT': str(report)}
+    oracle = oracle_path or CORPUS / 'oracles' / task_id / 'oracle.py'
     proc = subprocess.run([sys.executable, '-m', 'pytest', '-p', 'no:cacheprovider', '-p',
-                           'corpus_probe', '-q', str(oracle)], cwd=workspace, env=env,
+                           'corpus_probe', '-c', '/dev/null', '--rootdir', str(oracle.parent), '-q', str(oracle)], cwd=workspace, env=env,
                           capture_output=True, text=True, timeout=max(0.01, timeout), check=False)
     (output / 'oracle-output.txt').write_text(proc.stdout + proc.stderr, encoding='utf-8')
     try:
@@ -514,7 +531,7 @@ def grade(config, task_id, workspace, output, timeout=120):
     # The probe counts any non-assertion exception as an error, including one raised by the
     # candidate code inside the test body. Pytest reports those as "failed"; setup and
     # collection problems are reported as "error" and stay infrastructure.
-    if proc.returncode == 1 and candidate_exception_only(proc.stdout):
+    if (proc.returncode == 1 and candidate_exception_only(proc.stdout)) or candidate_collection_error(proc, workspace):
         return {'passed': False, 'status': 'fail'}
     return {'passed': None, 'status': 'infrastructure'}
 
@@ -523,6 +540,80 @@ def candidate_exception_only(pytest_output):
     lines = [line for line in pytest_output.strip().splitlines() if line.strip()]
     summary = lines[-1] if lines else ''
     return bool(re.search(r'\b\d+ failed\b', summary)) and not re.search(r'\b\d+ errors?\b', summary)
+
+
+def candidate_collection_error(proc, workspace):
+    text = proc.stdout + proc.stderr
+    if proc.returncode != 2 or not re.search(r'\b(?:ImportError|ModuleNotFoundError|SyntaxError)\b', text):
+        return False
+    root = workspace.resolve()
+    matches = re.findall(r'^([^\s:]+\.py):\d+|File "([^"\n]+\.py)", line \d+', text, re.MULTILINE)
+    for normal, syntax in matches:
+        path = Path(normal or syntax)
+        path = (path if path.is_absolute() else root / path).resolve()
+        if path.is_relative_to(root) and path.is_file():
+            return True
+    return False
+
+
+def sandbox_evaluate(config, task_id, workspace, output, phase1, timeout, visible):
+    script = ('verify_phase1.py' if phase1 else 'verify.py')
+    companion = ('visible_phase1.py' if phase1 else 'visible.py')
+    task_dir = CORPUS / 'tasks' / task_id
+    code = ("import json,sys; from pathlib import Path; sys.path.insert(0,'/opt/lab'); "
+            "from benchmark import opencode_baseline as b; c=json.loads(sys.argv[1]); "
+            "c['node']='/opt/node/bin/node'; "
+            "r=b._check_visible(c,sys.argv[2],Path('/workspace'),sys.argv[3]=='1',float(sys.argv[5])) "
+            "if sys.argv[4]=='visible' else b._grade(c,sys.argv[2],Path('/workspace'),Path('/out'),float(sys.argv[5])); "
+            "print(json.dumps(r))")
+    try:
+        with tempfile.TemporaryDirectory(prefix='lab-grade-') as temp:
+            command = [config['bwrap'], '--die-with-parent', '--unshare-pid', '--unshare-net',
+                       '--ro-bind', '/usr', '/usr', '--symlink', 'usr/lib', '/lib',
+                       '--symlink', 'usr/lib64', '/lib64', '--symlink', 'usr/bin', '/bin',
+                       '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--tmpfs', '/home',
+                       '--dir', '/opt', '--dir', '/opt/lab', '--dir', '/opt/lab/corpus',
+                       '--dir', '/opt/lab/corpus/tasks', '--dir', '/opt/lab/corpus/oracles',
+                       '--ro-bind', str(ROOT / 'benchmark'), '/opt/lab/benchmark',
+                       '--ro-bind', str(CORPUS / 'support'), '/opt/lab/corpus/support',
+                       '--ro-bind', sys.prefix, '/opt/venv',
+                       '--ro-bind', str(Path(config['node']).resolve().parent.parent), '/opt/node',
+                       '--bind', str(workspace.resolve()), '/workspace', '--bind', temp, '/out']
+            if visible:
+                target = '/opt/lab/corpus/tasks/' + task_id
+                command += ['--dir', target]
+                for name in (script, companion):
+                    command += ['--ro-bind', str(task_dir / name), target + '/' + name]
+            else:
+                command += ['--ro-bind', str(CORPUS / 'oracles' / task_id),
+                            '/opt/lab/corpus/oracles/' + task_id]
+            command += ['--chdir', '/workspace', '--', '/opt/venv/bin/python', '-I', '-c', code,
+                        json.dumps(config), task_id, str(int(phase1)), 'visible' if visible else 'oracle',
+                        str(max(0.01, timeout - 2))]
+            env = {'PATH': '/usr/bin:/bin', 'HOME': '/home', 'TMPDIR': '/tmp',
+                   'PYTHONDONTWRITEBYTECODE': '1'}
+            proc = subprocess.run(command, env=env, capture_output=True, text=True,
+                                  timeout=max(0.01, timeout), check=False)
+            if output is not None:
+                for name in ('oracle-output.txt', 'oracle-probe.json'):
+                    source = Path(temp) / name
+                    if source.is_file():
+                        shutil.copyfile(source, output / name)
+            if proc.returncode:
+                raise RuntimeError(proc.stderr[-4000:])
+            return json.loads(proc.stdout)
+    except (OSError, subprocess.SubprocessError, ValueError, RuntimeError) as exc:
+        return {'passed': None, 'status': 'infrastructure', 'returncode': None,
+                'stdout': '', 'stderr': str(exc), 'error': str(exc)} if visible else {
+                    'passed': None, 'status': 'infrastructure', 'error': str(exc)}
+
+
+def check_visible(config, task_id, workspace, phase1=False, timeout=120):
+    return sandbox_evaluate(config, task_id, workspace, None, phase1, timeout, True)
+
+
+def grade(config, task_id, workspace, output, timeout=120):
+    return sandbox_evaluate(config, task_id, workspace, output, False, timeout, False)
 
 
 def write_json(path, value):
@@ -649,18 +740,17 @@ def run_attempt(config, unit, output, server, port, log_path):
         oracle = grade(config, unit['task'], workspace, output,
                        timeout=min(60, deadline - time.monotonic()))
         failures = [phase_failure(p, raw, server.poll() is None) for p in phases['phases']]
-        failure = next((x for x in failures if x), None)
-        if failure != 'model_protocol_error' and any(
+        failure = first_failure(failures)
+        if failure not in {'model_protocol_error', 'server_exited'} and any(
             row.get('error') or row.get('status', 0) >= 500 for row in proxy.rows
         ):
             failure = 'server_http_error'
-        if any(p['code'] == 124 for p in phases['phases']):
-            failure = 'model_wall_timeout'
+        failure = timeout_failure(failure, any(p['code'] == 124 for p in phases['phases']), 'model_wall_timeout')
         if task['class'] == 'continuation' and not phases['released'] and failure is None:
             failure = 'harness_missing_session' if not phases['phases'][0]['session'] else 'model_phase1_incomplete'
         if phases['released'] and phases['phases'][1]['session'] != phases['phases'][0]['session']:
             failure = 'harness_session_mismatch'
-        if failure is None and oracle['status'] == 'infrastructure':
+        if failure is None and (oracle['status'] == 'infrastructure' or visible['passed'] is None):
             failure = 'grader_infrastructure'
         if failure is None and oracle['passed'] is False:
             failure = 'model_oracle_failed'

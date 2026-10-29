@@ -12,7 +12,6 @@ import signal
 import sqlite3
 import statistics
 import subprocess
-import sys
 import threading
 import time
 from pathlib import Path
@@ -214,37 +213,9 @@ def run_cli(config, workspace, home, prompt, session, timeout, headroom=False):
 def sandbox_check(config, objective, workspace, output, timeout, visible=False):
     task, phase = objective_parts(objective)
     output.mkdir(parents=True, exist_ok=True)
-    code = (
-        "import json,sys; from pathlib import Path; sys.path.insert(0,'/opt/lab'); "
-        "from benchmark import opencode_baseline as b; "
-        "c=json.loads(sys.argv[1]); c['node']='/opt/node/bin/node'; "
-        "r=(b.check_visible(c,sys.argv[2],Path('/workspace'),phase1=sys.argv[3]=='1',timeout=float(sys.argv[5])) "
-        "if sys.argv[4]=='visible' else b.grade(c,sys.argv[2],Path('/workspace'),Path('/out'),timeout=float(sys.argv[5]))); "
-        "print(json.dumps(r))"
-    )
-    node = Path(config['node']).resolve().parent.parent
-    command = [config['bwrap'], '--die-with-parent', '--unshare-pid', '--unshare-net',
-        '--ro-bind', '/usr', '/usr', '--symlink', 'usr/lib', '/lib',
-        '--symlink', 'usr/lib64', '/lib64', '--symlink', 'usr/bin', '/bin',
-        '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--tmpfs', '/home',
-        '--dir', '/opt', '--dir', '/opt/lab',
-        '--ro-bind', str(baseline.ROOT / 'benchmark'), '/opt/lab/benchmark',
-        '--ro-bind', str(baseline.CORPUS), '/opt/lab/corpus',
-        '--ro-bind', sys.prefix, '/opt/venv', '--ro-bind', str(node), '/opt/node',
-        '--ro-bind', str(workspace), '/workspace', '--bind', str(output), '/out',
-        '--chdir', '/workspace', '--', '/opt/venv/bin/python', '-I', '-c', code,
-        json.dumps(config), task, phase, 'visible' if visible else 'oracle', str(max(0.01, timeout - 2))]
-    env = {'PATH': '/usr/bin:/bin', 'HOME': '/home', 'PYTHONDONTWRITEBYTECODE': '1'}
-    try:
-        proc = subprocess.run(command, env=env, capture_output=True, text=True,
-                              timeout=max(0.01, timeout), check=False)
-        if proc.returncode:
-            return {'passed': None, 'status': 'infrastructure', 'error': proc.stderr[-4000:]}
-        return json.loads(proc.stdout)
-    except (OSError, subprocess.SubprocessError) as exc:
-        return {'passed': None, 'status': 'infrastructure', 'error': str(exc)}
-    except ValueError as exc:
-        return {'passed': None, 'status': 'infrastructure', 'error': str(exc)}
+    if visible:
+        return baseline.check_visible(config, task, workspace, phase1=phase == '1', timeout=timeout)
+    return baseline.grade(config, task, workspace, output, timeout=timeout)
 
 
 def grade_objective(config, objective, workspace, output, timeout):
@@ -426,13 +397,11 @@ def run_attempt(config, unit, output, server, smoke=False):
         sessions = list({p['session'] for p in phases if p.get('session')})
         seen = count_compactions(home, sessions)
         failures = [baseline.phase_failure(phase, raw, server.process.poll() is None) for phase in phases]
-        failure = next((f for f in failures if f), None)
-        if any(phase.get('session_error') for phase in phases):
+        failure = baseline.first_failure(failures)
+        if failure not in {'server_exited', 'server_http_error'} and any(phase.get('session_error') for phase in phases):
             failure = 'harness_session_error'
-        if any(phase['code'] == 124 for phase in phases):
-            failure = 'supervisor_wall_budget'
-        if any(phase.get('supervisor_deadline') for phase in phases):
-            failure = 'supervisor_wall_budget'
+        failure = baseline.timeout_failure(failure, any(phase['code'] == 124 or phase.get('supervisor_deadline')
+                                                       for phase in phases), 'supervisor_wall_budget')
         if len(visible_history) < len(objectives) and not failure:
             failure = 'supervisor_wall_budget' if any(p.get('stop') for p in phases) else 'harness_incomplete'
         if not failure and any(value['status'] in {'infrastructure', 'wall_timeout'} for value in final.values()):

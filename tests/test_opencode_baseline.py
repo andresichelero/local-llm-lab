@@ -1,10 +1,69 @@
 import json
+import shutil
 import subprocess
 import urllib.request
 
 import pytest
 
 from benchmark import opencode_baseline as baseline
+
+
+@pytest.mark.parametrize('value, expected', [
+    ('text/event-stream; charset=utf-8', 'text/event-stream'),
+    ('application/json\r\nInjected: yes', 'application/json'),
+    ('text/html', 'application/json'),
+])
+def test_upstream_content_type_is_constant(value, expected):
+    assert baseline.safe_content_type(value) == expected
+
+
+def test_grader_sandbox_unavailable_is_infrastructure(tmp_path):
+    config = baseline.load_config()
+    config['bwrap'] = str(tmp_path / 'missing-bwrap')
+    workspace = tmp_path / 'workspace'
+    workspace.mkdir()
+    assert baseline.check_visible(config, 'py_query', workspace)['passed'] is None
+    assert baseline.grade(config, 'py_query', workspace, tmp_path)['status'] == 'infrastructure'
+
+
+@pytest.mark.parametrize('broken', ['import definitely_missing_module\n', 'def broken(:\n'])
+@pytest.mark.skipif(shutil.which('bwrap') is None, reason='bubblewrap unavailable')
+def test_collection_error_from_workspace_is_model_failure(tmp_path, broken):
+    config = baseline.load_config()
+    workspace = tmp_path / 'workspace'
+    baseline.prepare_workspace(config, 'py_query', workspace)
+    (workspace / 'bottle.py').write_text(broken)
+    result = baseline.grade(config, 'py_query', workspace, tmp_path)
+    assert result == {'passed': False, 'status': 'fail'}
+
+
+def test_evaluation_mounts_are_minimal_and_network_is_unshared(tmp_path, monkeypatch):
+    config = baseline.load_config()
+    workspace = tmp_path / 'workspace'
+    workspace.mkdir()
+    calls = []
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, '{"passed": true, "returncode": 0, "stdout": "", "stderr": ""}', '')
+    monkeypatch.setattr(baseline.subprocess, 'run', fake_run)
+    assert baseline.check_visible(config, 'py_query', workspace)['passed'] is True
+    command = calls[0]
+    assert '--unshare-net' in command
+    assert command[command.index('--bind') + 1:command.index('--bind') + 3] == [str(workspace), '/workspace']
+    assert not any('/oracles/py_query' in part or 'reference.patch' in part for part in command)
+    assert str(baseline.CORPUS / 'tasks' / 'py_query' / 'visible.py') in command
+
+
+@pytest.mark.parametrize('failure, expected', [
+    ('server_exited', 'server_exited'), ('server_http_error', 'server_http_error'),
+    ('model_cli_failure', 'model_wall_timeout'), (None, 'model_wall_timeout'),
+])
+def test_timeout_does_not_override_server_failure(failure, expected):
+    assert baseline.timeout_failure(failure, True, 'model_wall_timeout') == expected
+
+
+def test_later_server_failure_takes_priority():
+    assert baseline.first_failure(['model_cli_failure', 'server_exited']) == 'server_exited'
 
 
 @pytest.mark.parametrize('failure, oracle, visible, expected', [
