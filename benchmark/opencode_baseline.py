@@ -335,7 +335,7 @@ def grade(config, task_id, workspace, output, timeout=120):
     env = {'PATH': str(Path(config['node']).parent) + ':/usr/bin:/bin', 'HOME': str(workspace.parent / 'home'),
            'PYTHONDONTWRITEBYTECODE': '1', 'CORPUS_NODE': config['node'],
            'PYTHONPATH': os.pathsep.join([str(workspace), str(CORPUS / 'support')]),
-           'CORPUS_PROBE_REPORT': str(report)}
+           'CORPUS_SUPPORT': str(CORPUS / 'support'), 'CORPUS_PROBE_REPORT': str(report)}
     oracle = CORPUS / 'oracles' / task_id / 'oracle.py'
     proc = subprocess.run([sys.executable, '-m', 'pytest', '-p', 'no:cacheprovider', '-p',
                            'corpus_probe', '-q', str(oracle)], cwd=workspace, env=env,

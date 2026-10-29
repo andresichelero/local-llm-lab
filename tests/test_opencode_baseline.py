@@ -49,7 +49,7 @@ def test_server_and_profile_follow_arm_config():
     assert cmd[cmd.index('--reasoning') + 1] == 'on'
     assert json.loads(cmd[cmd.index('--chat-template-kwargs') + 1]) == {'enable_thinking': True}
     profile = baseline.profile(config, arm, 1234)
-    assert profile['agent']['build']['steps'] == 20
+    assert profile['agent']['build']['steps'] == config['steps']
     assert profile['provider']['local']['models']['local-qwen']['options']['temperature'] == 0.6
     assert '--no-cache-prompt' in baseline.server_command(config, config['arms']['B-nocache'], 1234)
     assert profile['agent']['build']['permission']['webfetch'] == 'deny'
@@ -109,6 +109,22 @@ def test_prepare_hides_private_and_followup(tmp_path):
     assert not (workspace / 'verify.py').exists()
     assert not (workspace / 'followup.json').exists()
     assert not list(workspace.rglob('oracle.py'))
+
+
+@pytest.mark.parametrize('task_id', ['tests_query', 'tests_range'])
+def test_real_authored_oracle_scores_bug_and_reference(tmp_path, task_id):
+    config = baseline.load_config()
+    workspace = tmp_path / 'workspace'
+    baseline.prepare_workspace(config, task_id, workspace)
+    bug_output = tmp_path / 'bug-grade'
+    bug_output.mkdir()
+    assert baseline.grade(config, task_id, workspace, bug_output) == {'passed': False, 'status': 'fail'}
+    subprocess.run(['git', 'apply', '--whitespace=nowarn',
+                    str(baseline.CORPUS / 'tasks' / task_id / 'reference.patch')],
+                   cwd=workspace, check=True)
+    fixed_output = tmp_path / 'reference-grade'
+    fixed_output.mkdir()
+    assert baseline.grade(config, task_id, workspace, fixed_output) == {'passed': True, 'status': 'pass'}
 
 
 def test_server_log_metrics():

@@ -1,6 +1,6 @@
 {
-  "protocol_id": "qwen-4b-opencode-baseline-b-20261029-bwrap-v4",
-  "output": "/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v4",
+  "protocol_id": "qwen-4b-opencode-baseline-b-20261029-bwrap-v5",
+  "output": "/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5",
   "bwrap": "/usr/bin/bwrap",
   "server": "/home/foxtrot/local-llm-benchmark/tools/llama-bin/llama-server",
   "server_sha256": "da1068f30d898c10c02c754ebef3b5b877073213989ff5ef9dfb2d4332e265f0",
@@ -16,7 +16,7 @@
   },
   "tasks": ["cont_path", "cont_quote", "js_plural", "js_sign", "mcp_header", "mcp_params", "py_query", "py_range", "recover_date", "recover_decode", "tests_query", "tests_range"],
   "wall_seconds": 600,
-  "steps": 20,
+  "steps": 40,
   "output_tokens": 8192,
   "sampling": {"off": {"temperature": 0}, "on": {"temperature": 0.6, "top_p": 0.95, "top_k": 20}},
   "infrastructure_retry_limit": 1,
