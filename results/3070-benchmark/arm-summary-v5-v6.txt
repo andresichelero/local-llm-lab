@@ -1,0 +1,12 @@
+# Resumo por braço (script auxiliar só de leitura, fora do repositório). Colunas: proto, arm, n, ok, rate, infra, secs_med_ok, secs_med_all, ttft_med_ms, peak_vram_max, cache_frac, failures. Ver docs/RESULTS.md.
+proto arm n ok rate infra secs_med_ok secs_med_all ttft_med_ms peak_vram_max cache_frac failures
+v5 B0 24 16 67% 1 36.4 42.3 272.9 4567 0.944 {'model_phase1_incomplete': 1, 'model_oracle_failed': 5, 'model_wall_timeout': 1, 'model_cli_failure': 1}
+v6 B-ctx128 12 9 75% 0 37.8 58.2 257.9 5422 0.945 {'model_oracle_failed': 2, 'model_wall_timeout': 1}
+v6 B-ctx16 12 3 25% 0 27.6 16.4 436.9 3858 0.867 {'model_cli_failure': 9}
+v6 B-ctx32 12 9 75% 0 38.1 46.1 233.9 4105 0.923 {'model_oracle_failed': 3}
+v6 B-kv16 12 7 58% 0 32.0 34.6 273.4 5754 0.912 {'model_oracle_failed': 4, 'model_wall_timeout': 1}
+v6 B-kv8 12 9 75% 0 30.5 39.0 272.1 5038 0.923 {'model_oracle_failed': 2, 'model_cli_failure': 1}
+v6 B-nocache 12 9 75% 0 81.7 115.5 7704.2 4521 0.0 {'model_wall_timeout': 1, 'model_oracle_failed': 1, 'model_cli_failure': 1}
+v6 B-q6 12 10 83% 0 34.3 37.0 289.7 5162 0.923 {'model_oracle_failed': 1, 'model_cli_failure': 1}
+v6 B-q8 12 8 67% 0 32.2 38.5 320.3 6033 0.944 {'model_oracle_failed': 4}
+v6 B-think 12 11 92% 0 108.9 110.1 199.7 4535 0.951 {'model_oracle_failed': 1}
