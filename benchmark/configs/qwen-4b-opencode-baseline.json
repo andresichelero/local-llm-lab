@@ -37,8 +37,8 @@
     "S-qwen-sampling": {"stage": 4, "repetitions": 1, "model": "q4", "context": 65536, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false, "sampling": {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0, "presence_penalty": 1.5}},
     "S-steps80": {"stage": 4, "repetitions": 1, "model": "q4", "context": 65536, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false, "steps": 80},
     "S-ctx48": {"stage": 4, "repetitions": 1, "model": "q4", "context": 49152, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false},
-    "S-cache-reuse": {"stage": 4, "repetitions": 1, "model": "q4", "context": 65536, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false, "server_extra_args": ["--cache-reuse", "256", "--ctx-checkpoints", "16"]},
-    "S-mtp": {"stage": 4, "repetitions": 1, "model": "q4", "context": 65536, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false, "server_extra_args": ["--spec-type", "draft-mtp"]},
+    "S-checkpoints": {"stage": 4, "repetitions": 1, "model": "q4", "context": 65536, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false, "server_extra_args": ["--ctx-checkpoints", "64", "--checkpoint-min-step", "1024"]},
+    "S-mtp": {"stage": 4, "repetitions": 1, "model": "q4", "context": 65536, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false, "server_extra_args": ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2"]},
     "S-q4-unsloth": {"stage": 4, "repetitions": 1, "model": "q4_unsloth", "context": 65536, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false}
   }
 }
