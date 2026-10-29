@@ -96,7 +96,8 @@ def disable_process_inspection() -> None:
 def restrict_candidate_process(*, workspace: Path,
                                helper_paths: Iterable[Path],
                                runtime_paths: Iterable[Path] = (),
-                               node_root: Path | None = None) -> None:
+                               node_root: Path | None = None,
+                               listable_paths: Iterable[Path] = ()) -> None:
     """Confine a worker to its input tree, exact helpers and runtime libraries.
 
     Landlock and the process-inspection seccomp filter are inherited through
@@ -149,6 +150,14 @@ def restrict_candidate_process(*, workspace: Path,
             paths.add(Path(node_root).resolve(strict=True))
         for path in sorted(paths, key=lambda item: (len(item.parts), str(item))):
             _add_path_rule(fd, path, readonly)
+        # /dev/null stays writable as a harmless sink; pytest opens it for its default log file.
+        devnull = Path("/dev/null")
+        if devnull.exists():
+            _add_path_rule(fd, devnull.resolve(strict=True),
+                           _LANDLOCK_ACCESS_FS_WRITE_FILE | _LANDLOCK_ACCESS_FS_TRUNCATE)
+        # Listing only: names under these trees are visible, file contents are not.
+        for path in listable_paths:
+            _add_path_rule(fd, Path(path).resolve(strict=True), _LANDLOCK_ACCESS_FS_READ_DIR)
 
         if libc.syscall(_SYS_LANDLOCK_RESTRICT_SELF, fd, 0) != 0:
             _raise_errno("landlock_restrict_self")

@@ -303,7 +303,9 @@ def verification_worker(request):
         # pytest walks up from the oracle path and reads the repository pytest.ini.
         helper_paths=[CORPUS / 'tasks' / task, CORPUS / 'oracles' / task,
                       CORPUS / 'support', Path(sys.prefix), ROOT / 'pytest.ini'],
-        node_root=Path(config['node']).resolve().parent.parent)
+        node_root=Path(config['node']).resolve().parent.parent,
+        # pytest then lists each directory from that rootdir down to the oracle.
+        listable_paths=[ROOT])
     if request['kind'] == 'visible':
         return baseline.check_visible(config, task, workspace, phase1=request['phase1'])
     if request['kind'] == 'oracle':
