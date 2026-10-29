@@ -1,0 +1,22 @@
+{
+  "protocol_id": "qwen-4b-f1-d1-d2-diagnostic-20261028-v1",
+  "model": "/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
+  "model_sha256": "13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983",
+  "engine": "/home/foxtrot/local-llm-benchmark/tools/llama-bin/llama-server",
+  "context": 16384,
+  "kv_k": "q4_0",
+  "kv_v": "q4_0",
+  "parallel": 1,
+  "flash_attention": true,
+  "wall_seconds": 900,
+  "warmup": {"prompt": "Reply OK.", "max_tokens": 64, "cache_prompt": false},
+  "tasks": ["python_fix", "javascript_fix", "authored_tests", "continuation", "mcp", "tool_recovery"],
+  "seeds": [101, 202],
+  "limits": {"main": 120, "compaction": 8, "title": 1, "metadata": 20, "tools": 240, "tool_seconds": 60, "test_seconds": 180},
+  "arms": {
+    "D1": {"harness": "qwen_workloads", "thinking": true, "temperature": 0.6, "top_p": 0.95, "top_k": 20, "min_p": 0, "presence_penalty": 0, "repeat_penalty": 1, "cache_prompt": false, "cache_reuse": 0, "max_tokens": 8192},
+    "D2": {"harness": "qwen_workloads", "thinking": false, "temperature": 0, "top_p": 0.95, "top_k": 20, "min_p": 0, "presence_penalty": 0, "repeat_penalty": 1, "cache_prompt": true, "cache_reuse": 0, "max_tokens": 2048}
+  },
+  "seed_arm_order": {"101": ["D1", "D2"], "202": ["D2", "D1"]},
+  "infrastructure_retry_limit": 1
+}

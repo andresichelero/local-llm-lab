@@ -37,7 +37,9 @@ class EngineCompatibilityError(RuntimeError):
     pass
 
 
-def llama_command(server, model, port, context, *, thinking=True, cache="q8_0"):
+def llama_command(server, model, port, context, *, thinking=True, cache="q8_0", cache_reuse=0):
+    if type(cache_reuse) is not int or cache_reuse < 0:
+        raise ValueError("cache_reuse must be a non-negative integer")
     return [
         str(server),
         "--model",
@@ -76,7 +78,7 @@ def llama_command(server, model, port, context, *, thinking=True, cache="q8_0"):
         "--chat-template-kwargs",
         json.dumps({"enable_thinking": thinking}),
         "--cache-reuse",
-        "0",
+        str(cache_reuse),
     ]
 
 
@@ -114,6 +116,7 @@ class ApiClient:
         seed=101,
         model="local-qwen",
         context_tokens=16384,
+        cache_prompt=False,
     ):
         if type(port) is not int or not 1 <= port <= 65535:
             raise ValueError("model endpoint must be a local integer port")
@@ -138,6 +141,7 @@ class ApiClient:
         self.model = model
         self.metadata_calls = 0
         self.context_tokens = context_tokens
+        self.cache_prompt = cache_prompt
         self.counts = {"main": 0, "compaction": 0, "title": 0}
 
     def tokenize(self, text):
@@ -196,7 +200,7 @@ class ApiClient:
             **self.generation,
         }
         if self.engine == "llama.cpp":
-            payload["cache_prompt"] = False
+            payload["cache_prompt"] = self.cache_prompt
         elif "repeat_penalty" in payload:
             payload["repetition_penalty"] = payload.pop("repeat_penalty")
         if tools:
@@ -212,7 +216,7 @@ class ApiClient:
         first_token = None
         message = {"role": "assistant", "content": ""}
         tool_calls = {}
-        usage, finish, complete = None, None, False
+        usage, finish, complete, timings = None, None, False, None
         error = None
         try:
             connection.request(
@@ -249,6 +253,8 @@ class ApiClient:
                         raise ModelProtocolError(str(event["error"]))
                     if event.get("usage"):
                         usage = event["usage"]
+                    if event.get("timings") is not None:
+                        timings = event["timings"]
                     for choice in event.get("choices") or []:
                         delta = choice.get("delta") or {}
                         if first_token is None and (
@@ -284,6 +290,7 @@ class ApiClient:
             result = {
                 "choices": [{"message": message, "finish_reason": finish}],
                 "usage": usage,
+                "timings": timings,
             }
             write_json(self.output / f"response-{self.calls:04d}.json", result)
             return result
@@ -297,6 +304,7 @@ class ApiClient:
                 "seconds": elapsed,
                 "ttft_seconds": first_token,
                 "usage": usage,
+                "timings": timings,
                 "kind": kind,
                 "stream_complete": complete,
                 "error": error,
@@ -317,10 +325,11 @@ class ApiClient:
 class ModelServer:
     def __init__(
         self, artifact_path, engine, output, context, *, thinking=True, cache="q8_0",
-        gpu_free_floor_mib=7000, gpu_reserve_mib=512,
+        gpu_free_floor_mib=7000, gpu_reserve_mib=512, cache_reuse=0,
     ):
         self.model, self.engine, self.output = Path(artifact_path), engine, Path(output)
         self.context, self.thinking, self.cache = context, thinking, cache
+        self.cache_reuse = cache_reuse
         if any(type(x) is not int or x < 0 for x in (gpu_free_floor_mib, gpu_reserve_mib)):
             raise ValueError("GPU limits must be non-negative integer MiB")
         self.gpu_free_floor_mib = gpu_free_floor_mib
@@ -357,6 +366,7 @@ class ModelServer:
                 self.context,
                 thinking=self.thinking,
                 cache=self.cache,
+                cache_reuse=self.cache_reuse,
             )
             cwd = self.output
         elif self.engine == "exllamav3":
@@ -405,6 +415,7 @@ class ModelServer:
                 "context": self.context,
                 "thinking": self.thinking,
                 "cache": self.cache,
+                "cache_reuse": self.cache_reuse,
             },
         )
         self.log = (self.output / "server.log").open("ab", buffering=0)
