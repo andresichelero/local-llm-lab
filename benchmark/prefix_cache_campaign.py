@@ -52,10 +52,11 @@ def withheld_section(prefix, current, name):
         found = markers.intersection(range(i1, i2))
         if not found:
             continue
-        if tag != 'replace' or j1 == j2:
+        # After an edit the withheld line may align as deleted; show the text around where it was.
+        if tag not in ('replace', 'delete'):
             raise ValueError(f'cannot align withheld prefix lines in {name}: {i1 + 1}-{i2}')
         covered.update(found)
-        regions.append((max(0, j1 - 2), min(len(new), j2 + 2)))
+        regions.append((max(0, j1 - 2), min(len(new), max(j2, j1 + 1) + 2)))
     if covered != markers or not markers:
         raise ValueError(f'cannot align all withheld prefix lines in {name}')
     parts = ['# Withheld prefix lines: current workspace text\n',

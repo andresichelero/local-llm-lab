@@ -25,13 +25,11 @@ def test_withheld_alignment_after_insertions():
     assert section == withheld_section(prefix, current, 'bottle.py')
 
 
-def test_withheld_alignment_fails_when_marker_has_no_current_line():
-    import pytest
-
+def test_withheld_line_deleted_by_an_edit_shows_surrounding_text():
     from benchmark.prefix_cache_campaign import withheld_section
 
-    with pytest.raises(ValueError, match='cannot align'):
-        withheld_section('a\n# task-specific line withheld\nb\n', 'a\nb\n', 'bottle.py')
+    section = withheld_section('a\n# task-specific line withheld\nb\n', 'a\nb\n', 'bottle.py')
+    assert '1: a\n2: b' in section
 
 
 def test_wl_package_contains_current_withheld_lines_only_for_wl(tmp_path):
