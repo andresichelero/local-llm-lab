@@ -1,0 +1,16 @@
+{
+  "protocol_id": "qwen-4b-opencode-long-tasks-20261029-v1",
+  "output": "/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-long-tasks-20261029-v1",
+  "wall_seconds": 1800,
+  "steps": 40,
+  "marathons": {
+    "M1": ["py_query", "py_range", "cont_quote:1", "cont_quote:2", "recover_decode"],
+    "M2": ["mcp_header", "mcp_params", "recover_date", "cont_path:1", "cont_path:2", "tests_range"]
+  },
+  "arms": {
+    "L-compact": {"model": "q4", "context": 32768, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false},
+    "L-bigctx": {"model": "q4", "context": 131072, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false},
+    "L-reset": {"model": "q4", "context": 32768, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false},
+    "L-headroom": {"model": "q4", "context": 32768, "kv_k": "q4_0", "kv_v": "q4_0", "cache_prompt": true, "thinking": false}
+  }
+}
