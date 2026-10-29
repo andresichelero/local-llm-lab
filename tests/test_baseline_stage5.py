@@ -1,4 +1,7 @@
+import copy
+import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -47,12 +50,75 @@ def test_dry_run_does_not_start_execution(monkeypatch, capsys):
     assert 'Q5-UDQ4XL' in output and 'X-think' in output and 'X-9b' in output
 
 
+def test_load_config_reads_selected_path(tmp_path):
+    selected = tmp_path / 'selected-stage5.json'
+    data = json.loads(stage5.CONFIG.read_text(encoding='utf-8'))
+    data['protocol_id'] = 'selected-stage5-config'
+    selected.write_text(json.dumps(data), encoding='utf-8')
+
+    assert stage5.load_config(selected)['protocol_id'] == 'selected-stage5-config'
+
+
+def test_main_uses_selected_config_for_dry_run(tmp_path, capsys):
+    selected = tmp_path / 'selected-stage5.json'
+    data = json.loads(stage5.CONFIG.read_text(encoding='utf-8'))
+    data['arms'] = {'T5-rtk': {**data['arms']['T5-rtk'], 'repetitions': 1}}
+    selected.write_text(json.dumps(data), encoding='utf-8')
+
+    stage5.main(['--config', str(selected), '--dry-run'])
+
+    output = capsys.readouterr().out
+    assert 'arm=T5-rtk' in output
+    assert 'arm=X-think' not in output
+
+
+def test_manifest_hashes_selected_config_path(tmp_path, monkeypatch):
+    selected = tmp_path / 'selected-stage5.json'
+    selected.write_bytes(stage5.CONFIG.read_bytes())
+    expected_hash = hashlib.sha256(selected.read_bytes()).hexdigest()
+    real_digest = stage5.baseline.digest
+
+    monkeypatch.setattr(stage5.baseline, 'manifest', lambda _: {'files_sha256': {}})
+
+    def digest(path):
+        if Path(path).resolve() == selected.resolve():
+            return real_digest(path)
+        return 'fixture-hash'
+
+    monkeypatch.setattr(stage5.baseline, 'digest', digest)
+    value = stage5.manifest(stage5.load_config(), selected)
+
+    assert value['files_sha256'][str(selected.resolve())] == expected_hash
+
+
+def test_stage5_rep3_config_has_two_three_repeat_arms_and_72_units(capsys):
+    selected = stage5.CONFIG.with_name('qwen-4b-opencode-stage5-rep3.json')
+    source = json.loads(stage5.CONFIG.read_text(encoding='utf-8'))
+    expected = copy.deepcopy(source)
+    expected['protocol_id'] = 'qwen-4b-opencode-stage5-rep3-v1'
+    expected['output'] = '/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-stage5-rep3-v1'
+    expected['arms'] = {
+        name: {**source['arms'][name], 'repetitions': 3}
+        for name in ('X-think', 'T5-rtk')
+    }
+
+    assert json.loads(selected.read_text(encoding='utf-8')) == expected
+    config = stage5.load_config(selected)
+    units = stage5.baseline.schedule(config)
+    assert len(units) == 72
+    assert [unit['arm'] for unit in units[:36]] == ['X-think'] * 36
+    assert [unit['arm'] for unit in units[36:]] == ['T5-rtk'] * 36
+
+    stage5.main(['--config', str(selected), '--dry-run'])
+    assert capsys.readouterr().out.rstrip().endswith('Total: 72')
+
+
 def test_execute_cascade_uses_new_workspace_and_thinking_server(tmp_path, monkeypatch):
     config = stage5.load_config()
     config['output'] = str(tmp_path)
     config['tasks'] = ['py_query']
     config['arms'] = {'X-think': config['arms']['X-think']}
-    monkeypatch.setattr(stage5, 'manifest', lambda _: {'protocol_id': 'test'})
+    monkeypatch.setattr(stage5, 'manifest', lambda *_: {'protocol_id': 'test'})
     monkeypatch.setattr(stage5.subprocess, 'run', lambda *a, **k: type('P', (), {'returncode': 1})())
     variants = []
 
@@ -178,7 +244,7 @@ def test_timeout_with_dead_server_is_not_escalated(tmp_path, monkeypatch):
     config = stage5.load_config()
     config.update(output=str(tmp_path), tasks=['py_query'])
     config['arms'] = {'X-think': config['arms']['X-think']}
-    monkeypatch.setattr(stage5, 'manifest', lambda _: {'protocol_id': 'test'})
+    monkeypatch.setattr(stage5, 'manifest', lambda *_: {'protocol_id': 'test'})
     monkeypatch.setattr(stage5.subprocess, 'run', lambda *a, **k: type('P', (), {'returncode': 1})())
     monkeypatch.setattr(stage5.baseline, 'sample_vram', lambda stop, rows: stop.wait())
     variants = []
@@ -234,7 +300,7 @@ def test_9b_exception_still_uses_server_log_as_oom_evidence(tmp_path, monkeypatc
     config = stage5.load_config()
     config.update(output=str(tmp_path), tasks=['py_query'])
     config['arms'] = {'X-9b': config['arms']['X-9b']}
-    monkeypatch.setattr(stage5, 'manifest', lambda _: {'protocol_id': 'test'})
+    monkeypatch.setattr(stage5, 'manifest', lambda *_: {'protocol_id': 'test'})
     monkeypatch.setattr(stage5.subprocess, 'run', lambda *a, **k: type('P', (), {'returncode': 1})())
     monkeypatch.setattr(stage5.baseline, 'sample_vram', lambda stop, rows: stop.wait())
     monkeypatch.setattr(stage5, 'vram_capacity_and_free', lambda: (8192, 800))
@@ -290,7 +356,7 @@ def test_9b_oom_at_smallest_context_is_infrastructure(tmp_path, monkeypatch):
     config = stage5.load_config()
     config.update(output=str(tmp_path), tasks=['py_query'])
     config['arms'] = {'X-9b': config['arms']['X-9b']}
-    monkeypatch.setattr(stage5, 'manifest', lambda _: {'protocol_id': 'test'})
+    monkeypatch.setattr(stage5, 'manifest', lambda *_: {'protocol_id': 'test'})
     monkeypatch.setattr(stage5.subprocess, 'run', lambda *a, **k: type('P', (), {'returncode': 1})())
     monkeypatch.setattr(stage5.baseline, 'sample_vram', lambda stop, rows: stop.wait())
     monkeypatch.setattr(stage5, 'vram_capacity_and_free', lambda: (8192, 800))
