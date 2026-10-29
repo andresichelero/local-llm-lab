@@ -90,15 +90,17 @@ def test_reject_prefix_that_is_not_frozen_host_prefix(tmp_path):
         build_package(root, 'py_range', tmp_path, 'rev', prefix=secret)
 
 
-def test_packages_exclude_nontrivial_private_oracle_lines():
-    root = Path(__file__).resolve().parents[1] / 'corpus'
+def audit_private_oracle_lines(root, builder):
     checked = 0
     for task_file in (root / 'tasks').glob('*/task.json'):
         task = json.loads(task_file.read_text(encoding='utf-8'))
-        package = build_package(root, task['id'], root / 'hosts' / task['host'], 'rev')
+        package = builder(root, task['id'], root / 'hosts' / task['host'], 'rev')
         rendered = package.markdown + json.dumps(package.to_dict(), ensure_ascii=False)
-        # Some identical assertions are deliberately public in the visible test.
-        public_lines = {line.strip() for line in package.readonly_context['visible_test'].splitlines()}
+        # The allowlist must come from the frozen source, never the audited package.
+        visible_name = 'visible_phase1.py' if task['class'] == 'continuation' else 'visible.py'
+        public_lines = {
+            line.strip() for line in (task_file.parent / visible_name).read_text(encoding='utf-8').splitlines()
+        }
         for private in (root / 'oracles' / task['id']).rglob('*'):
             if private.is_file() and private.suffix == '.py':
                 for line in private.read_text(encoding='utf-8').splitlines():
@@ -108,3 +110,31 @@ def test_packages_exclude_nontrivial_private_oracle_lines():
                         checked += 1
                         assert fragment not in rendered, (task['id'], fragment)
     assert checked > 0
+
+
+def test_packages_exclude_nontrivial_private_oracle_lines():
+    root = Path(__file__).resolve().parents[1] / 'corpus'
+    audit_private_oracle_lines(root, build_package)
+
+
+def test_fragment_audit_rejects_contaminated_visible_context():
+    from dataclasses import replace
+
+    import pytest
+
+    root = Path(__file__).resolve().parents[1] / 'corpus'
+    oracle = (root / 'oracles' / 'py_range' / 'oracle.py').read_text(encoding='utf-8')
+    fragment = next(line.strip() for line in oracle.splitlines() if 'bytes=0-0,5-99,-2' in line)
+    visible = (root / 'tasks' / 'py_range' / 'visible.py').read_text(encoding='utf-8')
+    assert fragment not in visible
+
+    def contaminated_builder(corpus_root, task_id, workspace, revision):
+        package = build_package(corpus_root, task_id, workspace, revision)
+        if task_id != 'py_range':
+            return package
+        context = dict(package.readonly_context)
+        context['visible_test'] += '\n' + fragment
+        return replace(package, readonly_context=context, markdown=package.markdown + '\n' + fragment)
+
+    with pytest.raises(AssertionError, match='py_range'):
+        audit_private_oracle_lines(root, contaminated_builder)
