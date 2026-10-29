@@ -687,6 +687,9 @@ def run_attempt(config, unit, output, server, port, log_path):
         result['vram_samples_mib'] = [x['vram_mib'] for x in samples]
         result['peak_vram_mib'] = result['resources']['vram_mib']['max']
         write_json(output / 'result.json', result)
+        # The per-episode copy of the provider cache (~63 MiB) duplicates a cache whose
+        # hashes are already in the manifest; keeping it filled the WSL disk.
+        shutil.rmtree(output / 'home/.config/opencode/node_modules', ignore_errors=True)
     return result
 
 
