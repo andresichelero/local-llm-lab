@@ -95,8 +95,8 @@ def test_stage5_rep3_config_has_two_three_repeat_arms_and_72_units(capsys):
     selected = stage5.CONFIG.with_name('qwen-4b-opencode-stage5-rep3.json')
     source = json.loads(stage5.CONFIG.read_text(encoding='utf-8'))
     expected = copy.deepcopy(source)
-    expected['protocol_id'] = 'qwen-4b-opencode-stage5-rep3-v1'
-    expected['output'] = '/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-stage5-rep3-v1'
+    expected['protocol_id'] = 'qwen-4b-opencode-stage5-rep3-v2'
+    expected['output'] = '/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-stage5-rep3-v2'
     expected['arms'] = {
         name: {**source['arms'][name], 'repetitions': 3}
         for name in ('X-think', 'T5-rtk')

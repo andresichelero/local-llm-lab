@@ -123,6 +123,16 @@ def timeout_failure(failure, timed_out, reason):
     return failure
 
 
+CLIENT_DISCONNECTS = {'ConnectionResetError', 'BrokenPipeError'}
+
+
+def proxy_server_failure(rows, timed_out):
+    # Killing the CLI at the wall timeout drops its open request; that reset is not a server fault.
+    return any(row.get('status', 0) >= 500
+               or (row.get('error') and not (timed_out and row['error'] in CLIENT_DISCONNECTS))
+               for row in rows)
+
+
 def first_failure(failures):
     return next((f for f in failures if f in {'server_exited', 'server_http_error'}),
                 next((f for f in failures if f), None))
@@ -741,11 +751,10 @@ def run_attempt(config, unit, output, server, port, log_path):
                        timeout=min(60, deadline - time.monotonic()))
         failures = [phase_failure(p, raw, server.poll() is None) for p in phases['phases']]
         failure = first_failure(failures)
-        if failure not in {'model_protocol_error', 'server_exited'} and any(
-            row.get('error') or row.get('status', 0) >= 500 for row in proxy.rows
-        ):
+        timed_out = any(p['code'] == 124 for p in phases['phases'])
+        if failure not in {'model_protocol_error', 'server_exited'} and proxy_server_failure(proxy.rows, timed_out):
             failure = 'server_http_error'
-        failure = timeout_failure(failure, any(p['code'] == 124 for p in phases['phases']), 'model_wall_timeout')
+        failure = timeout_failure(failure, timed_out, 'model_wall_timeout')
         if task['class'] == 'continuation' and not phases['released'] and failure is None:
             failure = 'harness_missing_session' if not phases['phases'][0]['session'] else 'model_phase1_incomplete'
         if phases['released'] and phases['phases'][1]['session'] != phases['phases'][0]['session']:
