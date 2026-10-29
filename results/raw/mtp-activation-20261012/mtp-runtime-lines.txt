@@ -1,4 +1,0 @@
-0.01.212.116 I llama_model_loader: - kv  30:                qwen35.nextn_predict_layers u32              = 1
-0.02.125.446 I common_speculative_init_result: creating MTP draft context against the target model '/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf'
-0.02.169.833 I spec common_specu: adding speculative implementation 'draft-mtp'
-0.02.229.882 I srv    load_model: speculative decoding context initialized

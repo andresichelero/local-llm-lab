@@ -1,8 +1,0 @@
-{
-  "passed": false,
-  "error": "NameError: name 'fixture' is not defined",
-  "profile_checks": {
-    "passed": false
-  },
-  "server_log_path": "/home/foxtrot/local-llm-benchmark/results/raw/model-quality-paired-20261012-r1c-20261012T0538Z/llama-server-qwen3.5-4b.log"
-}
