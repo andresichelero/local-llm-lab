@@ -41,7 +41,7 @@ Leitura, com cautela:
 - **Etapa 4 (replicação e servidor):** controle 25/36, Q6_K 27/36, MTP com decode 55% mais rápido, checkpoints de contexto com tempo dos sucessos 34% menor. Tabela completa em [docs/RESULTS.md](docs/RESULTS.md), seção 7.
 - **Etapa 5 (pesos, ferramentas e cascatas):** a cascata que repete com thinking ligado quando a verificação visível falha passou de 7/12 para 11/12 (4 de 4 resgates). A cascata para o 9B resgatou 1 de 3. O plugin RTK piorou (6/12). LSP, Q6_K_L, UD-Q6_K_XL e UD-Q4_K_XL ficaram entre 9 e 10/12, sem diferença significativa. Ver [docs/RESULTS.md](docs/RESULTS.md), seção 8.
 - **Tarefas longas (T2):** em maratonas de 5 a 6 objetivos, o contexto grande passou em 9/9 oráculos. Headroom ficou em 7/9, a compactação do OpenCode em 6/9 e o reset com `PROGRESS.md` em 5/9. Ver seção 9.
-- **Prefixo do repositório em cache (T3b):** com cerca de 46 mil tokens já no cache, o TTFT cai de 16,1 s para 0,16 s. Na v3, com o desenho corrigido, o acerto ficou igual nos três braços (2/12): o contexto longo não melhora a qualidade do worker de chamada única. Ver seção 10.
+- **Prefixo do repositório em cache (T3b):** com cerca de 46 mil tokens já no cache, o TTFT cai de 16,1 s para 0,16 s. A v3 registrou 2/12 nos três braços. Excluindo a tarefa `js_sign` do P-W16 por falha comprovada do verificador, esse braço fica em 2/11; outros episódios também sofreram diagnósticos ambientais. A comparação de qualidade é inconclusiva. Ver seção 10.
 - **Significância:** nenhuma comparação atinge p < 0,05. No braço de 16K, com 5 derrotas e nenhuma vitória, o p bilateral é 0,0625, que é o menor valor possível com cinco pares discordantes na mesma direção. Use estes números como sinais para a próxima etapa, não como ranking.
 
 ## Configuração recomendada
@@ -74,7 +74,7 @@ A partir da raiz do repositório:
 ```sh
 export PYTHONDONTWRITEBYTECODE=1
 PY=python3   # use o Python 3.12 do ambiente de validação
-$PY -m pytest -p no:cacheprovider -q                  # 16 arquivos de teste, ver Limitações
+$PY -m pytest -p no:cacheprovider -q                  # 19 arquivos de teste, ver Limitações
 $PY -m benchmark.opencode_baseline --dry-run          # lista as 300 unidades do protocolo atual
 $PY -m benchmark.opencode_baseline --dry-run --arm B0 # 24 unidades
 PYTHONDONTWRITEBYTECODE=1 $PY corpus/validate_corpus.py --node /caminho/para/node   # 12/12 PASS, cerca de 2 min
@@ -126,7 +126,7 @@ benchmark/
   eval_suites/            sondas de comportamento das fixtures
 corpus/                   12 tarefas: hosts (Bottle 0.13.2 e ms 2.1.3), tarefas, oráculos,
                           stubs, suporte, prefixos e manifesto de hashes
-tests/                    16 arquivos de teste dos módulos mantidos
+tests/                    19 arquivos de teste dos módulos mantidos
 results/3070-benchmark/   agregados das etapas 1 a 5, T2 e T3b
 reports/                  relatórios das etapas F0, F1, F3 e T1, copiados sem logs nem snapshots
 ```
@@ -136,14 +136,15 @@ reports/                  relatórios das etapas F0, F1, F3 e T1, copiados sem l
 - **Poder estatístico baixo.** São 12 episódios por braço (24 no controle), com uma repetição por braço. Diferenças de 1 ou 2 episódios são ruído. No controle, quatro tarefas trocaram de resultado entre as duas repetições.
 - **Quantizadores diferentes.** O controle usa Q4_K_M do bartowski. Q6_K e Q8_0 são do unsloth, e o Q4_K_M do unsloth só aparece na etapa 4.
 - **Armazenamento.** Os GGUF de Q6_K e Q8_0 são lidos a partir de `/mnt/d` (disco D:). A regra do laboratório pede o ext4 do WSL. O efeito sobre as métricas não foi medido.
-- **Sandbox parcial.** O bubblewrap não bloqueia a rede. O confinamento do bash não foi comprovado para todos os comandos. Os testes visíveis e o oráculo rodam fora do sandbox, pelo supervisor.
+- **Sandbox.** A execução do OpenCode permite rede; o confinamento do bash não foi comprovado para todos os comandos. As avaliações atuais usam sandbox separado sem rede; os resultados históricos foram produzidos com as versões anteriores.
 - **VRAM do dispositivo.** A VRAM é amostrada no dispositivo inteiro, a cerca de 1 Hz, e o desktop do Windows compartilha a GPU. Não é a memória exclusiva do processo.
 - **TTFT por proxy.** O TTFT mede o tempo até o primeiro conteúdo, reasoning ou chamada de ferramenta, visto pelo proxy local. Pode estar indisponível para algumas requisições.
 - **Campos ausentes nos resultados v5 e v6.** A taxonomia automática de término e as métricas de qualidade do diff (linhas, escopo, testes enfraquecidos) foram adicionadas depois. Os resultados das etapas 1 a 3 trazem esses campos vazios ou nulos. As causas de falha vêm dos rótulos `failure` gravados pelo runner.
 - **Retentativas por infraestrutura.** Duas unidades de v6 tiveram a primeira tentativa anulada por falha do avaliador. A segunda tentativa, que passou, entrou no acerto. Isso segue o protocolo. Em v5, uma falha do modelo foi classificada como infraestrutura e repetida. Essa classificação foi corrigida em v6.
+- **Timeouts nas etapas 4 e 5.** Nove resultados finais e duas tentativas intermediárias também registraram reset de conexão. As regras atuais dariam prioridade ao erro de servidor, mas os logs não provam se o reset ocorreu antes do timeout; os números históricos foram mantidos. Veja a [revalidação](reports/analise-estrategia-4b-2026-10-28/execucao/F1/revisao-pr45-correcoes.md).
 - **Etapas 4 e 5 com uma repetição na maioria dos braços.** Os braços `S-*`, `Q5-*`, `T5-*` e `X-*` têm 12 episódios e só detectam diferenças acima de cerca de 25 pontos. As maratonas do T2 têm uma repetição cada.
-- **T3b mede o protocolo de edição, não o contexto.** O 4B escreve o bloco SEARCH de memória, e não por cópia. Com temperatura 0, reenvia a mesma edição rejeitada. Mesmo com o desenho corrigido (v3), o acerto ficou em 2/12 nos três braços.
-- **Landlock em drvfs.** O sandbox Landlock do verificador não funciona em `/mnt/d`. O T3b roda de uma cópia do repositório no ext4 do WSL.
+- **T3b.** O 4B escreve o bloco SEARCH de memória e reenvia edições rejeitadas. Erros de OpenSSL afetaram verificações v2 e v3; os acertos históricos não isolam o efeito do contexto. Veja a [revalidação](reports/analise-estrategia-4b-2026-10-28/execucao/F1/revisao-pr45-correcoes.md).
+- **Landlock em drvfs.** A execução histórica do T3b usou uma cópia do repositório no ext4 do WSL. O verificador revisado foi testado também em `/mnt/d`.
 - **Corpus piloto.** As 12 tarefas não foram calibradas com o modelo nem são um conjunto de confirmação. O `bottle.py` tem cerca de 51 mil tokens, estimados por caracteres.
 - **Reprodução em outra máquina.** O config tem caminhos e SHA-256 do laboratório. Para outra máquina, é preciso um novo `protocol_id`, pois o manifesto recusa misturar protocolos.
 

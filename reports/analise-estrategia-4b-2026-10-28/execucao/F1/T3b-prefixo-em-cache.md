@@ -64,7 +64,7 @@ A campanha rodou a partir do snapshot ext4, commit `c05d697`, e gravou os result
 
 ### Latência: o cache funciona
 
-| Braço | TTFT (mediana) | Prompt processado | Tokens do cache | Tempo/episódio | Decode | Pico de VRAM |
+| Braço | TTFT (mediana) | Prompt processado | Tokens do cache | Tempo/episódio | Decode | Mediana do pico de VRAM por episódio |
 |---|---:|---:|---:|---:|---:|---:|
 | P-W16 (trechos de até 16K, sem prefixo) | 82 ms | 557 | 2.844 | 8,3 s | 85 tok/s | 3.871 MiB |
 | P-WL-cold (prefixo de cerca de 46K, cache frio) | **16,1 s** | 46.075 | 0 | 22,1 s | 66 tok/s | 4.510 MiB |

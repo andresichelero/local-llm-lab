@@ -7,7 +7,7 @@ Este documento reúne todas as tabelas das etapas 1 a 4. O resumo e a leitura es
 - **Dados brutos (fora do repositório).** `qwen-4b-opencode-baseline-bwrap-v5` (controle B0, 24 episódios) e `qwen-4b-opencode-baseline-bwrap-v6` (nove braços, 12 episódios cada), no ext4 do WSL.
 - **Protocolos.** `qwen-4b-opencode-baseline-b-20261029-bwrap-v5` e `qwen-4b-opencode-baseline-b-20261029-bwrap-v6`, como registrados nos manifestos.
 - **Agregados.** [baseline-report-v5-v6.md](../results/3070-benchmark/baseline-report-v5-v6.md) e [baseline-report-v5-v6.csv](../results/3070-benchmark/baseline-report-v5-v6.csv), gerados por `benchmark/baseline_report.py` com `--control-dir` apontando para v5 e `--control B0`. A saída de [arm-summary-v5-v6.txt](../results/3070-benchmark/arm-summary-v5-v6.txt) veio de um script auxiliar só de leitura, fora do repositório. Ela traz as colunas de VRAM máxima e de fração de cache, que o relatório não calcula.
-- **Verificação da configuração.** Os 20 braços das etapas 1 a 3, registrados nos manifestos de v5 e v6, são idênticos aos do config atual. Não há nenhuma diferença.
+- **Verificação da configuração.** Os 10 braços das etapas 1 a 3, registrados nos manifestos de v5 e v6, são idênticos aos do config atual. Não há nenhuma diferença.
 
 ## 1. Configuração de cada braço
 
@@ -195,12 +195,12 @@ Não houve regressão nem OOM. A instrumentação registra o pedido de compacta�
 
 ## 10. Prefixo do repositório em cache (T3b, protocolos prefix-cache-v2 e v3)
 
-Os dados brutos estão em `qwen-4b-prefix-cache-v2`: 108 unidades (3 braços × 12 tarefas × 3 repetições), sem nenhuma falha de infraestrutura. As repetições saíram idênticas com temperatura 0, então a amostra efetiva é de 12 tarefas por braço.
+Os dados brutos estão em `qwen-4b-prefix-cache-v2`: 108 unidades (3 braços × 12 tarefas × 3 repetições), sem falhas de infraestrutura registradas na classificação final. A revalidação encontrou falhas ambientais do verificador em parte das unidades; veja abaixo. As repetições saíram idênticas com temperatura 0, então a amostra efetiva é de 12 tarefas por braço.
 
 - Agregado: [t3b-prefix-cache-summary.json](../results/3070-benchmark/t3b-prefix-cache-summary.json).
 - Análise: [T3b-prefixo-em-cache.md](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/T3b-prefixo-em-cache.md).
 
-| Braço | Tarefas aprovadas | TTFT mediano | Tokens do cache | Tempo mediano (s) | VRAM pico (MiB) |
+| Braço | Tarefas aprovadas | TTFT mediano | Tokens do cache | Tempo mediano (s) | Mediana do pico de VRAM por episódio (MiB) |
 | --- | --- | --- | --- | --- | --- |
 | `P-W16`: trechos de até 16K | 2/12 | 82 ms | 2.844 | 8.3 | 3871 |
 | `P-WL-cold`: prefixo de cerca de 46K, cache frio | 1/12 | 16,1 s | 0 | 22.1 | 4510 |
@@ -214,7 +214,9 @@ Conclusões:
 
 ### v3: desenho corrigido
 
-Os dados brutos estão em `qwen-4b-prefix-cache-v3`: 36 unidades (3 braços × 12 tarefas × 1 repetição), sem nenhuma falha de infraestrutura. A v3 fez três mudanças:
+Agregado com as 36 unidades e o manifesto: [t3b-v3-prefix-cache-summary.json](../results/3070-benchmark/t3b-v3-prefix-cache-summary.json).
+
+Os dados brutos estão em `qwen-4b-prefix-cache-v3`: 36 unidades (3 braços × 12 tarefas × 1 repetição), sem falhas de infraestrutura registradas na classificação final. A v3 fez três mudanças:
 - mostra nos pacotes WL o texto atual das linhas mascaradas;
 - permite reparar uma edição rejeitada, com até 2 reparos por episódio;
 - usa 1 repetição.
@@ -229,5 +231,7 @@ Conclusões:
 - O marcador sumiu do SEARCH (0 de 36), mas o acerto não mudou: são as mesmas duas tarefas nos três braços.
 - O 4B escreve o SEARCH de memória, e não por cópia.
 - Com temperatura 0, ele reenvia a mesma edição rejeitada em 29 de 33 reparos WL.
-- Neste worker de chamada única, o contexto longo não melhora a qualidade. O gargalo é o protocolo de edição.
+- A comparação de qualidade é inconclusiva: verificações falharam por acesso negado à configuração do OpenSSL, e seus diagnósticos afetaram reparos.
 - O prefixo em cache traz só ganho de latência.
+
+Na revalidação, 9 notas privadas da v2 e 5 da v3 passaram em cópias isoladas, embora tenham falhado na execução histórica por erro ambiental. Todas as 14 entregas foram rejeitadas; isso não permite reconstruir os reparos que teriam ocorrido com o verificador saudável. Além disso, `P-W16/js_sign` foi rejeitada por diagnóstico ambiental, sem falha de modelo comprovada: excluindo essa tarefa, o resultado do P-W16 passa de **2/12 para 2/11** tanto na v2 (três repetições) quanto na v3 (uma). As tabelas mantêm os registros históricos. Outros episódios receberam diagnósticos ambientais, portanto 2/11 não torna a comparação de qualidade conclusiva. Nas etapas 4 e 5, 11 tentativas com timeout também registraram reset de conexão: a aplicação literal da nova prioridade classificaria 9 resultados finais e 2 tentativas intermediárias como infraestrutura, mas os logs não mostram se o reset precedeu o timeout. As tabelas preservam as classificações históricas. Os detalhes e os limites dos logs estão na [revisão do PR 45](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/revisao-pr45-correcoes.md).
