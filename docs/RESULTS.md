@@ -11,7 +11,7 @@ Este documento reúne todas as tabelas das etapas 1 a 3. O resumo e a leitura es
 
 ## 1. Configuração de cada braço
 
-A tabela lista todos os braços do config atual (`benchmark/configs/qwen-4b-opencode-baseline.json`), inclusive a etapa 4. As etapas 1 a 3 rodaram com as mesmas especificações. A etapa 4 não foi executada.
+A tabela lista todos os braços do config atual (`benchmark/configs/qwen-4b-opencode-baseline.json`), inclusive a etapa 4. As etapas 1 a 3 rodaram com as mesmas especificações. Nenhum resultado da etapa 4 entra nesta PR.
 
 | Etapa | Braço | Repetições | Pesos | Contexto (tokens) | KV K/V | Cache de prompt | Thinking | Amostragem | Passos | Argumentos extra do servidor |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -127,7 +127,7 @@ Com doze pares por braço, nenhuma comparação chega a p < 0,05. No braço de 1
 
 ### Etapa 4: o que está configurado e o que o relatório T1 descreve
 
-A etapa 4 não foi executada. O relatório T1 descreve 144 episódios. O config atual tem 168, e a diferença é esta:
+Nenhum resultado da etapa 4 entra nesta PR. O relatório T1 descreve 144 episódios. O config atual tem 168, e a diferença é esta:
 
 - O braço `C4-think`, com 2 repetições (24 episódios), foi acrescentado ao config depois do relatório T1, no commit `c2cf750`.
 - O braço `S-cache-reuse` do T1 (`--cache-reuse 256 --ctx-checkpoints 16`) virou `S-checkpoints` (`--ctx-checkpoints 64 --checkpoint-min-step 1024`), no commit `bb93df2`.
