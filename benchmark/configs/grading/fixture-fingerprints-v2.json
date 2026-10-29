@@ -1,0 +1,138 @@
+{
+  "schema_version": 2,
+  "grader_protocol_version": "restricted-python-workspace-v2",
+  "tasks": {
+    "calculator_division": {
+      "fixture": "benchmark/fixtures/harness_task",
+      "files": {
+        "TASK.md": {
+          "size_bytes": 640,
+          "sha256": "5cab453abf7211c6c0a046a6ce47c4aa41868233139146a41c35f104818e7386"
+        },
+        "src/calculator.py": {
+          "size_bytes": 117,
+          "sha256": "f302b550aa8363cd1eb52515dc391b8a8cd7faa05b8d300c2f7b4eb608314341"
+        },
+        "tests/test_calculator.py": {
+          "size_bytes": 304,
+          "sha256": "b408c6780be4f41ee46cd102821321317c0d63219b9ce3fd4dea46b9dfb1b146"
+        }
+      },
+      "probe": {
+        "size_bytes": 890,
+        "file": "benchmark/eval_suites/calculator_division/test_probe.py",
+        "sha256": "4fb3d9f2355b10b65e32c53a3fe3d7c61a0de2837f00a56dfeeffdf4df598ebd"
+      }
+    },
+    "whitespace_normalization": {
+      "fixture": "benchmark/fixtures/harness_whitespace",
+      "files": {
+        "TASK.md": {
+          "size_bytes": 545,
+          "sha256": "cd84b013a791cf8a0298eb3533a5a6d7d42bf24ea48f3c625280696b5f9af6a9"
+        },
+        "src/text_utils.py": {
+          "size_bytes": 63,
+          "sha256": "97c735a112756424fd38e0bea1572f3cba4849f98406fc99b763bb72e912bf51"
+        },
+        "tests/test_text_utils.py": {
+          "size_bytes": 240,
+          "sha256": "02dc5f2639dea8c783e38ade582910433ecc612cddbd77f39846fc9d39cc350a"
+        }
+      },
+      "probe": {
+        "size_bytes": 959,
+        "file": "benchmark/eval_suites/whitespace_normalization/test_probe.py",
+        "sha256": "bd074afbadc77e8348b735cb506a260aa85d1f92e7ea413ddb39525b4781c934"
+      }
+    },
+    "dotenv_line_parser": {
+      "fixture": "benchmark/fixtures/harness_env_parser",
+      "files": {
+        "TASK.md": {
+          "size_bytes": 654,
+          "sha256": "2ec3d12bd11daa2a1965605f0ea16438fc965a93f2d6756709d70a0d1f2fede4"
+        },
+        "src/config_parser.py": {
+          "size_bytes": 236,
+          "sha256": "88b6347c23cca8a0e9fe19eb0c4654081083fcfe6780f4dca186fc79ca4125da"
+        },
+        "tests/test_config_parser.py": {
+          "size_bytes": 743,
+          "sha256": "f2995c182704dbae2692d084d643aef3ee2db58af00758e9b46a49196930ad08"
+        }
+      },
+      "probe": {
+        "size_bytes": 1415,
+        "file": "benchmark/eval_suites/dotenv_line_parser/test_probe.py",
+        "sha256": "6e09992d8f3229e9e04970864f1884ab91849e7d80ff0729cf1c5e05b7a2c233"
+      }
+    },
+    "config_precedence": {
+      "fixture": "benchmark/fixtures/config_precedence_task",
+      "files": {
+        "TASK.md": {
+          "size_bytes": 928,
+          "sha256": "95099317234f4139b0fdbbb7f6574552d8871799afc7dff04f25f600f7f237ea"
+        },
+        "src/config.py": {
+          "size_bytes": 409,
+          "sha256": "98a193a53f614d27ad50c5b02cd1ddc220cf0f45ec0bfcbf0a331c6a376025ea"
+        },
+        "tests/test_config.py": {
+          "size_bytes": 1750,
+          "sha256": "dcbbed4907daf1ba95a179e786df7e0480ca4807f73e5098fdf80c09ec948153"
+        }
+      },
+      "probe": {
+        "size_bytes": 1599,
+        "file": "benchmark/eval_suites/config_precedence/test_probe.py",
+        "sha256": "ca8ef0a7573f9d6ece32e792efb64021c82e2bf783cdf3bb00e93f5744b014be"
+      }
+    },
+    "retry_policy": {
+      "fixture": "benchmark/fixtures/retry_policy_task",
+      "files": {
+        "TASK.md": {
+          "size_bytes": 1262,
+          "sha256": "aabc53e38cc3bc29b235d111406355aa8d823226819bf2f8f8d4b9470f85da3f"
+        },
+        "src/retry.py": {
+          "size_bytes": 681,
+          "sha256": "25a2c143486212a65fa4038e216c67a995b1fe515d049f7d7816b5014a62a04d"
+        },
+        "tests/test_retry.py": {
+          "size_bytes": 2111,
+          "sha256": "ba796075b2eeb4f0671b07fe7e1aea9584be4b3a235b8a58f6479567cde4345e"
+        }
+      },
+      "probe": {
+        "size_bytes": 2579,
+        "file": "benchmark/eval_suites/retry_policy/test_probe.py",
+        "sha256": "c265693db1360452377d67063fbfc21e54b4f41958f4d8e09ce9f212a1f6f0b0"
+      }
+    },
+    "package_refactor": {
+      "fixture": "benchmark/fixtures/package_refactor_task",
+      "files": {
+        "TASK.md": {
+          "size_bytes": 1291,
+          "sha256": "b2c9310b338bda0f1471e37002a3bdd339abf593d7c7ff32c173153fbbd503a7"
+        },
+        "src/service.py": {
+          "size_bytes": 410,
+          "sha256": "655d6c0eda83e6efd50f3f05ad83ad017652e9c80522c2e41aba46f4fdf1ca32"
+        },
+        "tests/test_service.py": {
+          "size_bytes": 1293,
+          "sha256": "a093fa976a80063f619c593f09d39a887890202358849592bfc6904921179533"
+        }
+      },
+      "probe": {
+        "size_bytes": 1685,
+        "file": "benchmark/eval_suites/package_refactor/test_probe.py",
+        "sha256": "dd0432e64b4866dbdad44d5fc74df4837e1a515d6060b288ad5fee621df04780"
+      }
+    }
+  }
+}

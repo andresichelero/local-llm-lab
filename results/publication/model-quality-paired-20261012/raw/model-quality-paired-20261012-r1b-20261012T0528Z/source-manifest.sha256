@@ -1,7 +1,0 @@
-7fee738d2317375c79f6cfe8d74d7b01ecfd34b194c3d78e3c31a05744ac2bf6  /home/foxtrot/local-llm-benchmark/snapshots/model-quality-paired-20261012-r1b-c4f7663/source-git-archive.tar.gz
-28b1d05fb6ab4ffe85930e46bb472f99f77e426e29fc8fe2f294794a38c30d9f  /home/foxtrot/local-llm-benchmark/snapshots/model-quality-paired-20261012-r1b-c4f7663/pre-run-dry-run.json
-514192c563ed512cfe7b5907fdd5082812a08e16b71060ef8d7b3d730a7d69e4  /home/foxtrot/local-llm-benchmark/snapshots/model-quality-paired-20261012-r1b-c4f7663/clean-source/benchmark/model_quality_paired.py
-a6b2c43c8a8440854addffe37b91be22d1e98feff8b201d8bc8d5815c3c27ffa  /home/foxtrot/local-llm-benchmark/snapshots/model-quality-paired-20261012-r1b-c4f7663/clean-source/benchmark/harness_runner.py
-0b81b48b60720a94930fa9b94f8b4fe8279bb40cb3fea258d819bfee50aa80fd  /home/foxtrot/local-llm-benchmark/snapshots/model-quality-paired-20261012-r1b-c4f7663/clean-source/benchmark/harness_eval.py
-bbef19a6b5427cdd75745989ec5f2673bc977cd7dc917aa1763eae82eab59d1c  /home/foxtrot/local-llm-benchmark/snapshots/model-quality-paired-20261012-r1b-c4f7663/clean-source/benchmark/opencode_controlled_probe.py
-080a9d0301f20fbdd7827367022b176ef08fcf5f7b71bcf7b3c57a0dd7f9c6a1  /home/foxtrot/local-llm-benchmark/snapshots/model-quality-paired-20261012-r1b-c4f7663/clean-source/tests/test_model_quality_paired.py

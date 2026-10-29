@@ -1,0 +1,19 @@
+{
+  "id": "recover_decode",
+  "class": "tool_recovery",
+  "host": "bottle-0.13.2",
+  "objective": "Inspect the deterministic failure report and repair Bottle's byte-to-text conversion while preserving its public behavior.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium",
+  "stub": "corpus/stubs/recover_decode/tool.py",
+  "adaptation": "A deterministic tool response supplies the external evidence for an edit in Bottle; no live MCP service is required."
+}

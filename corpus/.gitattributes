@@ -1,0 +1,2 @@
+# Preserve frozen fixture bytes across platforms; the manifest hashes bytes.
+* -text

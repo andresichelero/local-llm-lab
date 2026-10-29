@@ -1,188 +1,166 @@
-# Local LLM Lab
+# Benchmark de LLM local: Qwen3.5-4B em RTX 3070 (8 GB)
 
-Reproducible experiments for local inference, quantization, fine-tuning, and agent harnesses on this Windows 10 + WSL2 host. The machine audit is stored under `results/system-audit/`; run results must be recorded separately from upstream claims.
+> **English summary.** This repository is a reproducible, single-machine benchmark of a local coding agent. Qwen3.5-4B runs on llama.cpp v0.8.0 (CUDA 13.0) on an NVIDIA RTX 3070 8 GB under WSL2, driven by OpenCode 1.19.5 inside a bubblewrap sandbox. A 12-task pilot corpus (Bottle 0.13.2 and ms 2.1.3) is graded by private oracles, and each runtime factor (context, KV cache type, weight quantization, prompt cache, thinking mode) is varied one at a time from a control arm. Stages 1 to 3 (132 episodes: 12 per arm and 24 for the control) show no statistically significant difference between arms. Prompt caching is essential for latency. Stage 4 replicated the control (25/36) and Q6_K (27/36), did not confirm the stage 3 thinking gain, and showed that MTP speculative decoding (+55% decode) and context checkpoints cut task time by about a third. Stage 5 found that a cascade that retries a visibly failed attempt with thinking enabled lifted 7/12 to 11/12, while the RTK output filter hurt (6/12). Long-task marathons favoured a large context over compaction or resets, and a cached 46K-token repository prefix cut time to first token from 16 s to 0.16 s. Campaigns before 2026-10-28 were removed from this tree and remain in the git history.
 
-## Machine facts that constrain this lab
+## Resumo
 
-- Windows 10 Pro 22H2, Ryzen 5 5600X, 32 GiB physical RAM, RTX 3070 8 GiB, NVIDIA driver 610.62.
-- Ubuntu 24.04.5 in WSL2, kernel 6.18.40.1, CUDA device visible through `nvidia-smi`.
-- The current user `.wslconfig` sets WSL to 8 GiB RAM, 8 processors, 4 GiB swap, and a 110 GB virtual disk limit; the Ubuntu ext4 filesystem reports 108 GiB.
-- Free VRAM has varied from about 4.6 GiB during the first audit to 3.2–3.4 GiB while other WSL and Windows workloads were active; the desktop shares this GPU.
-- The Ubuntu virtual disk is stored on the C: Samsung 970 EVO Plus SSD; at the latest check its ext4 filesystem was 108 GiB with 19 GiB free. All experiments, active model/runtime files, scratch workspaces, logs, resource samples, and raw outputs stay on this SSD-backed WSL filesystem. D: and E: are storage/archive drives only; E: receives verified completed artifacts and historical records. No HDD performance tests are part of this lab. Check current free space before downloads/builds.
-- CUDA Toolkit 13.0 was installed from NVIDIA's WSL repository. `nvcc` 13.0.88 is available. The Windows driver remains 610.62; no Linux NVIDIA driver was installed into WSL.
+Este repositório mede, em uma única máquina, quanto cada escolha de runtime muda a taxa de acerto e o custo de um agente de programação local.
 
-The host, WSL and GPU can change while the lab runs. Re-run the audit before interpreting later benchmarks.
+- **Modelo e runtime:** Qwen3.5-4B em GGUF, servido pelo `llama-server` do llama.cpp v0.8.0 (commit `8642541`) com CUDA. Uma instância por braço, `--parallel 1`, execução serial.
+- **Agente:** OpenCode 1.19.5 (`opencode run --format json --pure`), isolado em bubblewrap 0.9.0. O sandbox não monta o repositório, `/mnt/d`, `/home` nem os oráculos.
+- **Corpus:** 12 tarefas de piloto em 6 classes (2 por classe), com oráculo privado avaliado uma vez ao fim de cada tentativa. O oráculo nunca entra no prompt.
+- **Matriz:** um fator por vez a partir do controle B0 (Q4_K_M, KV q4_0, contexto 64K, cache de prompt ligado, thinking desligado, temperatura 0).
 
-## Quick start
+Detalhes: [método](docs/METHODOLOGY.md), [máquina e versões](docs/HARDWARE.md), [todas as tabelas](docs/RESULTS.md).
 
-```bash
-cd "$HOME/local-llm-benchmark/source-tree"
-bash scripts/00_audit_system.sh
+## Principais resultados (etapas 1 a 3)
+
+Taxa com intervalo de Wilson de 95%. "Pareado" compara cada braço com o controle, por tarefa e repetição 1 (McNemar exato, bilateral).
+
+| Etapa | Braço | Mudança em relação ao controle | Acertos | Taxa (IC 95%) | Tempo mediano, todos (s) | Tempo mediano, sucessos (s) | TTFT mediano (ms) | VRAM pico, máximo (MiB) | Fração do prompt em cache | Pareado com o controle (vitórias / derrotas / empates; p exato) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Etapa 1 | `B0` | controle: Q4_K_M, KV q4_0, 64K, cache on, thinking off, temp 0 | 16/24 | 67% (47%–82%) | 42.3 | 36.4 | 296 | 4567 | 0.94 | controle |
+| Etapa 2 | `B-ctx16` | contexto 16K | 3/12 | 25% (9%–53%) | 16.4 | 27.6 | 448 | 3858 | 0.87 | 0 / 5 / 7; p = 0.0625 |
+| Etapa 2 | `B-ctx32` | contexto 32K | 9/12 | 75% (47%–91%) | 46.1 | 38.1 | 235 | 4105 | 0.92 | 2 / 1 / 9; p = 1.0000 |
+| Etapa 2 | `B-ctx128` | contexto 128K | 9/12 | 75% (47%–91%) | 58.2 | 37.8 | 294 | 5422 | 0.94 | 1 / 0 / 11; p = 1.0000 |
+| Etapa 2 | `B-kv8` | KV q8_0 | 9/12 | 75% (47%–91%) | 39.0 | 30.5 | 265 | 5038 | 0.92 | 1 / 0 / 11; p = 1.0000 |
+| Etapa 2 | `B-kv16` | KV f16 | 7/12 | 58% (32%–81%) | 34.6 | 32.0 | 306 | 5754 | 0.91 | 1 / 2 / 9; p = 1.0000 |
+| Etapa 3 | `B-q6` | Q6_K (unsloth) | 10/12 | 83% (55%–95%) | 37.0 | 34.3 | 301 | 5162 | 0.92 | 2 / 0 / 10; p = 0.5000 |
+| Etapa 3 | `B-q8` | Q8_0 (unsloth) | 8/12 | 67% (39%–86%) | 38.5 | 32.2 | 317 | 6033 | 0.94 | 1 / 1 / 10; p = 1.0000 |
+| Etapa 3 | `B-nocache` | cache de prompt off | 9/12 | 75% (47%–91%) | 115.5 | 81.7 | 7498 | 4521 | 0.00 | 2 / 1 / 9; p = 1.0000 |
+| Etapa 3 | `B-think` | thinking on (temp 0,6, top_p 0,95, top_k 20) | 11/12 | 92% (65%–99%) | 110.1 | 108.9 | 214 | 4535 | 0.95 | 3 / 0 / 9; p = 0.2500 |
+
+Leitura, com cautela:
+
+- **Controle:** 16 de 24 episódios (67%, IC 95% 47–82%).
+- **Contexto:** com 16K o acerto cai para 3 de 12. Nove episódios terminaram com erro do CLI, e o relatório da etapa 2 registra a mensagem de contexto excedido (16 384 tokens). Com 32K, 64K (controle) e 128K o acerto fica entre 67% e 75%, sem diferença detectável. O 128K usa mais VRAM (pico de 5 422 MiB, contra 4 567 MiB no controle).
+- **KV cache:** q8_0 acertou 9 de 12 e f16 acertou 7 de 12. O q4_0 do controle acertou 16 de 24. As diferenças estão dentro do ruído. Entre os braços de KV, o f16 tem o maior pico de VRAM (5 754 MiB).
+- **Pesos:** Q6_K (unsloth) acertou 10 de 12 e Q8_0 (unsloth) acertou 8 de 12. O controle usa outro quantizador (bartowski), então não é possível separar o efeito dos bits do efeito do quantizador.
+- **Cache de prompt:** sem cache, o TTFT mediano sobe de 296 ms para cerca de 7,5 s e o tempo mediano dos episódios vai de 42 s para 115 s. A taxa de acerto não mudou de forma detectável (9 de 12, pareado p = 1,0).
+- **Thinking:** 11 de 12 (92%), contra 16 de 24 no controle. O tempo mediano dos sucessos foi 109 s, contra 36 s. O pareamento dá 3 vitórias e nenhuma derrota (p = 0,25). Na replicação da etapa 4, o thinking acertou 16 de 24 (67%). Somando as duas, são 27 de 36 (75%), dentro do ruído do controle.
+- **Etapa 4 (replicação e servidor):** controle 25/36, Q6_K 27/36, MTP com decode 55% mais rápido, checkpoints de contexto com tempo dos sucessos 34% menor. Tabela completa em [docs/RESULTS.md](docs/RESULTS.md), seção 7.
+- **Etapa 5 (pesos, ferramentas e cascatas):** a cascata que repete com thinking ligado quando a verificação visível falha passou de 7/12 para 11/12 (4 de 4 resgates). A cascata para o 9B resgatou 1 de 3. O plugin RTK piorou (6/12). LSP, Q6_K_L, UD-Q6_K_XL e UD-Q4_K_XL ficaram entre 9 e 10/12, sem diferença significativa. Ver [docs/RESULTS.md](docs/RESULTS.md), seção 8.
+- **Tarefas longas (T2):** em maratonas de 5 a 6 objetivos, o contexto grande passou em 9/9 oráculos. Headroom ficou em 7/9, a compactação do OpenCode em 6/9 e o reset com `PROGRESS.md` em 5/9. Ver seção 9.
+- **Prefixo do repositório em cache (T3b):** com cerca de 46 mil tokens já no cache, o TTFT cai de 16,1 s para 0,16 s. A v3 registrou 2/12 nos três braços. Excluindo a tarefa `js_sign` do P-W16 por falha comprovada do verificador, esse braço fica em 2/11; outros episódios também sofreram diagnósticos ambientais. A comparação de qualidade é inconclusiva. Ver seção 10.
+- **Significância:** nenhuma comparação atinge p < 0,05. No braço de 16K, com 5 derrotas e nenhuma vitória, o p bilateral é 0,0625, que é o menor valor possível com cinco pares discordantes na mesma direção. Use estes números como sinais para a próxima etapa, não como ranking.
+
+## Configuração recomendada
+
+Estas recomendações saem das etapas 1 a 5 e das campanhas T2 e T3b (detalhes em [docs/RESULTS.md](docs/RESULTS.md), seções 7 a 10).
+
+- **Contexto:** 32K é o mínimo, e 64K dá margem. Com OpenCode, 16K não serve neste corpus.
+- **KV cache:** q4_0. Não houve perda mensurável e é o de menor VRAM.
+- **Pesos:** Q4_K_M ou Q6_K. Somando as etapas, Q6_K teve 77% (37/48) e Q4_K_M 68% (41/60), diferença não significativa. Q6_K usa cerca de 550 MiB a mais. O Q4_K_M da unsloth não foi melhor que o do bartowski (7/12).
+- **Cache de prompt:** ligado. Sem ele, a latência cresce cerca de 25 vezes.
+- **Thinking:** desligado na primeira tentativa e ligado só na escalada. Ligado sempre, a vantagem da etapa 3 (11/12) não se repetiu na etapa 4 (16/24), e o tempo cresce cerca de 3,3 vezes. Como cascata, quando a verificação visível falha, resgatou 4 de 4 casos na etapa 5, com cerca de 116 s extras por resgate.
+- **Ferramentas:** sem RTK, que piorou o acerto (6/12). O LSP é neutro; o modelo nunca chamou a ferramenta `lsp` por conta própria.
+- **Tarefas longas:** contexto grande com cache, enquanto couber na VRAM (pico de 5,4 GB). Se for preciso limitar o contexto, Headroom foi melhor que a compactação nativa e que o reset.
+- **Servidor:** MTP (`--spec-type draft-mtp --spec-draft-n-max 2`) aumenta o decode de 74 para 115 tok/s (aceitação 91%). Checkpoints de contexto (`--ctx-checkpoints 64 --checkpoint-min-step 1024`) reduzem o tempo dos sucessos de 37 para 25 s. Nenhum dos dois teve efeito mensurável no acerto.
+- **Amostragem:** temperatura 0. A amostragem recomendada pela Qwen teve 6/12.
+- **Passos do OpenCode:** 40. Com 80 o resultado foi 10/12, sem ganho claro.
+
+## Como reproduzir
+
+### Pré-requisitos
+
+- Windows com WSL2 (Ubuntu 24.04) e GPU NVIDIA de 8 GB. Testado com RTX 3070, driver 610.62 e CUDA Toolkit 13.0 (ver [docs/HARDWARE.md](docs/HARDWARE.md)).
+- Binários e pesos nos caminhos e com os SHA-256 de `benchmark/configs/qwen-4b-opencode-baseline.json`: `llama-server` do llama.cpp v0.8.0, OpenCode 1.19.5, Node, bubblewrap e os GGUF. Nada disso está no repositório.
+- Python 3.12 com pytest e ruff. Versões usadas: pytest 9.1.1 e ruff 0.17.3.
+
+### Comandos sem GPU
+
+A partir da raiz do repositório:
+
+```sh
+export PYTHONDONTWRITEBYTECODE=1
+PY=python3   # use o Python 3.12 do ambiente de validação
+$PY -m pytest -p no:cacheprovider -q                  # 19 arquivos de teste, ver Limitações
+$PY -m benchmark.opencode_baseline --dry-run          # lista as 300 unidades do protocolo atual
+$PY -m benchmark.opencode_baseline --dry-run --arm B0 # 24 unidades
+PYTHONDONTWRITEBYTECODE=1 $PY corpus/validate_corpus.py --node /caminho/para/node   # 12/12 PASS, cerca de 2 min
 ```
 
-Run benchmark commands from a repository checkout on WSL ext4 (for example, `$HOME/local-llm-benchmark/source-tree`). The benchmark preflights reject non-ext4 model, runtime, dataset, and output paths.
+### Comandos com GPU
 
-The audit is read-only. Model downloads require an explicit tier and check free space before writing:
+Estes comandos iniciam o `llama-server`. Rode somente com a GPU livre. O runner se recusa a começar se já houver um `llama-server` ativo.
 
-```bash
-MODEL_DIR="$HOME/local-llm-benchmark/models" bash scripts/07_download_models.sh --tier small --dry-run
+```sh
+$PY -m benchmark.opencode_baseline --smoke                  # 1 episódio: B0, tarefa py_query
+$PY -m benchmark.opencode_baseline --smoke --task cont_path # outra tarefa
+$PY -m benchmark.opencode_baseline --arm B-kv8              # um braço
+$PY -m benchmark.opencode_baseline --stage N                # todas as unidades da etapa N (N de 1 a 4)
 ```
 
-Do not use `--tier all` until the model matrix has been reviewed and each download's size is known. Existing model directories are never cleaned by these scripts.
-
-## Experiment status
-
-See `results/reports/status.md` for the current ledger of what has been researched, installed, executed, measured, and deferred. `research/source-ledger.csv` classifies primary evidence separately from community reports. Community throughput claims are leads, not lab measurements.
-
-### Current SSD findings — 2026-10-11
-
-New benchmark runs use the C:-hosted WSL ext4 SSD for active model/runtime files, scratch workspaces, logs, resource traces, and raw outputs. The core llama.cpp inference and quality launchers now check the model, executable, shared libraries, benchmark root, and output directories before starting; HDD-backed model/runtime/library paths are rejected. E: is reserved for verified archives and historical records; no new HDD performance tests are part of this lab. Existing HDD comparisons are retained only as explicitly labeled historical context.
-
-- **Qwen3.5-9B, llama.cpp, 16K context:** median generation was 59.37 tok/s with q4_0 KV, 61.99 tok/s with q8_0, and 59.52 tok/s with f16 KV. A narrow planted-fact probe returned the exact fact in 3/3 repeats per KV format; this is not broad quality evidence. See [throughput/resource results](results/reports/ssd-context-kv.md) and the [recall probe](results/reports/context-recall.md).
-- **Qwen3.5-9B output/tool reliability:** a separate five-repeat SSD series passed exact JSON and a real `add(19, 23)` tool round trip 5/5 each. Median wall time was 0.493 s for JSON and 1.512 s for the complete tool round trip. This covers two fixed prompts only; see the [repeatability report](results/reports/qwen35-tool-reliability.md).
-- **Qwen2.5-Coder-14B hybrid:** 32 GPU layers measured 11.73 tok/s and 350 ms median TTFT; 36 layers measured 13.92 tok/s and 289 ms, with less VRAM headroom. The tested structured tool call failed, so the result does not establish tool-use quality. See the [hybrid report](results/reports/qwen25-coder14b-hybrid.md).
-- **Qwen2.5-Coder-14B tool repeatability:** at 32 GPU layers, strict JSON passed 3/3, while the required structured tool call passed 0/3; the model emitted a textual pseudo-call each time. The temporary SSD model copy was removed after verifying the E: archive checksum. See the [repeatability report](results/reports/qwen14b-tool-reliability.md).
-- **Qwen3.5-9B local coding harnesses:** Pi, OpenCode, and Mistral Vibe each passed 3/3 runs on one fixed task. Pi used the least measured initial context (1,709 tokens) and had 19.92 s median wall time. Pi's separate context-compaction stress passed 0/5 under the full continuation and file-coverage contract; the fifth run again exceeded the configured context and failed to preserve task state. See the [harness comparison](results/reports/harness-evaluation.md) and [compaction stress](results/reports/pi-context-stress.md).
-- **Qwen3.5-4B harness follow-up (three fixed coding tasks):** across all 45 measured runs OpenCode passed 15/15 strict checks, Pi 11/15, and Mistral Vibe 9/15. On calculator division the counts were 5/5, 3/5, and 0/5; on whitespace normalization all passed 5/5; on `.env` assignment parsing they passed 5/5, 3/5, and 4/5, respectively. The parser-task medians were 38.88 s for OpenCode, 41.98 s for Pi, and 54.35 s for Vibe. Pi made 11 failed tool calls and twice wrote extra tests outside the allowed scope; Vibe did this once. Those failed runs still passed the independent behavior probe and unit tests, so the strict failures reflect edit discipline. Peak WSL RAM was 5,178 MiB, swap stayed at zero, and sampled VRAM peaked at 4,120 MiB. These small fixed tasks are not a general quality ranking, and harness token counters are not directly comparable. Active benchmark I/O stayed on the C:-backed WSL ext4 SSD; E: received the checksummed run archive and verified model copy only after measurements, and no HDD performance test was run. See the [three-task report](results/reports/harness-qwen35-4b-multitask.md), [parser-task report](results/reports/harness-qwen35-4b-env-parser.md), and [parser raw JSONL](results/raw/qwen35-4b-env-parser-harness-20261011.jsonl). Re-run with `./scripts/19_benchmark_harnesses.sh --task dotenv_line_parser --harness all --warmup`, then omit `--warmup` and add `--repeat 5` for measurements.
-- **OpenCode subagent probe:** the installed 1.19.0 successfully delegated a read-only inspection to a local subagent in 14.25 s. Bounded coding attempts finished in 65 s and 143 s, passed 1/4 and 3/4 tests, and neither reached its independent reviewer; the last did not delegate at all. They are not evidence of useful multi-agent coding quality. All test artifacts stayed on WSL ext4 backed by C:. The [local profile](benchmark/configs/harnesses/opencode-subagents.json) disables auto-updates, allows only the named workers, and denies shell/edit access to subagents. See the [probe report](results/reports/opencode-subagent-probe-20261011.md) and [raw event streams](results/raw/exploratory-invalid/).
-- **Vibe context continuation:** four SSD-only two-prompt trials each compacted and successfully read all 32 archives. The first three changed executable bits on 34 tracked fixtures and failed strict scope. The fourth completed in 157.319 s, passed manifest/recovery/workspace tests, and had zero mode changes; current strict success is 1/4. See the [Vibe context stress report](results/reports/vibe-context-stress.md).
-- **Unsloth QLoRA:** the 7B capacity smoke completed three 8-step runs at 5,640 MiB median peak allocated VRAM. This validates fit for a short synthetic smoke, not useful adaptation quality or the maximum trainable model size. See the [7B capacity report](results/reports/unsloth-7b-capacity-smoke.md).
-- **LoRA vs QLoRA quality probe:** on the same pinned 0.5B coder, both trained adapters passed 15/15 deterministic held-out runs (54/54 cases). The FP16 base missed one task because its completion exceeded the token cap; the NF4 base passed all five. This is a narrow synthetic result, not a general quality ranking. All training and evaluation ran on C:-backed WSL ext4; see the [paired report](results/reports/lora-vs-qlora-20261011.md).
-- **7B Transformers/PEFT QLoRA:** Qwen2.5-Coder-7B completed an 8-step NF4 smoke at sequence length 192 on the RTX 3070; PyTorch peak allocation was 7,678 MiB and sampled total VRAM reached 7,835 MiB. Base and adapter each passed 15/15 held-out task runs, while median reference NLL fell from 0.5195 to 0.2361. This is a tight-fit capacity check and a narrow synthetic quality probe, not evidence of broad adaptation gains. See the [7B report](results/reports/qwen25-coder-7b-qlora-quality-20261011T1858Z.md).
-- **7B QLoRA backend follow-up:** the three measured Unsloth runs produced identical adapter hashes and used 5,640 MiB peak allocated VRAM; their held-out adapter passed 15/15 runs. A single matched PEFT run used 7,678 MiB and also passed 15/15. This small probe found similar narrow-set NLL, with almost identical total wall time; it does not establish a general runtime or quality winner. See the [backend comparison](results/reports/qwen25-coder-7b-finetune-backends-20261011.md).
-
-These are machine-specific measurements with the Windows desktop sharing the RTX 3070. Check the linked reports and raw JSONL before applying the numbers to another run; each report states its prompt, repetition count, exclusions, and quality limitations. The next priorities are paired quality tests across model/quant/runtime configurations, broader coding and tool-use tasks, and reproducible router and multi-agent comparisons.
-
-### Continuation audit and controlled delegation — 2026-10-11
-
-The [fresh audit and comparison](results/reports/audit-continuation-20261011.md) rechecked Git/PR state, machine resources, model hashes and SSD runtime dependencies before continuation. PR34 was integrated; the next work is on a feature branch. The corrected OpenCode profile was runtime-loaded and its local endpoint, exact child allowlist, and child shell/edit denies were confirmed. A read-only smoke completed in 20.132 s with one explorer call and no workspace changes.
-
-A gated calibration on the existing calculator task used equal 20-step/180-second limits: the single-agent control passed in 44.075 s. The delegated treatment passed the independent coding grader, but timed out at 180.378 s with only the explorer completed and no independent reviewer. Workflow success therefore failed; no warmups or measured pairs were started. This is a failed coordination calibration, not a repeated quality/speed comparison. See the [controlled probe](results/reports/opencode-controlled-20261011.md) and [round plan](docs/superpowers/plans/2026-10-11-opencode-controlled.md). The lab remains incomplete; bounded local routing/failure escalation and broader unsaturated quality tasks take priority over raising delegation limits until one run passes.
-
-### Revised Methodology Roadmap Findings — 2026-10-12 (Milestones M0 to M6)
-
-Following the formal methodology review (`methodology-review-20261012.md` and `2026-10-12-methodology-revised-roadmap.md`), the lab executed and verified all planned milestones M0 through M6 under strictly serialized GPU inference on the RTX 3070 with ext4 SSD reserves maintained $\ge 8\text{ GiB}$:
-
-- **M0 (Historical Evidence Audit):** Criptographic SHA-256 validation of all publication artifacts (64/64 OK) and external drive E: archive synchronization.
-- **M1 (Adversarial Validators & Failure Taxonomy):** Implemented pure validators (`validate_add_arguments`, `validate_add_final`), MiB telemetry in `resource_sampler.py`, and structured operational failure classes in `benchmark/model_quality_paired.py`.
-- **M2 (Discriminant Task Suite & Pilot):** Created 3 new discriminant fixtures (`config_precedence`, `retry_policy`, `package_refactor`) with adversarial mutation tests and verified via a 100% successful controlled pilot (`model-quality-pilot-20261012-192315`) in 8m53s.
-- **M3 (Paired 4B vs 9B 24-Trial Matrix):** Executed 24 measured trials across 6 tasks $\times$ 2 models $\times$ 2 repeats in balanced AB/BA blocks (`model-quality-v2-20261012-195743`):
-  - **Pass Rate Parity:** Both `qwen3.5-4b` and `qwen3.5-9b` achieved 66.7% (8/12) strict functional success. Both solved division, whitespace, dotenv parser, and retry policy; both failed config precedence and package refactor.
-  - **Latency / Algorithmic Trade-off:** 4B was ~25-32% faster on simple tasks (median 21-25s), but **9B was 2.38× faster on `retry_policy`** (46.9s vs 111.6s) by solving the exception contract in 1 turn without entering repair loops. See [M3 report](results/reports/model-quality-paired-v2-20261012.md).
-- **M4 (Inference Efficiency & Optimization):**
-  - **Tarefa 6A (Prompt Caching):** `--cache-prompt` reduced prompt prefill token recomputation from ~8,500 to incremental tokens (22-500) per turn, delivering **1.57× to 1.70× wall-clock speedup** (21-22s vs 36s) with 100% pass parity (12/12 passed). Promoted to standard. See [6A report](results/reports/prefix-cache-paired-20261012.md).
-  - **Tarefa 6B (MTP in Agentic Harness):** Built-in `--spec-type draft-mtp --spec-draft-n-max 3` achieved an aggregate **91.16% draft token acceptance rate**, doubling generation speed from 77 t/s to **146.6 t/s** and yielding an additional **1.24× to 1.79× wall-clock speedup** (down to 17.0s on division and 22.4s on retry policy) with 100% strict pass (12/12 passed) and only ~360 MiB VRAM overhead. Promoted to standard for Qwen3.5-4B. See [6B report](results/reports/mtp-agentic-evaluation-20261012.md).
-- **M5 (Candidate Model Admission):** Evaluated `Gemma-4-E4B-it-qat UD-Q4_K_XL` (3.93 GiB, SHA `df0fd4ee...`). Model fits in 16K VRAM (4,118 MiB), but achieved **0/6 (0%) strict passes** in OpenCode agent runs due to unscoped function deletions (`unchanged_helpers: false`) and conversational artifact code leaks (`SyntaxError`). Formally **REJECTED** from the production routing pool. See [M5 report](results/reports/model-admission-20261012.md).
-- **M6 (Model Switch Latency & Deterministic Routing Matrix):**
-  - **Switch Latency Benchmark:** 5 alternating switch cycles measured unload in 0.20-0.45s, 4B load in 3.0-3.1s, and 9B load in 3.9-4.4s, establishing total model swap cost of **3.4s to 4.9s**.
-  - **Routing Architecture:** Formalized deterministic 3-tier routing: Tier 0 (CPU / linters / pytest), Tier 1 (Qwen3.5-4B with cache+MTP, ~17s-22s, $\le 4.87\text{ GiB}$ VRAM), Tier 2 (Qwen3.5-9B with cache, ~40s-47s, $\le 7.33\text{ GiB}$ VRAM), with automated cascade escalation after 2 failed repair cycles. Backlog for QLoRA and long-context governed per roadmap criteria. See [M6 report](results/reports/routing-governance-20261012.md).
-
-
-
-## Reproducibility rules
-
-The [October 12 implementation status](results/reports/status.md) now records a failed hardened delegation smoke and a successful MTP activation request (204 drafted tokens, 187 accepted), with no demonstrated quality or speed gain. The first MTP attempt was setup-invalid and is retained. The bounded single-agent model comparison uses a separate prerequisite from delegation; offline routing uses explicit capabilities and keeps cloud disabled. See the [Round 0 report](results/reports/round0-permission-smoke-20261012.md) and [MTP report](results/reports/mtp-activation-20261012.md). The [single-agent attempt](results/reports/model-quality-paired-20261012.md) stopped at its 4B Edit gate, with 0/18 measured rows and no 9B attempt. The separate MTP off/on diagnostic freezes four warmups and twelve requests behind per-arm JSON/tool gates; coding behavior remains a separate promotion prerequisite. The combined implementation passed 140 tests and 19 subtests, with Ruff checks on the changed executors; offline routing has no live quality or cost result.
-
-- Each run records the git revision, model revision, runtime version, quantization, context, generation limit, and hardware readings when available.
-- Keep raw JSONL and logs. Derived CSV/report files can be regenerated.
-- Use one warm-up and at least three measured repetitions for comparisons. This lab's initial smoke run is explicitly not a final ranking.
-- Keep prompts, seeds, sampling settings, and endpoints fixed within a comparison.
-- Do not infer quality from throughput. Coding tasks must include deterministic checks and preserve their test output.
-- Never store API keys or credentials in this repository. Cloud work is opt-in and has a conservative spend ceiling.
-
-## Tier 0 baseline (historical)
-
-The first Tier 0 target was IBM Granite 4.1 3B in GGUF Q4_K_M, served locally by llama.cpp. Its pinned model remains archived on E: and verified against SHA-256 in `versions.lock`. A CLI smoke test and a clean-source three-repeat 2K-context server baseline completed; the clean baseline is in `results/raw/tier0-final.jsonl`, consolidated results are in `results/csv/summary.csv`, and a human-readable summary is in `results/reports/tier0-summary.md`. These are short-run throughput tests; model quality and larger-context behavior remain untested.
-
-## ExLlamaV3 / EXL3 tier
-
-ExLlamaV3 1.6.1 is installed in an isolated Python 3.12 environment on the C:-hosted WSL ext4 SSD; CUDA 12.8 PyTorch detected the RTX 3070. The E: HDD holds verified archives only. To reproduce the pinned install, run `scripts/04_install_exllamav3.sh`. Qwen3.5-9B EXL3 2.50bpw has been measured through 64K context using chunked prefill and 4-bit K/V cache; see `results/raw/exllama-qwen35-9b.jsonl` and the execution status. Its same-family GGUF Q4_K_M counterpart has now been downloaded and verified for a runtime comparison. The GGUF and EXL3 measurements use different quantization formats and bit budgets, so any speed difference is not attributable to runtime alone.
-
-Reproduce the pinned GGUF download with `scripts/07_download_qwen35_gguf.sh --dry-run`, then omit `--dry-run` to download to `MODEL_DIR` (default `/mnt/e/local-llm-models`). Both downloaders preserve partial files for safe resumption and verify the final checksum. The cache-controlled short-prompt comparison shows 64.13 tok/s median for llama.cpp Q4_K_M versus 62.51 tok/s for ExLlamaV3 EXL3 2.50bpw, with respective TTFT medians 64.32 ms and 47.24 ms. llama.cpp Q4_K_M completed cold prompts up to 28,695 tokens in 32K context with q4_0 K/V at 1,820 tok/s prefill, 54.41 tok/s generation, and 6,147 MiB sampled VRAM. These are different quantization formats and serving templates, so treat them as configuration measurements, not a controlled runtime-only ranking. Cold-prefill runs set `CACHE_PROMPT=off` (the default). See `results/reports/status.md` and raw JSONL for scope and details.
-
-## QLoRA capacity smoke
-
-The pinned QLoRA downloader supports `scripts/07_download_training_model.sh --profile qwen25-coder-0.5b|qwen25-coder-7b`. It verifies each file's revision, size, and digest before writing a manifest. Current QLoRA experiments use the SSD-backed WSL ext4 filesystem. Older E:-backed storage observations remain in `results/reports/qlora-storage-comparison.md` as archival history only; they are not repeated or used to rank active configurations. The 7B SSD capacity results are summarized in `results/reports/qlora-7b-summary.md`.
-
-To stage the pinned model and isolated training environment from E: to the SSD-backed WSL Linux filesystem without deleting the archive, run `bash scripts/16_stage_benchmark_to_ssd.sh --dry-run`, then omit `--dry-run`. The destination defaults to ${XDG_DATA_HOME:-$HOME/.local/share}/local-llm-lab; set `BENCH_STORAGE_ROOT` to choose another WSL-native path. The copied virtual environment is checked for relocatability before the script reports the QLoRA command.
-
-The same smoke runner accepts `--method lora` (FP16 base weights) or `--method qlora` (NF4 with double quantization). A controlled comparison on the pinned 0.49B model completed three measured repeats per method after one warm-up, with the same eight-row dataset and training settings. On this machine, median training/total time was 1.637/9.159 s for LoRA and 2.214/10.147 s for QLoRA; QLoRA's Torch-allocated peak was 886 MiB versus 1,109.8 MiB for LoRA. All runs passed the same pre/post static probe. Since the base model already passed and the dataset is synthetic, this is a capacity/runtime result, not a quality comparison. Adapter artifacts are archived on E: and the temporary model copy has been cleared from the SSD. See [the paired report](results/reports/lora-qlora-comparison.md) and [raw JSONL](results/raw/lora-qlora-smoke.jsonl). The script now accepts either method while retaining QLoRA as the default.
-
-### Unsloth QLoRA smoke
-
-An isolated Unsloth 2026.10.3 environment on the C:-backed WSL SSD completed separate one-warm-up/three-measurement 8-step NF4 QLoRA smokes on the same pinned Qwen2.5-Coder-0.5B fixture. With dropout 0.05, training median was 2.334 s and Torch-allocated peak VRAM 507 MiB; with dropout 0.00, 2.257 s and 508.8 MiB. The PEFT QLoRA baseline measured 2.214 s and 886 MiB. Thus Unsloth used less allocated memory, but neither configuration beat PEFT training time. Dropout 0 enabled fused QKV/O kernels and was about 3% faster than dropout 0.05 for training only; changing dropout alters regularization and the difference is small. These smokes validate pipeline and adapter saving only; the base model already passed the deterministic code probe before training. See [the Unsloth report](results/reports/unsloth-qlora-smoke.md), [raw records](results/raw/unsloth-smoke.jsonl), and [dropout-zero CSV](results/csv/unsloth-dropout0-summary.csv). All benchmark inputs, runtime, cache, and outputs were on SSD-backed WSL ext4; E: is archival storage.
-
-The same isolated Unsloth environment completed three 8-step QLoRA smokes on the pinned 7.62B Qwen2.5-Coder-7B model using SSD-backed WSL ext4. Median Torch-allocated VRAM was 5,640 MiB (5,772 MiB reserved) and sampled system VRAM peaked at 6,705 MiB; the previous SSD PEFT series peaked at 7,678 MiB allocated. This confirms that the short 7B training path fits with substantially more GPU memory headroom under Unsloth, but does not measure useful adaptation quality or prove a speed ranking. We archived the adapter on E: after checksum verification. The repeatable model staging and evidence are described in [the 7B capacity report](results/reports/unsloth-7b-capacity-smoke.md).
-
-A clean-provenance repeat then completed one warm-up and three SSD-only measurements: median 28.85 s total, 3.39 s for eight training steps, 5,640 MiB Torch-allocated VRAM, and 6,723 MiB sampled total VRAM. All runs passed the deterministic probe and recorded source_tree_dirty=false; the [updated capacity report](results/reports/unsloth-7b-capacity-smoke.md) has raw JSONL, traces, and limitations. The earlier warm-up/repetition with invalid provenance is preserved but excluded from summaries.
-
-Storage-path audit found that the original Unsloth launcher left its process cwd on the D: checkout and created a small 2.28 MB compiled cache there. That cache was moved to C: and the runner now enters the SSD storage root before importing Unsloth. A post-fix smoke verified no cache was recreated on D:. The earlier Unsloth timings retain that small cache-I/O caveat; no HDD performance testing was performed.
-
-Dropout-zero comparison on the 7B model enabled fused QKV/O LoRA kernels but changed median training time only from 3.385 s to 3.289 s (+22.7 MiB allocated VRAM); this tiny smoke does not establish a meaningful speed or quality win. Details and raw records are in the [7B capacity report](results/reports/unsloth-7b-capacity-smoke.md).
-
-Long-context QLoRA checks on 7B now pass at 512, 1,024, and 2,048 tokens with one warm-up plus three repetitions each. At 2,048, median training was 22.73 s and sampled total VRAM peaked at 7,541 MiB, leaving limited margin for desktop contention. This is a synthetic capacity smoke, not a quality result or a universal context ceiling; see the [detailed capacity report and fixtures](results/reports/unsloth-7b-capacity-smoke.md).
-
-## Held-out QLoRA quality probe
-
-One 16-step NF4 QLoRA run trained the pinned Qwen2.5-Coder-0.5B-Instruct (0.49B, revision `ea3f2471cf1b1f0db85067f1ef93848e38e88c25`) on the existing eight-row synthetic fixture at sequence length 192, seed 42, rank 8, and learning rate 2e-4. The RTX 3070 completed training in 4.045 s with an 886 MiB Torch-allocated peak; the saved adapter is 4.2 MiB. Three deterministic repeats on five held-out function tasks passed 15/15 tasks and 54/54 test cases for both the NF4 base and adapter. The baseline was already perfect, so this run shows no measurable quality gain from adaptation; it is a narrow synthetic probe, not evidence of general coding quality. See the [quality report](results/reports/qlora-quality-heldout-20261011T184100Z.md), [CSV](results/csv/qlora-quality-heldout-20261011T184100Z.csv), and [raw JSONL](results/raw/qlora-quality-heldout-20261011T184100Z.jsonl). Reproduce with `bash scripts/32_benchmark_qlora_quality.sh --dry-run`, then rerun without `--dry-run`; all benchmark files must stay on WSL ext4. A verified copy of the used model, adapter, and results is archived under `E:\LocalLLMLabArchive\2026-10-11\qlora-heldout-quality-20261011T184100Z`.
-
-## SSD-backed llama.cpp follow-up
-
-The Qwen3.5-9B GGUF Q4_K_M (pinned revision `3885219b6810b007914f3a7950a8d1b469d598a5`, SHA-256 in `versions.lock`) was tested from WSL ext4 on the C: SSD at 2K and 16K context. The earlier E:-backed startup observations remain only in the linked historical report and are not part of the current SSD performance results. Warm inference was about 63–66 generated tok/s; prompt and GPU load varied slightly between runs.
-
-The 16K run processed a 14,380-token prompt using Q4 K/V with 3/3 successful outputs, 1,966 tok/s median prefill, 62.04 tok/s generation, and 6,191 MiB peak in paired resource samples. Raw JSONL, resource samples, startup events, and logs are in `results/raw/` and `logs/`; see `results/reports/ssd-inference-comparison.md` for archived context.
-
-After testing, keep the hash-verified archive on E: and remove only the temporary SSD copy when it is no longer needed. Run `bash scripts/18_stage_qwen35_gguf_to_ssd.sh --dry-run`, then omit `--dry-run` to restage it for the next Qwen series.
-
-The benchmark helper `scripts/17_stage_llamacpp_to_ssd.sh` copies the built runtime to WSL ext4 without deleting the D: source, checks that files match, compares the build version, and verifies that llama/ggml libraries resolve from the SSD copy. `scripts/18_stage_qwen35_gguf_to_ssd.sh` restages the pinned GGUF from E: and refuses to overwrite a different destination. `scripts/09_benchmark_inference.sh` now records model/runtime paths, storage profiles, model revision, and server startup-to-ready time. GPU sharing with the Windows desktop produced a later lower-throughput run with higher baseline VRAM use; it is reported separately rather than attributed to the drive.
-
-## Pi context compaction stress
-
-The Pi SDK stress runner uses an isolated agent directory and scratch workspace on the C:-hosted WSL SSD; it does not use the user's Pi settings. Five local trials exercised a 16K Qwen3.5-9B Q4_K_M session with automatic compaction and a continuation task. Compaction occurred, but no trial passed the full independent quality contract: the transcripts showed skipped archive files, failed continuation, or context overflow. One apparent pass had only read 7 of 32 files. The fifth trial read 31/32 files but ended at an estimated 16,906/16,384 context tokens and produced no summary or manifest. Its session, scratch workspace, and server log were archived to E: after measurement and checksum verification; all benchmark execution and active I/O remained on the C:-backed WSL ext4 SSD. The stricter probe adds per-file fingerprints and test checks so results cannot pass on a plausible summary alone. Exact token compression ratio remains unmeasured because the harness records summary characters, not the token count of removed history. See [Pi compaction results](results/reports/pi-context-stress.md) and raw attempts in `results/raw/pi-context-stress*.jsonl`.
-
-## Mistral Vibe context-compaction stress
-
-Four local trials used Vibe 2.26.1 with Qwen3.5-9B Q4_K_M at 16K context. A successful-result audit confirms 32/32 archive reads in all four runs; the prior intent-only count needed stronger evidence, now checked against successful file-read results or successful shell outputs tied to deterministic archive fingerprints. The second run reopened archive-01 and archive-07 during continuation. The fourth run took 157.3 s, used 323,847 input and 5,076 output tokens, recorded three automatic compactions, passed workspace tests, reopened no archives, and made no out-of-scope workspace changes. Its peak sampled VRAM was 6,236 MiB and RAM was 2,891 MiB. That is the first strict full-task pass (1/4). The first three runs had executable-bit changes on all 34 tracked fixture files; the fourth had none. The runner records the source commit, dirty state, and tracked diff hash for reproducibility. Session artifacts and server logs were archived to E: only after all inference ran on the C:-hosted WSL ext4 SSD; HDDs are archive-only. The token count of removed history is unavailable, so no token compression ratio is claimed. See [Vibe context results](results/reports/vibe-context-stress.md).
-
-## Local coding-harness comparison
-
-Pi 1.1.0, OpenCode 1.19.0, and Mistral Vibe 2.26.1 each ran one warm-up and three measured repeats against the same deterministic coding task and local Qwen3.5-9B Q4_K_M endpoint. The server used llama.cpp `d81235049`, 16K context, Q4_0 KV, and the WSL-native SSD. All nine valid measured runs passed the five unit tests, independent behavior probe, and change-scope check; each harness passed 3/3.
-
-Pi had the lowest measured context overhead and shortest median wall time for this task: 1,709 first-prompt tokens, 13,875 total prompt tokens, and 19.92 s median. OpenCode used 7,550 first-prompt tokens and 50,580 total, with 46.13 s median. Vibe used 8,088 first-prompt tokens and 53,490 total, with 45.02 s median. Peak VRAM stayed around 6.1 GiB; Pi used the least RAM in these runs. These results support Pi as the leanest harness for this particular single-agent coding workload. All three had the same task success, and the experiment did not test subagents, MCP, long-context compaction, or general coding ability. The consolidated report excludes legacy rows without Git provenance.
-
-Reproduce with llama-server already running at `http://127.0.0.1:8080` against the pinned Qwen3.5-9B Q4_K_M GGUF and the three isolated harness installs present: `./scripts/19_benchmark_harnesses.sh --harness all --warmup`, followed by `./scripts/19_benchmark_harnesses.sh --harness all --repeat 3`. Generate the consolidated files with `python3 benchmark/summarize_harness_results.py`. Raw per-run output, quality checks, and hardware samples are stored under `results/raw/harness-run-summary.jsonl` and the SSD-side run directories listed in each record; two early OpenCode setup-invalid records remain preserved and are excluded from the CSV and Markdown summary. See `results/reports/harness-evaluation.md`.
-
-As a model follow-up, Ornith-1.0-9B Q4_K_M passed three of three Pi coding runs on the C:-backed WSL SSD (25.13 s median versus 19.92 s for the pinned Qwen3.5 Pi baseline). A matched Ornith task then passed 3/3 under Pi, OpenCode, and Mistral Vibe; Pi had the lowest median prompt usage and wall time in this single-task sample. These are not general model or harness rankings. Parameterized benchmark runners enforce WSL ext4 for active model, runtime, log, and result paths; the Vibe stress runner stages its config and sampler onto that SSD while allowing the source checkout to remain on D:. Its isolated Vibe process drops ambient credentials and disables telemetry and update checks. HDDs are archive-only. The downloader also validates custom `MODEL_DIR` paths and measures free space on the destination filesystem. See the [harness report](results/reports/harness-evaluation.md), [raw measurements](results/raw/harness-ornith-matrix.jsonl), and [per-run CSV](results/csv/harness-ornith-matrix-runs.csv).
-
-Create a grouped Qwen/Ornith summary from multiple raw series with repeated `--input` arguments to `benchmark/summarize_harness_results.py`; the multi-model report and CSV are in `results/reports/harness-multi-model-summary.md` and `results/csv/harness-multi-model-summary.csv`.
-
-TrueForge 0.178.0 is installed and its isolated local UI returned the exact expected text from the same llama.cpp endpoint. This was a text-only smoke: the UI exposed zero tools, and startup reported that the local sandbox fallback needs `bubblewrap` and `socat`. No coding/tool result is claimed for TrueForge; see `results/raw/trueforge-smoke.jsonl`.
-
-## SSD-only context and KV follow-up
-
-Context/KV runs use `scripts/20_benchmark_context_kv.sh`. The pinned Qwen3.5-9B GGUF, llama.cpp executable, active JSONL, resource samples, and server logs stay on the C:-hosted WSL ext4 filesystem for the whole run. After every requested configuration completes, JSONL and sampler files are copied into `results/raw/` in this checkout for Git history; they are not read back from D: or E: during inference. A deterministic exact-recall probe at 16K also returned the same invented fact in 3/3 measurements for q4_0, q8_0, and f16 KV; this is one narrow probe, not a general quality result. The initial interrupted attempts are preserved under `results/raw/exploratory-invalid/` and excluded from analysis. See [context/KV throughput results](results/reports/ssd-context-kv.md), [long-context recall results](results/reports/context-recall.md), and the [consolidated CSV](results/csv/ssd-context-kv.csv).
-
-## Additional 2026 coding-model candidates
-
-The current research pass added Microsoft FrogNano-4B-2609, Ornith-1.0-9B, and Xiaomi MiMo-V2.6-Distill-Qwen-9B to `config/models.yaml`. FrogNano remains deferred because its official repository metadata and model-card license table conflict. MiMo Distill remains untested; the reviewed official repository lists 18.8 GB of BF16 weights and no selected compatible quantization. Ornith's publisher provides a pinned Q4_K_M GGUF, which was staged and tested on the C-backed WSL ext4 SSD. See [the candidate review](research/2026-coding-model-candidates.md) and [source ledger](research/source-ledger.csv). E: remains archival storage only.
-
-Ornith-1.0-9B Q4_K_M is pinned at 5,629,108,704 bytes with SHA-256 in `versions.lock`. `bash scripts/27_download_ornith_ssd.sh --dry-run` checks for the model size plus a 1 GiB free-space margin; omit `--dry-run` to download and verify it. The RTX 3070 loaded it fully on GPU at 2K with FP16 K/V. One warm-up and three measured repeats passed strict JSON 3/3 and a real structured `add(19,23)` tool round trip 3/3. A separate three-repeat streaming probe measured 62.70 generated tokens/s median, 137 ms TTFT, and 1,151 tokens/s prompt processing for a 156-token input. This is a compatibility and short-prompt baseline, not a repository coding benchmark or validation of vendor long-context scores. See [the local report](results/reports/ornith-q4-ssd-smoke.md), [quality comparison CSV](results/csv/agentic-model-quality-comparison.csv), and [raw JSONL](results/raw/ornith-q4-quality-20261011-rep-1.jsonl). Keep active benchmark files on WSL ext4; E: is archive-only.
-
-## QLoRA optimizer comparison (SSD only)
-
-Qwen2.5-Coder-7B-Instruct was trained with PEFT QLoRA/NF4 using AdamW 32-bit states and bitsandbytes AdamW8bit, with one warm-up and three measured eight-step runs per optimizer. Both used the same pinned base, seed, 8-row fixture, rank, sequence length, and C:-backed WSL ext4. The median training times were 5.540 s and 5.674 s, with 7,678.4 MiB and 7,649.7 MiB peak Torch allocation respectively. Three-repeat held-out checks passed 54/54 cases for both; this small synthetic set is a smoke, not a broad quality ranking. The 8-bit setting uses the library's 4,096-element threshold, so smaller optimizer tensors remain 32-bit. See the [comparison report](results/reports/qlora-optimizer-comparison-20261011.md), [CSV](results/csv/qlora-optimizer-comparison-20261011.csv), and raw records in `results/raw/`. An earlier run without recorded storage provenance is preserved but excluded from the comparison.
-
-## QLoRA rank sweep (SSD only)
-
-The pinned Qwen2.5-Coder-0.5B-Instruct was trained with PEFT QLoRA/NF4, AdamW32, seed 42, 16 steps, sequence length 192, and the same eight-row fixture. Ranks 8, 16, and 32 used alpha = 2 × rank; each had one warm-up and three measured trains. Final adapters and the base were compared on five deterministic held-out function tasks over three repeats. All active I/O was on the C:-backed WSL ext4 SSD; E: is reserved for archived artifacts, and no HDD measurements were run.
-
-All ranks passed 54/54 held-out cases, matching the already-strong base. Median training time was 3.905 s (rank 8), 3.935 s (rank 16), and 3.932 s (rank 32); Torch-allocated peak VRAM was 886.0, 898.4, and 923.1 MiB. Median reference NLL fell from 0.266511 for the base to 0.084842, 0.068473, and 0.063254 respectively, but this synthetic five-task set does not establish generalization or a coding-quality winner. Rank 8 is the smallest adapter with identical observed test success; larger ranks add parameters and memory without an observed pass-rate gain in this probe. The [report](results/reports/qlora-rank-sweep-20261011T194427Z/qlora-rank-sweep.md) includes variability and SHA-256; [CSV](results/reports/qlora-rank-sweep-20261011T194427Z/qlora-rank-sweep.csv) and [raw SSD JSONL](results/raw/qlora-rank-sweep-20261011T194427Z/) preserve the measurements.
-
-Reproduce with `bash scripts/35_benchmark_qlora_rank.sh --dry-run`, then omit `--dry-run`. The runner enforces WSL ext4 for the checkout, pinned local model, isolated runtime, logs, and results. It performs ranks sequentially and uses no network or model downloads.
-
-## 7B QLoRA rank capacity (SSD only)
-
-The pinned Qwen2.5-Coder-7B-Instruct was trained with NF4/double quantization, AdamW32, seed 42, eight steps, sequence length 192, and one warm-up plus three measured runs at each rank. Ranks 8, 16, and 32 all completed on the RTX 3070 and passed 54/54 held-out cases, matching the base. Median training time was 7.160 s (rank 8), 10.522 s (rank 16), and 13.831 s (rank 32); Torch allocated peaks were 7,678.4, 7,748.9, and 7,901.5 MiB. Rank 32 fit in this run but left only about 290 MiB below the card's 8,192 MiB capacity, so it leaves very little margin for Windows desktop contention.
-
-Median held-out reference NLL was 0.519531 for the base and 0.236144, 0.223301, and 0.203885 for ranks 8/16/32. The synthetic five-task set was already solved perfectly by the base, so the NLL shift does not establish broader coding improvement. Rank 8 was fastest/smallest; rank 16 and 32 lower the measured NLL while increasing time, adapter size, and VRAM, without improving the pass rate in this probe. See the [7B rank report](results/reports/qlora-7b-rank-sweep-20261011T195840Z/qlora-7b-rank-sweep.md), [CSV](results/reports/qlora-7b-rank-sweep-20261011T195840Z/qlora-7b-rank-sweep.csv), and [raw SSD JSONL](results/raw/qlora-7b-rank-sweep-20261011T195840Z/). The runner [scripts/36_benchmark_qlora_7b_rank.sh](scripts/36_benchmark_qlora_7b_rank.sh) records failed ranks and continues the requested sweep.
-
+O protocolo atual grava em `results/qwen-4b-opencode-baseline-bwrap-v7`, porque `benchmark/configs/qwen-4b-opencode-baseline.json` já é a revisão v7 da etapa 4. Para reproduzir as etapas 1 a 3, use o config das revisões v5 e v6, que está em commits anteriores do histórico do git (o último commit antes desta refatoração é `c2cf750`). Resultados com manifesto diferente não são misturados: o runner recusa.
+
+### Relatórios
+
+```sh
+$PY -m benchmark.baseline_report DIR_v5 DIR_v6 \
+  --markdown relatorio.md --csv relatorio.csv \
+  --control-dir DIR_v5 --control B0
+```
+
+Os agregados já gerados estão em [results/3070-benchmark/](results/3070-benchmark/). Os resultados brutos (workspaces, logs e JSON por tentativa) ficam fora do repositório.
+
+## Estrutura do repositório
+
+```
+README.md
+docs/
+  METHODOLOGY.md          método: corpus, oráculo, isolamento, contagem, classificação
+  HARDWARE.md             máquina, versões, pesos e armazenamento
+  RESULTS.md              todas as tabelas: por braço, por tarefa, pareadas e configuração
+  restricted-python-v2.md, methodology/pristine-grading-protocol.md
+                          documentação de código mantido (candidatos a remoção)
+benchmark/
+  opencode_baseline.py    runner da linha de base: protocolo, manifesto, isolamento e oráculo
+  baseline_report.py      relatório offline: Wilson, McNemar, tempos, TTFT e VRAM
+  worker_contract.py, worker_runner.py, guarded_edit.py
+                          contrato e runner do trabalhador delimitado; não avaliado nesta linha de base
+  harness_runner.py, harness_eval.py, pristine_grading.py, restricted_python.py,
+  run_observer.py, provenance.py, resource_sampler.py, safe_execution_guard.py
+                          dependências importadas pelo runner
+  configs/                protocolo atual e perfis do harness (OpenCode, Pi, Vibe)
+  fixtures/               seis fixtures de tarefa usadas pelo harness e pelo grader
+  eval_suites/            sondas de comportamento das fixtures
+corpus/                   12 tarefas: hosts (Bottle 0.13.2 e ms 2.1.3), tarefas, oráculos,
+                          stubs, suporte, prefixos e manifesto de hashes
+tests/                    19 arquivos de teste dos módulos mantidos
+results/3070-benchmark/   agregados das etapas 1 a 5, T2 e T3b
+reports/                  relatórios das etapas F0, F1, F3 e T1, copiados sem logs nem snapshots
+```
+
+## Limitações
+
+- **Poder estatístico baixo.** São 12 episódios por braço (24 no controle), com uma repetição por braço. Diferenças de 1 ou 2 episódios são ruído. No controle, quatro tarefas trocaram de resultado entre as duas repetições.
+- **Quantizadores diferentes.** O controle usa Q4_K_M do bartowski. Q6_K e Q8_0 são do unsloth, e o Q4_K_M do unsloth só aparece na etapa 4.
+- **Armazenamento.** Os GGUF de Q6_K e Q8_0 são lidos a partir de `/mnt/d` (disco D:). A regra do laboratório pede o ext4 do WSL. O efeito sobre as métricas não foi medido.
+- **Sandbox.** A execução do OpenCode permite rede; o confinamento do bash não foi comprovado para todos os comandos. As avaliações atuais usam sandbox separado sem rede; os resultados históricos foram produzidos com as versões anteriores.
+- **VRAM do dispositivo.** A VRAM é amostrada no dispositivo inteiro, a cerca de 1 Hz, e o desktop do Windows compartilha a GPU. Não é a memória exclusiva do processo.
+- **TTFT por proxy.** O TTFT mede o tempo até o primeiro conteúdo, reasoning ou chamada de ferramenta, visto pelo proxy local. Pode estar indisponível para algumas requisições.
+- **Campos ausentes nos resultados v5 e v6.** A taxonomia automática de término e as métricas de qualidade do diff (linhas, escopo, testes enfraquecidos) foram adicionadas depois. Os resultados das etapas 1 a 3 trazem esses campos vazios ou nulos. As causas de falha vêm dos rótulos `failure` gravados pelo runner.
+- **Retentativas por infraestrutura.** Duas unidades de v6 tiveram a primeira tentativa anulada por falha do avaliador. A segunda tentativa, que passou, entrou no acerto. Isso segue o protocolo. Em v5, uma falha do modelo foi classificada como infraestrutura e repetida. Essa classificação foi corrigida em v6.
+- **Timeouts nas etapas 4 e 5.** Nove resultados finais e duas tentativas intermediárias também registraram reset de conexão. As regras atuais dariam prioridade ao erro de servidor, mas os logs não provam se o reset ocorreu antes do timeout; os números históricos foram mantidos. Veja a [revalidação](reports/analise-estrategia-4b-2026-10-28/execucao/F1/revisao-pr45-correcoes.md).
+- **Etapas 4 e 5 com uma repetição na maioria dos braços.** Os braços `S-*`, `Q5-*`, `T5-*` e `X-*` têm 12 episódios e só detectam diferenças acima de cerca de 25 pontos. As maratonas do T2 têm uma repetição cada.
+- **T3b.** O 4B escreve o bloco SEARCH de memória e reenvia edições rejeitadas. Erros de OpenSSL afetaram verificações v2 e v3; os acertos históricos não isolam o efeito do contexto. Veja a [revalidação](reports/analise-estrategia-4b-2026-10-28/execucao/F1/revisao-pr45-correcoes.md).
+- **Landlock em drvfs.** A execução histórica do T3b usou uma cópia do repositório no ext4 do WSL. O verificador revisado foi testado também em `/mnt/d`.
+- **Corpus piloto.** As 12 tarefas não foram calibradas com o modelo nem são um conjunto de confirmação. O `bottle.py` tem cerca de 51 mil tokens, estimados por caracteres.
+- **Reprodução em outra máquina.** O config tem caminhos e SHA-256 do laboratório. Para outra máquina, é preciso um novo `protocol_id`, pois o manifesto recusa misturar protocolos.
+
+## Roadmap
+
+Fonte da etapa 4: [relatório T1](reports/analise-estrategia-4b-2026-10-28/execucao/F1/T1-coleta-e-etapa4.md). O plano estratégico v2 e o backlog de 29/10/2026 ficam fora desta árvore; a ordem abaixo segue o que foi combinado neles.
+
+Concluídos em 29/10/2026: etapa 4, etapa 5 (pesos, LSP, RTK e cascatas), tarefas longas (T2) e prefixo em cache (T3b).
+
+1. **Confirmar as direções fortes:** replicar a cascata com thinking e o RTK em 3 repetições, e o T2 (contexto grande contra Headroom) em 3 repetições.
+2. **Campanha combinada:** MTP, checkpoints e a cascata com thinking, com Q4_K_M e com Q6_K.
+3. **MCP** e quantizações novas, conforme forem lançadas.
+4. **Backlog P1:** consolidar a configuração de uso; ampliar o corpus de 12 para 24 a 36 tarefas inéditas; comparar ExLlamaV3 com TabbyAPI contra llama.cpp, depois de verificar as tool calls do Qwen3.5 híbrido; comparar o custo com um modelo grande no mesmo corpus.
+5. **Backlog P2:** mistral.rs com o mesmo GGUF; trabalhador delimitado em escala; llama.cpp nativo no Windows contra WSL2; recompilar com `GGML_CUDA_FA_QUANTS` para KV misto.
+6. **Backlog P3, fora do escopo do 4B:** vLLM ou LMDeploy com AWQ e GPTQ-Marlin; offload de MoE maior que a VRAM; modelos de 7 a 14B; LoRA de agente.
+
+## Histórico
+
+As campanhas anteriores a 28/10/2026 foram removidas desta árvore. Estão no histórico do git, até o commit `c2cf750` de `refactor/3070-benchmark` e seus antecessores. A lista do que saiu e por quê está no Pull Request de refatoração.

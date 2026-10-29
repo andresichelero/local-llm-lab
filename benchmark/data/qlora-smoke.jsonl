@@ -1,8 +1,0 @@
-{"messages":[{"role":"user","content":"Write only a Python function named multiply(a, b) that returns the product."},{"role":"assistant","content":"def multiply(a, b):\n    return a * b"}]}
-{"messages":[{"role":"user","content":"Implement subtract(a, b) in Python. Return code only."},{"role":"assistant","content":"def subtract(a, b):\n    return a - b"}]}
-{"messages":[{"role":"user","content":"Give a Python function square(n) that returns n squared; no explanation."},{"role":"assistant","content":"def square(n):\n    return n * n"}]}
-{"messages":[{"role":"user","content":"Write is_even(n), a Python function returning whether n is even. Code only."},{"role":"assistant","content":"def is_even(n):\n    return n % 2 == 0"}]}
-{"messages":[{"role":"user","content":"Implement max_of_two(a, b) in Python and return only the function."},{"role":"assistant","content":"def max_of_two(a, b):\n    return a if a >= b else b"}]}
-{"messages":[{"role":"user","content":"Write a Python function absolute_difference(a, b) returning the absolute difference."},{"role":"assistant","content":"def absolute_difference(a, b):\n    return abs(a - b)"}]}
-{"messages":[{"role":"user","content":"Create a Python function double(n) that returns twice n. Output code only."},{"role":"assistant","content":"def double(n):\n    return 2 * n"}]}
-{"messages":[{"role":"user","content":"Write min_of_two(a, b) in Python; no prose, just the function."},{"role":"assistant","content":"def min_of_two(a, b):\n    return a if a <= b else b"}]}

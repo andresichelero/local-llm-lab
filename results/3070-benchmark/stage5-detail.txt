@@ -1,0 +1,29 @@
+control Q4 pooled: 41/60 CI (0.56, 0.79)
+
+== per arm (first attempt) ==
+Q5-Q6KL      10/12 (0.55, 0.95) secs_med 56.1 calls 262 prompt_tok 5857946 compl_tok 52348 tools 266 tool_fail 4 {'lsp_tool_calls': 0}
+Q5-UDQ4XL    9/12 (0.47, 0.91) secs_med 34.2 calls 184 prompt_tok 3896781 compl_tok 34810 tools 185 tool_fail 3 {'lsp_tool_calls': 0}
+Q5-UDQ6XL    10/12 (0.55, 0.95) secs_med 40.1 calls 194 prompt_tok 3318230 compl_tok 47371 tools 192 tool_fail 6 {'lsp_tool_calls': 0}
+T5-lsp       9/12 (0.47, 0.91) secs_med 67.0 calls 273 prompt_tok 6126092 compl_tok 78715 tools 275 tool_fail 7 {'lsp_tool_calls': 0}
+T5-lsp-tool  10/12 (0.55, 0.95) secs_med 37.8 calls 228 prompt_tok 5241202 compl_tok 44572 tools 232 tool_fail 3 {'lsp_tool_calls': 0}
+T5-rtk       6/12 (0.25, 0.75) secs_med 44.2 calls 292 prompt_tok 6551276 compl_tok 51656 tools 296 tool_fail 7 {'lsp_tool_calls': 0}
+X-9b         8/12 (0.39, 0.86) secs_med 37.3 calls 230 prompt_tok 4378129 compl_tok 66038 tools 232 tool_fail 7 {'lsp_tool_calls': 0}
+X-think      7/12 (0.32, 0.81) secs_med 44.4 calls 268 prompt_tok 6017463 compl_tok 52168 tools 251 tool_fail 6 {'lsp_tool_calls': 0}
+
+== per task: control rate (all reps) | stage 5 arms (first attempt) ==
+task              ctrl    Q5-Q6KL  Q5-UDQ4XL  Q5-UDQ6XL     T5-lsp T5-lsp-too     T5-rtk       X-9b    X-think
+cont_path          4/5         ok         ok         ok         ok         ok  model_ora         ok         ok
+cont_quote         4/5         ok         ok         ok  model_pha         ok         ok         ok         ok
+js_plural          5/5         ok         ok         ok         ok         ok  model_ora         ok         ok
+js_sign            3/5         ok         ok         ok         ok         ok         ok  model_ora  model_ora
+mcp_header         5/5         ok         ok         ok         ok         ok         ok         ok         ok
+mcp_params         5/5         ok         ok         ok         ok         ok         ok         ok         ok
+py_query           3/5         ok         ok         ok  model_cli         ok         ok         ok  model_ora
+py_range           0/5  model_ora  model_ora  model_ora         ok  model_ora  model_ora  model_ora  model_ora
+recover_date       4/5         ok  model_ora         ok         ok  model_ora  model_ora         ok         ok
+recover_decode     5/5         ok         ok         ok         ok         ok         ok         ok         ok
+tests_query        1/5         ok  model_ora         ok         ok         ok  model_ora  model_wal  model_wal
+tests_range        2/5  model_wal         ok  model_wal  model_wal         ok  model_wal  model_ora  model_ora
+
+== result keys sample ==
+['category', 'continuation_released', 'diff_quality', 'effective_context', 'effective_output_tokens', 'failure', 'lsp_launches', 'lsp_log_lines', 'lsp_started', 'lsp_tool_calls', 'oom_evidence', 'oracle', 'peak_vram_mib', 'phase1_visible', 'phases', 'proxy_requests', 'request_metrics', 'resource_samples', 'resources', 'server_metrics', 'taxonomy', 'tokens_after_last_edit', 'total_seconds', 'unit', 'usage', 'visible', 'vram_samples_mib']

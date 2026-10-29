@@ -1,0 +1,26 @@
+section,source,arm,n,successes,success_rate,wilson_low,wilson_high,seconds_mean,seconds_median,ttft_ms_median,prefill_tok_s_median,decode_tok_s_median,peak_vram_mib_median,processed_tokens_total,cache_tokens_total,wasted_prompt_tokens,wasted_completion_tokens,wasted_seconds,taxonomy,task,outcomes,stability,arms
+arms,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,B0,24,16,0.6666666666666666,0.4670631683813174,0.8202780967270225,97.83908744629154,42.250847334000355,295.8651480007575,713.8766062786406,71.24490763570398,4535.5,,,6722306,85053,1528.6387264090008,{},,,,
+tasks,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,B0,2,1,,,,,,,,,,,,,,,,cont_path,10,mixed,
+tasks,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,B0,2,2,,,,,,,,,,,,,,,,cont_quote,11,consistent,
+tasks,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,B0,2,2,,,,,,,,,,,,,,,,js_plural,11,consistent,
+tasks,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,B0,2,1,,,,,,,,,,,,,,,,js_sign,10,mixed,
+tasks,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,B0,2,2,,,,,,,,,,,,,,,,mcp_header,11,consistent,
+tasks,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,B0,2,2,,,,,,,,,,,,,,,,mcp_params,11,consistent,
+tasks,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,B0,2,2,,,,,,,,,,,,,,,,py_query,11,consistent,
+tasks,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,B0,2,0,,,,,,,,,,,,,,,,py_range,00,consistent,
+tasks,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,B0,2,1,,,,,,,,,,,,,,,,recover_date,01,mixed,
+tasks,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,B0,2,2,,,,,,,,,,,,,,,,recover_decode,11,consistent,
+tasks,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,B0,2,0,,,,,,,,,,,,,,,,tests_query,00,consistent,
+tasks,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,B0,2,1,,,,,,,,,,,,,,,,tests_range,01,mixed,
+task_comparisons,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,,,,,,,,,,,,,,,,,,,cont_path,,,"{""B0"": {""n"": 2, ""successes"": 1}}"
+task_comparisons,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,,,,,,,,,,,,,,,,,,,cont_quote,,,"{""B0"": {""n"": 2, ""successes"": 2}}"
+task_comparisons,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,,,,,,,,,,,,,,,,,,,js_plural,,,"{""B0"": {""n"": 2, ""successes"": 2}}"
+task_comparisons,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,,,,,,,,,,,,,,,,,,,js_sign,,,"{""B0"": {""n"": 2, ""successes"": 1}}"
+task_comparisons,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,,,,,,,,,,,,,,,,,,,mcp_header,,,"{""B0"": {""n"": 2, ""successes"": 2}}"
+task_comparisons,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,,,,,,,,,,,,,,,,,,,mcp_params,,,"{""B0"": {""n"": 2, ""successes"": 2}}"
+task_comparisons,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,,,,,,,,,,,,,,,,,,,py_query,,,"{""B0"": {""n"": 2, ""successes"": 2}}"
+task_comparisons,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,,,,,,,,,,,,,,,,,,,py_range,,,"{""B0"": {""n"": 2, ""successes"": 0}}"
+task_comparisons,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,,,,,,,,,,,,,,,,,,,recover_date,,,"{""B0"": {""n"": 2, ""successes"": 1}}"
+task_comparisons,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,,,,,,,,,,,,,,,,,,,recover_decode,,,"{""B0"": {""n"": 2, ""successes"": 2}}"
+task_comparisons,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,,,,,,,,,,,,,,,,,,,tests_query,,,"{""B0"": {""n"": 2, ""successes"": 0}}"
+task_comparisons,/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v5,,,,,,,,,,,,,,,,,,,tests_range,,,"{""B0"": {""n"": 2, ""successes"": 1}}"

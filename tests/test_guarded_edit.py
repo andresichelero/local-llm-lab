@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+
 import pytest
 
 from benchmark.guarded_edit import (
@@ -23,6 +24,11 @@ from benchmark.guarded_edit import (
     check_syntax_leak,
     main,
 )
+
+
+@pytest.fixture(autouse=True)
+def _use_temporary_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
 
 
 def test_empty_search_block(tmp_path: Path) -> None:
@@ -492,3 +498,192 @@ def test_cli_check_missing_file(tmp_path: Path, capsys: pytest.CaptureFixture[st
 
 
 
+
+
+def test_batch_exact_and_transactional(tmp_path):
+    import hashlib
+
+    from benchmark.guarded_edit import EditStatus, apply_edit_batch
+    (tmp_path / 'a.txt').write_text('one  \n')
+    (tmp_path / 'b.txt').write_text('two\n')
+    hashes = {p: hashlib.sha256((tmp_path / p).read_bytes()).hexdigest() for p in ('a.txt', 'b.txt')}
+    output = 'FILE: a.txt\n<<<<<<< SEARCH\none  \n=======\nnew\n>>>>>>> REPLACE\nFILE: b.txt\n<<<<<<< SEARCH\nmissing\n=======\nnew\n>>>>>>> REPLACE\n'
+    result = apply_edit_batch(tmp_path, output, hashes, ['a.txt', 'b.txt'])
+    assert result.status == EditStatus.ZERO_OCCURRENCES
+    assert (tmp_path / 'a.txt').read_text() == 'one  \n'
+    output = output.replace('missing', 'two')
+    result = apply_edit_batch(tmp_path, output, hashes, ['a.txt', 'b.txt'])
+    assert result.success and len(result.files) == 2 and result.original_output == output
+    assert result.files[0].diff and result.files[0].before_sha256 == hashes['a.txt']
+
+
+def test_batch_strict_parser_and_scope(tmp_path):
+    from benchmark.guarded_edit import EditStatus, apply_edit_batch
+    (tmp_path / 'a.txt').write_text('one\n')
+    result = apply_edit_batch(tmp_path, '```\n', {}, ['a.txt'])
+    assert result.status == EditStatus.MALFORMED_OUTPUT
+    result = apply_edit_batch(tmp_path, 'FILE: a.txt\n<<<<<<< SEARCH\none\n=======\ntwo\n>>>>>>> REPLACE\n', {}, [])
+    assert result.status == EditStatus.OUTSIDE_ALLOWLIST
+
+
+def test_batch_rejections_are_typed(tmp_path):
+    from benchmark.guarded_edit import EditStatus, apply_edit_batch
+    p = tmp_path / 'x.py'
+    p.write_text('x = 1\nx = 1\n')
+    digest = hashlib.sha256(p.read_bytes()).hexdigest()
+    def apply(search, replacement, hashes=None):
+        output = f'FILE: x.py\n<<<<<<< SEARCH\n{search}=======\n{replacement}>>>>>>> REPLACE\n'
+        return apply_edit_batch(tmp_path, output, hashes or {'x.py': digest}, ['x.py']).status
+    assert apply('x = 1\n', 'x = 2\n') == EditStatus.MULTIPLE_OCCURRENCES
+    assert apply('none\n', 'x = 2\n') == EditStatus.ZERO_OCCURRENCES
+    assert apply('', 'x = 2\n') == EditStatus.EMPTY_SEARCH
+    assert apply('x = 1\nx = 1\n', 'x = (\n') == EditStatus.INVALID_SYNTAX
+    assert apply('x = 1\nx = 1\n', '```python\n') == EditStatus.SYNTAX_LEAK
+    assert apply('x = 1\nx = 1\n', 'x = 2\n', {'x.py': 'old'}) == EditStatus.STALE_SHA
+    assert p.read_text() == 'x = 1\nx = 1\n'
+
+
+def test_batch_protects_existing_tests_oracles_and_symlinks(tmp_path):
+    from benchmark.guarded_edit import EditStatus, apply_edit_batch
+    (tmp_path / 'test').mkdir()
+    (tmp_path / 'oracles').mkdir()
+    for name in ('test/a.py', 'oracles/a.py'):
+        (tmp_path / name).write_text('pass\n')
+        output = f'FILE: {name}\n<<<<<<< SEARCH\npass\n=======\nx = 1\n>>>>>>> REPLACE\n'
+        assert apply_edit_batch(tmp_path, output, {}, [name]).status == EditStatus.PROTECTED_FILE
+    (tmp_path / 'link').symlink_to(tmp_path / 'test', target_is_directory=True)
+    output = 'FILE: link/a.py\n<<<<<<< SEARCH\npass\n=======\nx = 1\n>>>>>>> REPLACE\n'
+    assert apply_edit_batch(tmp_path, output, {}, ['link/a.py']).status == EditStatus.SYMLINK_REJECTED
+    output = output.replace('link/a.py', '../outside.py')
+    assert apply_edit_batch(tmp_path, output, {}, ['../outside.py']).status == EditStatus.PATH_OUTSIDE_WORKSPACE
+
+
+def test_batch_rolls_back_when_second_replace_fails(tmp_path, monkeypatch):
+    import os
+
+    from benchmark.guarded_edit import apply_edit_batch
+    (tmp_path / 'a.txt').write_text('one\n')
+    (tmp_path / 'b.txt').write_text('two\n')
+    hashes = {p: hashlib.sha256((tmp_path / p).read_bytes()).hexdigest() for p in ('a.txt', 'b.txt')}
+    output = ('FILE: a.txt\n<<<<<<< SEARCH\none\n=======\nnew\n>>>>>>> REPLACE\n'
+              'FILE: b.txt\n<<<<<<< SEARCH\ntwo\n=======\nnew\n>>>>>>> REPLACE\n')
+    replace = os.replace
+    count = 0
+    def fail_second(source, target):
+        nonlocal count
+        count += 1
+        if count == 2:
+            raise OSError('simulated write failure')
+        return replace(source, target)
+    monkeypatch.setattr(os, 'replace', fail_second)
+    with pytest.raises(OSError):
+        apply_edit_batch(tmp_path, output, hashes, ['a.txt', 'b.txt'])
+    assert (tmp_path / 'a.txt').read_text() == 'one\n'
+    assert (tmp_path / 'b.txt').read_text() == 'two\n'
+
+
+def test_batch_rejects_invalid_javascript(tmp_path):
+    from benchmark.guarded_edit import EditStatus, apply_edit_batch
+    target = tmp_path / 'a.js'
+    target.write_text('const value = 1;\n')
+    digest = hashlib.sha256(target.read_bytes()).hexdigest()
+    output = ('FILE: a.js\n<<<<<<< SEARCH\nconst value = 1;\n=======\n'
+              'const value = ;\n>>>>>>> REPLACE\n')
+    assert apply_edit_batch(tmp_path, output, {'a.js': digest}, ['a.js']).status == EditStatus.INVALID_SYNTAX
+    assert target.read_text() == 'const value = 1;\n'
+
+
+def test_batch_rejects_inline_markers(tmp_path):
+    from benchmark.guarded_edit import EditStatus, apply_edit_batch
+    target = tmp_path / 'a.txt'
+    target.write_text('one')
+    digest = hashlib.sha256(target.read_bytes()).hexdigest()
+    output = 'FILE: a.txt\n<<<<<<< SEARCH\none=======\ntwo>>>>>>> REPLACE\n'
+    assert apply_edit_batch(tmp_path, output, {'a.txt': digest}, ['a.txt']).status == EditStatus.MALFORMED_OUTPUT
+    assert target.read_text() == 'one'
+
+
+def test_batch_rolls_back_on_unexpected_exception(tmp_path, monkeypatch):
+    import os
+
+    from benchmark.guarded_edit import apply_edit_batch
+    (tmp_path / 'a.txt').write_text('one\n')
+    (tmp_path / 'b.txt').write_text('two\n')
+    hashes = {name: hashlib.sha256((tmp_path / name).read_bytes()).hexdigest() for name in ('a.txt', 'b.txt')}
+    output = ('FILE: a.txt\n<<<<<<< SEARCH\none\n=======\nnew\n>>>>>>> REPLACE\n'
+              'FILE: b.txt\n<<<<<<< SEARCH\ntwo\n=======\nnew\n>>>>>>> REPLACE\n')
+    replace = os.replace
+    count = 0
+    def failure(source, target):
+        nonlocal count
+        count += 1
+        if count == 2:
+            raise RuntimeError('simulated interrupt')
+        return replace(source, target)
+    monkeypatch.setattr(os, 'replace', failure)
+    with pytest.raises(RuntimeError):
+        apply_edit_batch(tmp_path, output, hashes, ['a.txt', 'b.txt'])
+    assert (tmp_path / 'a.txt').read_text() == 'one\n'
+    assert (tmp_path / 'b.txt').read_text() == 'two\n'
+
+
+def test_batch_receipt_records_each_applied_block(tmp_path):
+    from benchmark.guarded_edit import apply_edit_batch
+    target = tmp_path / 'a.txt'
+    target.write_text('one\ntwo\n')
+    digest = hashlib.sha256(target.read_bytes()).hexdigest()
+    output = ('FILE: a.txt\n<<<<<<< SEARCH\none\n=======\nfirst\n>>>>>>> REPLACE\n'
+              'FILE: a.txt\n<<<<<<< SEARCH\ntwo\n=======\nsecond\n>>>>>>> REPLACE\n')
+    result = apply_edit_batch(tmp_path, output, {'a.txt': digest}, ['a.txt'])
+    assert result.success
+    assert result.files[0].blocks_applied == (
+        {'search': 'one\n', 'replace': 'first\n'}, {'search': 'two\n', 'replace': 'second\n'})
+
+
+def test_batch_rolls_back_if_interrupted_after_replace(tmp_path, monkeypatch):
+    import os
+
+    from benchmark.guarded_edit import apply_edit_batch
+    target = tmp_path / 'a.txt'
+    target.write_text('one\n')
+    digest = hashlib.sha256(target.read_bytes()).hexdigest()
+    output = 'FILE: a.txt\n<<<<<<< SEARCH\none\n=======\nnew\n>>>>>>> REPLACE\n'
+    replace = os.replace
+    calls = 0
+    def interrupted(source, destination):
+        nonlocal calls
+        calls += 1
+        replace(source, destination)
+        if calls == 1:
+            raise TimeoutError('interrupt after replace')
+    monkeypatch.setattr(os, 'replace', interrupted)
+    with pytest.raises(TimeoutError):
+        apply_edit_batch(tmp_path, output, {'a.txt': digest}, ['a.txt'])
+    assert target.read_text() == 'one\n'
+
+
+def test_overlapping_search_is_ambiguous_and_never_written(tmp_path):
+    from benchmark.guarded_edit import EditStatus, apply_edit_batch
+    target = tmp_path / 'a.py'
+    original = b'a = 1\na = 1\na = 1\n'
+    target.write_bytes(original)
+    digest = hashlib.sha256(original).hexdigest()
+    output = ('FILE: a.py\n<<<<<<< SEARCH\na = 1\na = 1\n=======\n'
+              'a = 2\n>>>>>>> REPLACE\n')
+    result = apply_edit_batch(tmp_path, output, {'a.py': digest}, ['a.py'])
+    assert result.status == EditStatus.MULTIPLE_OCCURRENCES
+    assert target.read_bytes() == original
+
+
+@pytest.mark.parametrize('statement', ['return', 'break'])
+def test_uncompilable_python_is_rejected_before_write(tmp_path, statement):
+    from benchmark.guarded_edit import EditStatus, apply_edit_batch
+    target = tmp_path / 'a.py'
+    original = b'value = 1\n'
+    target.write_bytes(original)
+    digest = hashlib.sha256(original).hexdigest()
+    output = (f'FILE: a.py\n<<<<<<< SEARCH\nvalue = 1\n=======\n'
+              f'value = 2\n{statement}\n>>>>>>> REPLACE\n')
+    result = apply_edit_batch(tmp_path, output, {'a.py': digest}, ['a.py'])
+    assert result.status == EditStatus.INVALID_SYNTAX
+    assert target.read_bytes() == original

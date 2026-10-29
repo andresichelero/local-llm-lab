@@ -1,0 +1,37 @@
+arms: ['v5:B0', 'v6:B-ctx128', 'v6:B-ctx16', 'v6:B-ctx32', 'v6:B-kv16', 'v6:B-kv8', 'v6:B-nocache', 'v6:B-q6', 'v6:B-q8', 'v6:B-think', 'v7:C4-q4', 'v7:C4-q6', 'v7:C4-think', 'v7:S-checkpoints', 'v7:S-ctx48', 'v7:S-mtp', 'v7:S-q4-unsloth', 'v7:S-qwen-sampling', 'v7:S-steps80']
+
+== pooled ==
+Q4 (v5 B0 + C4-q4): 41/60 = 68% CI95 (0.56, 0.79)
+Q6 (B-q6 + C4-q6): 37/48 = 77% CI95 (0.63, 0.87)
+think (B-think + C4-think): 27/36 = 75% CI95 (0.59, 0.86)
+
+== per-task success (successes/runs) ==
+task                   B0     C4-q4     C4-q6  C4-think   B-think   S-ctx48 S-steps80 S-checkpo     S-mtp S-qwen-sa S-q4-unsl
+cont_path             1/2       3/3       2/3       2/2       1/1       1/1       1/1       1/1       1/1       1/1       1/1
+cont_quote            2/2       2/3       3/3       2/2       1/1       1/1       1/1       1/1       1/1       1/1       1/1
+js_plural             2/2       3/3       3/3       2/2       1/1       1/1       1/1       1/1       1/1       0/1       1/1
+js_sign               1/2       2/3       3/3       2/2       1/1       1/1       1/1       1/1       1/1       1/1       0/1
+mcp_header            2/2       3/3       3/3       2/2       1/1       1/1       1/1       1/1       1/1       0/1       1/1
+mcp_params            2/2       3/3       3/3       2/2       1/1       1/1       1/1       1/1       1/1       1/1       1/1
+py_query              2/2       1/3       3/3       1/2       1/1       1/1       1/1       1/1       1/1       1/1       0/1
+py_range              0/2       0/3       2/3       0/2       0/1       0/1       0/1       0/1       0/1       0/1       0/1
+recover_date          1/2       3/3       0/3       0/2       1/1       1/1       1/1       0/1       0/1       0/1       1/1
+recover_decode        2/2       3/3       3/3       1/2       1/1       1/1       1/1       1/1       1/1       1/1       1/1
+tests_query           0/2       1/3       1/3       1/2       1/1       1/1       1/1       0/1       0/1       0/1       0/1
+tests_range           1/2       1/3       1/3       1/2       1/1       1/1       0/1       1/1       0/1       0/1       0/1
+
+== decode speed (tokens/s, median over requests) and gen tokens per episode ==
+v5:B0                tok/s 71.1 gen_med 1880.0 draft_accept None
+v7:C4-q4             tok/s 74.3 gen_med 2216.5 draft_accept None
+v7:C4-q6             tok/s 67.1 gen_med 778.5 draft_accept None
+v7:C4-think          tok/s 73.7 gen_med 8241.0 draft_accept None
+v6:B-think           tok/s 75.7 gen_med 7866.5 draft_accept None
+v7:S-ctx48           tok/s 75.9 gen_med 1747.0 draft_accept None
+v7:S-steps80         tok/s 77.8 gen_med 1701.5 draft_accept None
+v7:S-checkpoints     tok/s 75.8 gen_med 784.5 draft_accept None
+v7:S-mtp             tok/s 115.2 gen_med 1191.5 draft_accept 0.91
+v7:S-qwen-sampling   tok/s 72.4 gen_med 1146.0 draft_accept None
+v7:S-q4-unsloth      tok/s 76.7 gen_med 1145.5 draft_accept None
+
+== paired by task: C4-q4 vs C4-q6 (rep-wise) ==
+q4 only 4 q6 only 6

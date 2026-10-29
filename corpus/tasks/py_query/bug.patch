@@ -1,0 +1,11 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -3055,7 +3055,7 @@
+         nv = pair.split('=', 1)
+         if len(nv) != 2: nv.append('')
+         key = urlunquote(nv[0].replace('+', ' '))
+-        value = urlunquote(nv[1].replace('+', ' '))
++        value = urlunquote(nv[1])
+         r.append((key, value))
+     return r
+ 

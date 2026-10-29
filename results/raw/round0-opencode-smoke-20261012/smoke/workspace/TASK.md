@@ -1,3 +1,0 @@
-Implement `parse_assignment(line)` in `src/config_parser.py`. Ignore blank lines, lines whose first non-whitespace character is `#`, lines without `=`, and lines with an empty trimmed key by returning `None`. Otherwise split only at the first `=`, trim whitespace around the key and value, and remove one matching pair of surrounding single or double quotes from the value. Preserve all other value characters, including later `=` signs and spaces inside quotes. Do not expand variables or change `normalize_key`.
-
-Add these exact tests: `test_ignores_blank_and_comment_lines`, `test_splits_on_first_equals_and_trims`, and `test_strips_matching_quotes`.

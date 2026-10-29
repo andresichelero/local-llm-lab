@@ -1,0 +1,17 @@
+{
+  "id": "py_range",
+  "class": "python_fix",
+  "host": "bottle-0.13.2",
+  "objective": "Repair HTTP byte ranges: explicit ends are inclusive, while yielded ends are exclusive; clamp to resource length and skip invalid ranges.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium"
+}

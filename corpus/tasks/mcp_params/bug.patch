@@ -1,0 +1,11 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -3028,7 +3028,7 @@
+             values.append((parts[0].strip(), {}))
+             for attr in parts[1:]:
+                 name, value = attr.split('=', 1)
+-                values[-1][1][name.strip().lower()] = value.strip()
++                values[-1][1][name.strip()] = value.strip()
+     else:
+         lop, key, attrs = ',', None, {}
+         for quoted, plain, tok in _hsplit(h):

@@ -1,0 +1,19 @@
+{
+  "id": "mcp_params",
+  "class": "mcp",
+  "host": "bottle-0.13.2",
+  "objective": "Read the tool response describing a downstream header parser failure, then fix parameter-name normalization in Bottle.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium",
+  "stub": "corpus/stubs/mcp_params/tool.py",
+  "adaptation": "A deterministic tool response supplies the external evidence for an edit in Bottle; no live MCP service is required."
+}
