@@ -40,6 +40,16 @@ def should_escalate(result):
     return False
 
 
+CLIENT_ABORTS = {'ConnectionResetError', 'BrokenPipeError', 'CancelledError'}
+
+
+def server_side_error(row, failure):
+    # Killing the CLI at the wall timeout resets the in-flight request; that is not a server fault.
+    if failure == 'model_wall_timeout' and row.get('status', 0) < 500 and row.get('error') in CLIENT_ABORTS:
+        return False
+    return bool(row.get('error') or row.get('status', 0) >= 500)
+
+
 def run_cascade(run, fallback):
     started = time.monotonic()
     first = run('control')
@@ -301,7 +311,7 @@ def execute(config, units):
                             # A timed-out CLI must not hide an independently observed server failure.
                             if server.process is not None and server.process.poll() is not None:
                                 result.update(failure='server_exited', category='infrastructure')
-                            elif any(row.get('error') or row.get('status', 0) >= 500
+                            elif any(server_side_error(row, result.get('failure'))
                                      for row in result.get('proxy_requests', [])):
                                 result.update(failure='server_http_error', category='infrastructure')
                             result.update(lsp_evidence(target))

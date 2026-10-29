@@ -1,5 +1,5 @@
 """Offline tests for the prefix-cache campaign planner."""
-from benchmark.prefix_cache_campaign import estimate_tokens, schedule
+from benchmark.prefix_cache_campaign import estimate_tokens, schedule, terminate_last_marker
 
 
 def test_schedule_pairs_each_task_and_repetition():
@@ -260,3 +260,10 @@ def test_continuation_uses_a_single_repair_for_the_whole_episode(monkeypatch, tm
     assert row['state'] == 'rejected'
     assert row['repairs'] == 1 and row['generations'] == 3
     assert calls[-2:] == [('visible', False), ('oracle', False)]
+
+
+def test_terminate_last_marker_restores_final_newline():
+    block = 'FILE: a.py\n<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE'
+    assert terminate_last_marker(block) == block + '\n'
+    assert terminate_last_marker(block + '\n\n') == block + '\n'
+    assert terminate_last_marker('BLOCKED: insufficient_context') == 'BLOCKED: insufficient_context'

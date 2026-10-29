@@ -320,3 +320,14 @@ def test_9b_oom_at_smallest_context_is_infrastructure(tmp_path, monkeypatch):
     monkeypatch.setattr(stage5.baseline, 'run_attempt', fake_run)
     with pytest.raises(RuntimeError, match='OOM'):
         stage5.execute(config, stage5.baseline.schedule(config))
+
+
+@pytest.mark.parametrize(('row', 'failure', 'expected'), [
+    ({'status': 200, 'error': 'ConnectionResetError'}, 'model_wall_timeout', False),
+    ({'status': 200, 'error': 'ConnectionResetError'}, None, True),
+    ({'status': 500, 'error': None}, 'model_wall_timeout', True),
+    ({'status': 200, 'error': 'HTTPError'}, 'model_wall_timeout', True),
+    ({'status': 200, 'error': None}, None, False),
+])
+def test_wall_timeout_client_abort_is_not_server_error(row, failure, expected):
+    assert stage5.server_side_error(row, failure) is expected

@@ -210,7 +210,15 @@ class MeasuredClient(LlamaClient):
         finally:
             row['seconds'] = time.monotonic() - started
             self.rows.append(row)
-        return ''.join(pieces)
+        return terminate_last_marker(''.join(pieces))
+
+
+def terminate_last_marker(text):
+    # The server drops the final newline at end of generation, but the edit grammar needs every
+    # marker on an LF-terminated line; restore only that newline.
+    if text.rstrip(' \t\r\n').endswith('>>>>>>> REPLACE'):
+        return text.rstrip(' \t\r\n') + '\n'
+    return text
 
 
 def metric_summary(rows):
@@ -292,8 +300,9 @@ def verification_worker(request):
     guard.disable_process_inspection()
     guard.restrict_candidate_process(
         workspace=output,
+        # pytest walks up from the oracle path and reads the repository pytest.ini.
         helper_paths=[CORPUS / 'tasks' / task, CORPUS / 'oracles' / task,
-                      CORPUS / 'support', Path(sys.prefix)],
+                      CORPUS / 'support', Path(sys.prefix), ROOT / 'pytest.ini'],
         node_root=Path(config['node']).resolve().parent.parent)
     if request['kind'] == 'visible':
         return baseline.check_visible(config, task, workspace, phase1=request['phase1'])
