@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import difflib
 import hashlib
 import json
 import math
@@ -31,10 +32,41 @@ def estimate_tokens(text):
     return math.ceil(len(text) / 3.5)
 
 
-def schedule(tasks):
+def schedule(tasks, repetitions=3):
     return [{'arm': arm, 'host': task['host'], 'task': task['id'], 'repetition': rep}
             for arm in ARMS for task in sorted(tasks, key=lambda t: (t['host'], t['id']))
-            for rep in range(1, 4)]
+            for rep in range(1, repetitions + 1)]
+
+
+def marker_in_search(output):
+    return any('task-specific line withheld' in match for match in
+               re.findall(r'<<<<<<< SEARCH\n(.*?)^=======', output, re.DOTALL | re.MULTILINE))
+
+
+def withheld_section(prefix, current, name):
+    old, new = prefix.splitlines(), current.splitlines()
+    markers = {i for i, line in enumerate(old) if line.strip() in
+               ('# task-specific line withheld', '/* task-specific line withheld */')}
+    regions, covered = [], set()
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, old, new, autojunk=False).get_opcodes():
+        found = markers.intersection(range(i1, i2))
+        if not found:
+            continue
+        # After an edit the withheld line may align as deleted; show the text around where it was.
+        if tag not in ('replace', 'delete'):
+            raise ValueError(f'cannot align withheld prefix lines in {name}: {i1 + 1}-{i2}')
+        covered.update(found)
+        regions.append((max(0, j1 - 2), min(len(new), max(j2, j1 + 1) + 2)))
+    if covered != markers or not markers:
+        raise ValueError(f'cannot align all withheld prefix lines in {name}')
+    parts = ['# Withheld prefix lines: current workspace text\n',
+             ('The system prefix is a read-only reference with omitted lines. Copy SEARCH text exactly '
+             'from workspace excerpts in this message, never from a marker line. '
+             'Line numbers are labels, not part of the file text.\n')]
+    for start, end in regions:
+        parts.append(f'## {name} lines {start + 1}-{end}\n```\n' +
+                     '\n'.join(f'{i + 1}: {new[i]}' for i in range(start, end)) + '\n```\n')
+    return '\n'.join(parts)
 
 
 def tasks_with_prefix():
@@ -116,7 +148,16 @@ def summarize(rows):
                     'decode_tok_s', 'total_seconds', 'peak_vram_mib', 'repairs'):
             values = [r[key] for r in valid if isinstance(r.get(key), (int, float))]
             medians[key] = statistics.median(values) if values else None
+        arm_rows = [r for r in rows if r['arm'] == arm]
+        rejected = {}
+        for row in arm_rows:
+            status = row.get('last_edit_rejection')
+            if status:
+                rejected[status] = rejected.get(status, 0) + 1
         arms[arm] = {'n': len(valid), 'successes': wins,
+                     'edit_repair_episodes': sum(bool(r.get('edit_repair')) for r in arm_rows),
+                     'visible_repair_episodes': sum(bool(r.get('visible_repair')) for r in arm_rows),
+                     'last_edit_rejection_statuses': rejected,
                      'wilson_95': wilson(wins, len(valid)),
                      'median': medians,
                      'infrastructure': sum(r['arm'] == arm and r['category'] == 'infrastructure' for r in rows)}
@@ -239,12 +280,20 @@ def metric_summary(rows):
 def make_package(task, workspace, arm, prefix=None, runner=None):
     context = select_context(task, workspace)
     budget = {'input_tokens': (16384 if arm == 'P-W16' else 65536) - 2048,
-              'max_tokens': 2048, 'wall_seconds': 300, 'repairs': 1}
+              'max_tokens': 2048, 'wall_seconds': 300, 'repairs': 2, 'repair_rejected_edits': True}
     kwargs = {'readonly_context': context, 'budgets': budget}
     if runner:
         package = runner.followup_package(CORPUS, runner.package, **kwargs)
     else:
         package = build_package(CORPUS, task['id'], workspace, task['host'], **kwargs)
+    if arm != 'P-W16':
+        name = 'index.js' if task['host'].startswith('ms-') else 'bottle.py'
+        if name not in task['relevant_files']:
+            raise ValueError(f'host source {name} is not relevant for {task["id"]}')
+        section = withheld_section((CORPUS / 'prefixes' / (task['host'] + '.txt')).read_text(encoding='utf-8'),
+                                   (workspace / name).read_text(encoding='utf-8'), name)
+        package = dataclasses.replace(package, markdown=package.markdown + '\n' + section,
+                                      readonly_context={**package.readonly_context, 'withheld_prefix_lines': section})
     if prefix is not None:
         package = dataclasses.replace(package, prefix_id=hashlib.sha256(prefix).hexdigest())
     return package
@@ -267,12 +316,21 @@ def dry_plan(config, tasks):
                 return estimate_tokens(prefix.decode('utf-8')) + estimate_tokens(packet) + 32
             selected[host] = fit_prefix(original, host_packets, count,
                                         65536 - 2048 - config['repair_reserve_tokens'])
-        for unit in schedule(tasks):
+        for unit in schedule(tasks, config.get('repetitions', 3)):
             prefix = (CORPUS / 'prefixes' / (unit['host'] + '.txt')).read_text(encoding='utf-8')
             chosen = selected[unit['host']].decode('utf-8')
             package = packets[(unit['task'], unit['arm'])]
+            total = estimate_tokens(package) + (estimate_tokens(chosen) if unit['arm'] != 'P-W16' else 0) + 32
+            limit = (16384 if unit['arm'] == 'P-W16' else 65536) - 2048
+            if unit['arm'] != 'P-W16':
+                limit -= config['repair_reserve_tokens']
+            if total > limit:
+                raise ValueError(f'estimated packet exceeds input limit: {unit}')
+            heading = '# Withheld prefix lines: current workspace text\n'
             print(json.dumps({**unit, 'package_estimated_tokens': estimate_tokens(package),
                               'prefix_estimated_tokens': estimate_tokens(chosen) if unit['arm'] != 'P-W16' else 0,
+                              'withheld_section_estimated_tokens': estimate_tokens(heading + package.split(heading, 1)[1]) if unit['arm'] != 'P-W16' else 0,
+                              'total_estimated_tokens': total, 'input_limit': limit,
                               'original_prefix_estimated_tokens': estimate_tokens(prefix),
                               'prefix_reduced_estimate': len(chosen) < len(prefix) if unit['arm'] != 'P-W16' else False,
                               'estimate': 'characters/3.5; runtime uses exact tokenizer'}, ensure_ascii=False))
@@ -392,9 +450,21 @@ def run_episode(config, task, unit, server, prefix, output):
         journal = [json.loads(line) for line in (output / 'journal.jsonl').read_text(encoding='utf-8').splitlines()]
         generations = sum(e['state'] == 'generating' for e in journal)
         repairs = sum(e['state'] == 'generating' and e.get('turn', 0) > 0 for e in journal)
+        rejections = [e for e in journal if e['state'] == 'edit_rejected']
+        candidates = [e for e in journal if e['state'] == 'candidate']
+        last = candidates[-1] if candidates else None
+        last_rejection = next((e['status'] for e in reversed(rejections)
+                               if last and e['attempt_id'] == last['attempt_id']
+                               and e['turn'] == last['turn']), None)
+        edit_repair = any(e['state'] == 'edit_rejected' and any(
+            later['state'] == 'generating' and later['attempt_id'] == e['attempt_id']
+            and later.get('turn') == e['turn'] + 1 for later in journal) for e in journal)
         row = {**unit, 'success': category == 'success', 'category': category, 'failure': failure,
                'state': result.state, 'phases': phases, 'visible': visible, 'oracle': oracle,
                'repairs': repairs, 'generations': generations, 'total_seconds': time.monotonic() - started,
+               'edit_repair': edit_repair, 'visible_repair': any(e['state'] == 'visible_repair' for e in journal),
+               'last_edit_rejection': last_rejection,
+               'marker_in_search': any(marker_in_search(e['output']) for e in journal if e['state'] == 'candidate'),
                'prefix_sha256': hashlib.sha256(prefix).hexdigest() if prefix is not None else None,
                **metric_summary(client.rows)}
     finally:
@@ -427,7 +497,7 @@ def campaign(config, tasks):
     baseline.write_json(output / 'manifest.json', {'config': config, 'corpus': actual,
                                                     'code': {str(p.relative_to(ROOT)): baseline.digest(p)
                                                              for p in code_files},
-                                                    'schedule': schedule(tasks)})
+                                                    'schedule': schedule(tasks, config.get('repetitions', 3))})
     task_by_id = {task['id']: task for task in tasks}
     packets = {}
     with tempfile.TemporaryDirectory(prefix='prefix-packets-') as tmp:
@@ -476,7 +546,7 @@ def campaign(config, tasks):
         if row['category'] == 'infrastructure':
             raise RuntimeError('infrastructure failure; campaign stopped and results preserved')
 
-    run_lifecycle(schedule(tasks), start_server, warm, run)
+    run_lifecycle(schedule(tasks, config.get('repetitions', 3)), start_server, warm, run)
     baseline.write_json(output / 'summary.json', summarize(rows))
 
 

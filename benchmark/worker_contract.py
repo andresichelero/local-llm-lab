@@ -24,7 +24,7 @@ class WorkerPackage:
     readonly_context: dict[str, str]
     prefix_id: str | None
     verification_profile: str
-    budgets: dict[str, int]
+    budgets: dict[str, int | bool]
     block_reasons: list[str]
     markdown: str
 
@@ -61,7 +61,8 @@ PACKAGE_SCHEMA = {
         **{name: {'type': 'array', 'items': {'type': 'string'}} for name in ('invariants', 'writable_files', 'block_reasons')},
         **{name: {'type': 'object', 'additionalProperties': {'type': 'string'}} for name in ('input_hashes', 'readonly_context')},
         'prefix_id': {'type': ['string', 'null']},
-        'budgets': {'type': 'object', 'additionalProperties': {'type': 'integer'}},
+        'budgets': {'type': 'object', 'properties': {'repair_rejected_edits': {'type': 'boolean'}},
+                    'additionalProperties': {'type': 'integer'}},
     },
 }
 RESULT_SCHEMA = {
@@ -135,7 +136,8 @@ def _build_package(corpus_root: Path, task_id: str, workspace: Path, base_revisi
     if budgets:
         limits.update(budgets)
     if (limits['wall_seconds'] <= 0 or limits['wall_seconds'] > 300
-            or limits['repairs'] not in (0, 1)
+            or limits['repairs'] not in (0, 1, 2)
+            or ('repair_rejected_edits' in limits and not isinstance(limits['repair_rejected_edits'], bool))
             or limits['input_tokens'] <= 0 or limits['max_tokens'] <= 0):
         raise ValueError('invalid budgets')
     body = ('# Task\n' + task['objective'] + '\n\n# Invariants\n' + '\n'.join('- ' + x for x in task['invariants'])

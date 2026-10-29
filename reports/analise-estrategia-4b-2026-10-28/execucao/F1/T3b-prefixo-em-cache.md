@@ -100,3 +100,48 @@ Diferenças curiosas entre cold e warm na mesma tarefa (`mcp_header`, `js_sign`,
   1. mostrar no pacote WL o trecho real atual das linhas mascaradas (ou montar o prefixo sem máscara, a partir do arquivo de cada tarefa), para o SEARCH ter uma fonte correta;
   2. permitir um reparo também quando a edição é rejeitada, devolvendo ao modelo o diagnóstico `zero_occurrences`;
   3. usar 1 repetição com temperatura 0, ou 3 repetições com amostragem.
+
+## v3: desenho corrigido (29/10, 15h53 às 16h09)
+
+Commits `852803f` (implementação, Codex Terra) e `c37ce40` (correção de alinhamento). Snapshot ext4 em `c37ce40`. Resultados em `/home/foxtrot/local-llm-benchmark/results/qwen-4b-prefix-cache-v3`. A 1ª tentativa abortou no primeiro episódio WL e foi arquivada em `-v3-aborted-align`: depois da edição da fase 1, uma linha omitida passou a alinhar como apagada.
+
+### O que mudou
+
+- **Linhas omitidas visíveis.** Os pacotes WL ganham uma seção com o texto atual, no workspace, de todas as linhas mascaradas do host. Cada região vem com 2 linhas de contexto e número de linha. São cerca de 670 tokens no bottle e 180 no ms. O W16 não recebe essa seção.
+- **Reparo após edição rejeitada.** O modelo recebe o status e a mensagem do erro e pode tentar de novo. Fica atrás de uma opção (`repair_rejected_edits`), desligada por padrão no worker.
+- **Até 2 reparos**, compartilhados entre edição rejeitada e teste visível.
+- **1 repetição.** São 36 unidades.
+
+Ressalva: o WL recebe informação que o W16 não recebe. Por isso, a comparação entre W16 e WL não isola só o tamanho do contexto.
+
+### Resultado
+
+Houve zero falhas de infraestrutura.
+
+| Braço | Aprovadas | Episódios com reparo de edição | Última rejeição | TTFT (mediana) | Tempo/episódio |
+|---|---|---:|---|---:|---:|
+| P-W16 | 2/12 (`cont_path`, `recover_decode`) | 6 | 1 `zero_occurrences` | 1,0 s | 11,9 s |
+| P-WL-cold | 2/12 (`cont_path`, `recover_decode`) | 10 | 9 `zero_occurrences`, 1 `malformed_output` | 17,8 s | 32,3 s |
+| P-WL-warm | 2/12 (`cont_path`, `recover_decode`) | 9 | 8 `zero_occurrences`, 1 `malformed_output` | 2,1 s | 13,8 s |
+
+As duas aprovações são as mesmas nos três braços. A falha dominante do W16 mudou: em 7 de 12 tarefas, o modelo respondeu `BLOCKED: insufficient_context`, porque a janela selecionada não continha o código do bug.
+
+### Por que a v3 ainda não mede qualidade
+
+1. **O marcador sumiu, mas o SEARCH continua errado.** `marker_in_search` ficou em 0 de 36 unidades. Nos WL, porém, o modelo escreve o SEARCH a partir do que ele imagina que está no arquivo, e não por cópia. Exemplos:
+   - em `py_query`, `_parse_qsl` foi indentado como método;
+   - em `js_sign`, o SEARCH traz um `Math.abs` que não existe no arquivo;
+   - em `mcp_header` (os dois braços WL) e em `recover_date` (só no cold), o modelo copiou os **números de linha** da nova seção (`1606: ...`).
+2. **O reparo de edição não ajuda com temperatura 0.** A mensagem diz só "Search block was not found". Com a mesma informação e temperatura 0, o modelo reenvia a mesma saída, idêntica byte a byte: 15 de 17 reparos de edição no WL frio, 14 de 16 no WL quente e 3 de 9 no W16. A ferramenta de edição do OpenCode funciona porque o modelo relê o arquivo depois do erro.
+
+### Conclusão
+
+- **Comprovado de novo:** o custo de latência. O WL quente fica perto do W16 (13,8 s contra 11,9 s), e o WL frio custa quase 3 vezes mais (32,3 s).
+- **Qualidade:** neste worker de chamada única com SEARCH/REPLACE, o contexto longo **não melhorou** o acerto (2/12 nos três braços). O gargalo é a cópia exata do SEARCH pelo 4B, e não a falta de contexto. Isso vale tanto para o prefixo comum quanto para a seção de linhas omitidas.
+- Para seguir com o T3b, seria preciso mudar o protocolo de edição, e não o contexto. Duas opções:
+  - devolver no erro as linhas mais próximas do arquivo real (busca aproximada);
+  - aceitar SEARCH com espaços normalizados ou âncoras por número de linha.
+
+  As duas mudam o que está sendo medido. Por isso, recomendo encerrar o T3b com esta conclusão e voltar às direções fortes da etapa 5.
+
+Diagnóstico: `scratchpad/t3bv3_diag.py`, `scratchpad/count_lineno.py` e `scratchpad/show_cands.py` e `scratchpad/count_repeats.py`. A saída está em `scratchpad/t3bv3-diag.txt`.

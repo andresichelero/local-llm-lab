@@ -1,6 +1,7 @@
 {
-  "protocol_id": "qwen-4b-prefix-cache-v2",
-  "output": "/home/foxtrot/local-llm-benchmark/results/qwen-4b-prefix-cache-v2",
+  "protocol_id": "qwen-4b-prefix-cache-v3",
+  "output": "/home/foxtrot/local-llm-benchmark/results/qwen-4b-prefix-cache-v3",
+  "repetitions": 1,
   "server": "/home/foxtrot/local-llm-benchmark/tools/llama-bin/llama-server",
   "server_sha256": "da1068f30d898c10c02c754ebef3b5b877073213989ff5ef9dfb2d4332e265f0",
   "node": "/home/foxtrot/.nvm/versions/node/v25.5.0/bin/node",
