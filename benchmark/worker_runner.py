@@ -137,7 +137,7 @@ class WorkerRunner:
             if self._journal_failed:
                 raise JournalPersistenceError('journal persistence previously failed')
             if self._expired or (self._deadline is not None and time.monotonic() >= self._deadline):
-                state, oracle_passed, reason = 'infrastructure_error', None, 'TimeoutError'
+                state, oracle_passed, reason = 'rejected', None, 'wall_budget'
             if state not in {'accepted', 'rejected', 'blocked', 'infrastructure_error'}:
                 raise ValueError('invalid terminal state')
             if state == 'accepted' and not self._visible_accepted:

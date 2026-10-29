@@ -9,9 +9,8 @@ import platform
 import stat
 import sys
 import sysconfig
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
-
 
 _LANDLOCK_CREATE_RULESET_VERSION = 1
 _LANDLOCK_RULE_PATH_BENEATH = 1
@@ -97,7 +96,8 @@ def restrict_candidate_process(*, workspace: Path,
                                helper_paths: Iterable[Path],
                                runtime_paths: Iterable[Path] = (),
                                node_root: Path | None = None,
-                               listable_paths: Iterable[Path] = ()) -> None:
+                               listable_paths: Iterable[Path] = (),
+                               writable_paths: Iterable[Path] = ()) -> None:
     """Confine a worker to its input tree, exact helpers and runtime libraries.
 
     Landlock and the process-inspection seccomp filter are inherited through
@@ -141,8 +141,10 @@ def restrict_candidate_process(*, workspace: Path,
                               | _LANDLOCK_ACCESS_FS_REFER
                               | _LANDLOCK_ACCESS_FS_TRUNCATE)
         _add_path_rule(fd, Path(workspace).resolve(strict=True), writable_workspace)
+        for path in writable_paths:
+            _add_path_rule(fd, Path(path).resolve(strict=True), writable_workspace)
 
-        paths = set(Path(path).resolve(strict=True) for path in helper_paths)
+        paths = {Path(path).resolve(strict=True) for path in helper_paths}
         paths.update(Path(path).resolve(strict=True) for path in runtime_paths)
         paths.update(_runtime_library_paths())
         paths.update(_device_paths())

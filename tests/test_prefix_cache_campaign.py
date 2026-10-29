@@ -201,10 +201,67 @@ def test_isolated_visible_verifier_offline(tmp_path):
     output = tmp_path / 'episode'
     (output / 'workspace').mkdir(parents=True)
     (output / 'home').mkdir()
+    (output / 'verify-tmp').mkdir()
     (output / 'workspace' / 'bottle.py').write_text('x = 1\n')
     result = campaign.isolated_verify(config, 'py_query', output, 'visible')
     assert result['passed'] is False
     assert result['returncode'] != 0
+
+
+def test_visible_candidate_cannot_read_private_files_or_modify_journal(tmp_path):
+    import json
+
+    import pytest
+
+    from benchmark import prefix_cache_campaign as campaign
+
+    if not campaign.guard.worker_capabilities()['supported']:
+        pytest.skip('Landlock ABI 4 is unavailable')
+    config = json.loads(campaign.CONFIG.read_text(encoding='utf-8'))
+    output = tmp_path / 'episode'
+    workspace = output / 'workspace'
+    workspace.mkdir(parents=True)
+    (output / 'verify-tmp').mkdir()
+    journal = output / 'journal.jsonl'
+    journal.write_text('preserved', encoding='utf-8')
+    (workspace / 'bottle.py').write_text('x = 1\n', encoding='utf-8')
+    campaign.isolated_verify(config, 'py_query', output, 'oracle')
+    paths = [campaign.CORPUS / 'oracles' / 'py_query' / 'oracle.py',
+             output / 'verify-oracle' / 'oracle.py',
+             campaign.CORPUS / 'tasks' / 'py_query' / 'reference.patch',
+             campaign.CORPUS / 'tasks' / 'py_query' / 'bug.patch']
+    code = 'from pathlib import Path\n'
+    for path in paths:
+        code += f'try:\n print("LEAK:", Path({str(path)!r}).read_text())\nexcept OSError:\n print("DENIED")\n'
+    code += f'try:\n Path({str(journal)!r}).write_text("altered")\nexcept OSError:\n print("DENIED WRITE")\n'
+    code += 'raise RuntimeError("candidate diagnostic")\n'
+    (workspace / 'bottle.py').write_text(code, encoding='utf-8')
+    result = campaign.isolated_verify(config, 'py_query', output, 'visible')
+    diagnostic = result['stdout'] + result['stderr']
+    assert diagnostic.count('DENIED') == 5 and 'LEAK:' not in diagnostic
+    assert journal.read_text(encoding='utf-8') == 'preserved'
+
+
+def test_isolated_oracle_executes_and_classifies_candidate_failure(tmp_path):
+    import json
+
+    import pytest
+
+    from benchmark import prefix_cache_campaign as campaign
+
+    if not campaign.guard.worker_capabilities()['supported']:
+        pytest.skip('Landlock ABI 4 is unavailable')
+    config = json.loads(campaign.CONFIG.read_text(encoding='utf-8'))
+    output = tmp_path / 'episode'
+    (output / 'workspace').mkdir(parents=True)
+    (output / 'verify-tmp').mkdir()
+    (output / 'workspace' / 'bottle.py').write_text('def _parse_qsl(value): return []\n', encoding='utf-8')
+    result = campaign.isolated_verify(config, 'py_query', output, 'oracle')
+    assert result['passed'] is False and result['status'] == 'fail'
+    for broken in ('import definitely_missing_module\n', 'def broken(:\n'):
+        (output / 'workspace' / 'bottle.py').write_text(broken, encoding='utf-8')
+        result = campaign.isolated_verify(config, 'py_query', output, 'oracle')
+        assert result['passed'] is False and result['status'] == 'fail'
 
 
 def test_streamed_metrics_from_fake_server(monkeypatch):
@@ -247,6 +304,42 @@ def test_classify_private_grader_infrastructure():
     assert category == 'infrastructure'
 
 
+def test_classify_preserves_proven_visible_rejection_when_oracle_unavailable():
+    import types
+
+    from benchmark.prefix_cache_campaign import classify_result
+
+    result = types.SimpleNamespace(state='rejected', reason='no_new_visible_diagnostic')
+    failure, category = classify_result(result, {'passed': False}, {'passed': None, 'status': 'infrastructure'})
+    assert (failure, category) == ('no_new_visible_diagnostic', 'model')
+
+
+def test_verification_permissions_are_scoped_by_kind(monkeypatch, tmp_path):
+    from benchmark import prefix_cache_campaign as campaign
+
+    output = tmp_path / 'episode'
+    (output / 'workspace').mkdir(parents=True)
+    (output / 'verify-tmp').mkdir()
+    (output / 'verify-visible').mkdir()
+    (output / 'verify-oracle').mkdir()
+    calls = []
+    monkeypatch.setattr(campaign.guard, 'disable_process_inspection', lambda: None)
+    monkeypatch.setattr(campaign.guard, 'restrict_candidate_process', lambda **kw: calls.append(kw))
+    monkeypatch.setattr(campaign.baseline, '_check_visible', lambda *a, **kw: {'passed': False}, raising=False)
+    monkeypatch.setattr(campaign.baseline, '_grade', lambda *a, **kw: {'passed': False}, raising=False)
+    config = {'tasks': ['py_query'], 'node': '/usr/bin/node'}
+    for kind in ('visible', 'oracle'):
+        campaign.verification_worker({'output': str(output), 'config': config, 'task': 'py_query',
+                                      'kind': kind, 'phase1': False})
+    visible, oracle = calls
+    assert visible['workspace'] == output / 'workspace'
+    assert visible['writable_paths'] == [output / 'verify-tmp']
+    assert campaign.CORPUS / 'oracles' / 'py_query' not in visible['helper_paths']
+    assert campaign.CORPUS / 'tasks' / 'py_query' not in visible['helper_paths']
+    assert output / 'verify-oracle' in oracle['helper_paths']
+    assert output / 'verify-oracle' not in visible['helper_paths']
+
+
 def test_continuation_releases_followup_only_after_first_visible_pass(monkeypatch, tmp_path):
     import types
 
@@ -283,7 +376,7 @@ def test_continuation_releases_followup_only_after_first_visible_pass(monkeypatc
     assert row['success'] and len(row['phases']) == 2
 
 
-def test_continuation_uses_a_single_repair_for_the_whole_episode(monkeypatch, tmp_path):
+def test_continuation_uses_remaining_repairs_for_the_whole_episode(monkeypatch, tmp_path):
     import types
 
     from benchmark import prefix_cache_campaign as campaign
@@ -318,7 +411,7 @@ def test_continuation_uses_a_single_repair_for_the_whole_episode(monkeypatch, tm
     unit = {'arm': 'P-W16', 'host': task['host'], 'task': task['id'], 'repetition': 1}
     row = campaign.run_episode({}, task, unit, server, None, tmp_path / 'episode')
     assert row['state'] == 'rejected'
-    assert row['repairs'] == 1 and row['generations'] == 3
+    assert row['repairs'] == 2 and row['generations'] == 4
     assert calls[-2:] == [('visible', False), ('oracle', False)]
 
 

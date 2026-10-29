@@ -171,7 +171,7 @@ def test_wall_budget_interrupts_blocked_visible_verifier(tmp_path):
     runner = WorkerRunner(tmp_path, tmp_path / 'journal.jsonl', client)
     started = time.monotonic()
     result = runner.run(p, lambda: time.sleep(5), lambda: True)
-    assert result.state == 'infrastructure_error' and result.reason == 'TimeoutError'
+    assert result.state == 'rejected' and result.reason == 'wall_budget'
     assert time.monotonic() - started < 3
 
 
@@ -241,7 +241,7 @@ def test_private_oracle_swallows_timeout_without_acceptance(tmp_path):
     result = runner.run(p, lambda: VisibleResult(True, ''), private_oracle)
     entries = [json.loads(line) for line in (tmp_path / 'journal.jsonl').read_text().splitlines()]
     assert captured == ['TimeoutError']
-    assert result.state == 'infrastructure_error' and result.reason == 'TimeoutError'
+    assert result.state == 'rejected' and result.reason == 'wall_budget'
     assert result.oracle_passed is None
     assert all(e['state'] != 'accepted' for e in entries)
 
@@ -301,7 +301,7 @@ def test_terminal_completed_before_io_error_is_recovered_without_second_terminal
     assert runner.finalize('infrastructure_error') == result
 
 
-def test_timeout_after_prepared_is_terminal_infrastructure_error(tmp_path, monkeypatch):
+def test_timeout_after_prepared_is_terminal_wall_budget(tmp_path, monkeypatch):
     import time
     from dataclasses import replace
     p = package(tmp_path)
@@ -315,8 +315,8 @@ def test_timeout_after_prepared_is_terminal_infrastructure_error(tmp_path, monke
     monkeypatch.setattr(runner, '_record', delayed_prepared)
     result = runner.run(p, lambda: VisibleResult(True, ''), lambda: True)
     entries = [json.loads(line) for line in (tmp_path / 'journal.jsonl').read_text().splitlines()]
-    assert result.state == 'infrastructure_error' and result.reason == 'TimeoutError'
-    assert [e['state'] for e in entries] == ['prepared', 'infrastructure_error']
+    assert result.state == 'rejected' and result.reason == 'wall_budget'
+    assert [e['state'] for e in entries] == ['prepared', 'rejected']
 
 
 def test_incomplete_terminal_line_is_not_accepted_or_retried(tmp_path, monkeypatch):

@@ -9,6 +9,7 @@ import json
 import math
 import os
 import re
+import shutil
 import statistics
 import subprocess
 import sys
@@ -339,6 +340,8 @@ def dry_plan(config, tasks):
 def classify_result(result, visible, oracle, server_alive=True):
     if not server_alive:
         failure = 'server_exited'
+    elif result.state == 'rejected' and visible.get('passed') is False:
+        failure = result.reason or result.state
     elif result.state == 'infrastructure_error' or oracle.get('status') == 'infrastructure':
         failure = 'grader_infrastructure' if oracle.get('status') == 'infrastructure' else 'server_http_error'
     elif result.state != 'accepted':
@@ -352,29 +355,45 @@ def verification_worker(request):
     """Run the existing verifier in a separate, fail-closed restricted process."""
     output = Path(request['output']).resolve(strict=True)
     workspace = (output / 'workspace').resolve(strict=True)
+    scratch = (output / 'verify-tmp').resolve(strict=True)
+    scripts = (output / ('verify-visible' if request['kind'] == 'visible' else 'verify-oracle')).resolve(strict=True)
     config, task = request['config'], request['task']
-    if task not in config['tasks'] or workspace.parent != output:
+    kind = request['kind']
+    if (task not in config['tasks'] or workspace.parent != output or scratch.parent != output
+            or scripts.parent != output):
         raise ValueError('invalid verification request')
+    if kind not in ('visible', 'oracle'):
+        raise ValueError('invalid verification kind')
+    helpers = [Path(sys.prefix), scripts]
     guard.disable_process_inspection()
     guard.restrict_candidate_process(
-        workspace=output,
-        # pytest walks up from the oracle path and reads the repository pytest.ini.
-        helper_paths=[CORPUS / 'tasks' / task, CORPUS / 'oracles' / task,
-                      CORPUS / 'support', Path(sys.prefix), ROOT / 'pytest.ini'],
+        workspace=workspace, writable_paths=[scratch], helper_paths=helpers,
         node_root=Path(config['node']).resolve().parent.parent,
-        # pytest then lists each directory from that rootdir down to the oracle.
-        listable_paths=[ROOT])
-    if request['kind'] == 'visible':
-        return baseline.check_visible(config, task, workspace, phase1=request['phase1'])
-    if request['kind'] == 'oracle':
-        return baseline.grade(config, task, workspace, output)
-    raise ValueError('invalid verification kind')
+        # Pytest may enumerate ancestors while collecting the oracle. Directory
+        # listing grants no permission to read files outside the explicit helpers.
+        listable_paths=[scripts.parents[-2]] if kind == 'oracle' else [])
+    if kind == 'visible':
+        suffix = '_phase1' if request['phase1'] else ''
+        return baseline._check_visible(config, task, workspace, phase1=request['phase1'],
+                                       script=scripts / f'verify{suffix}.py')
+    return baseline._grade(config, task, workspace, scratch,
+                           oracle_path=scripts / 'oracle.py', support_path=scripts / 'support')
 
 
 def isolated_verify(config, task, output, kind, phase1=False):
+    scripts = output / ('verify-visible' if kind == 'visible' else 'verify-oracle')
+    scripts.mkdir(exist_ok=True)
+    if kind == 'visible':
+        suffix = '_phase1' if phase1 else ''
+        for name in (f'verify{suffix}.py', f'visible{suffix}.py'):
+            shutil.copyfile(CORPUS / 'tasks' / task / name, scripts / name)
+    elif kind == 'oracle':
+        shutil.copyfile(CORPUS / 'oracles' / task / 'oracle.py', scripts / 'oracle.py')
+        shutil.copytree(CORPUS / 'support', scripts / 'support', dirs_exist_ok=True)
     request = {'config': config, 'task': task, 'output': str(output.resolve()),
                'kind': kind, 'phase1': phase1}
-    env = {'PATH': '/usr/bin:/bin', 'HOME': str(output / 'home'),
+    env = {'PATH': '/usr/bin:/bin', 'HOME': str(output / 'verify-tmp'),
+           'TMPDIR': str(output / 'verify-tmp'),
            'LANG': 'C.UTF-8', 'PYTHONDONTWRITEBYTECODE': '1'}
     proc = subprocess.run([sys.executable, '-m', 'benchmark.prefix_cache_campaign', '--verify-worker'],
                           input=json.dumps(request), text=True, capture_output=True, cwd=ROOT,
@@ -388,6 +407,7 @@ def run_episode(config, task, unit, server, prefix, output):
     output.mkdir(parents=True, exist_ok=False)
     workspace = output / 'workspace'
     (output / 'home').mkdir()
+    (output / 'verify-tmp').mkdir()
     baseline.prepare_workspace(config, task['id'], workspace)
     client = MeasuredClient(f'http://127.0.0.1:{server.port}')
     package = make_package(task, workspace, unit['arm'], prefix)
@@ -432,8 +452,9 @@ def run_episode(config, task, unit, server, prefix, output):
             follow = make_package(task, workspace, unit['arm'], prefix, runner)
             first_events = [json.loads(line) for line in
                             (output / 'journal.jsonl').read_text(encoding='utf-8').splitlines()]
-            if any(e['state'] == 'generating' and e.get('turn', 0) > 0 for e in first_events):
-                follow = dataclasses.replace(follow, budgets={**follow.budgets, 'repairs': 0})
+            used_repairs = sum(e['state'] == 'generating' and e.get('turn', 0) > 0 for e in first_events)
+            follow = dataclasses.replace(follow, budgets={**follow.budgets,
+                                         'repairs': max(0, package.budgets['repairs'] - used_repairs)})
             next_runner = WorkerRunner(workspace, output / 'journal.jsonl', client)
             result = next_runner.run(follow, check, grade, mode='W16' if prefix is None else 'WL', prefix=prefix)
             phases.append(dataclasses.asdict(result))
