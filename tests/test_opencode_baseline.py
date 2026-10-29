@@ -53,10 +53,10 @@ def test_real_opencode_accepts_sandbox_profile(tmp_path, arm_name):
 def test_schedule_matches_matrix():
     config = baseline.load_config()
     units = baseline.schedule(config)
-    assert len(units) == 276
+    assert len(units) == 300
     assert [len([u for u in units if u['stage'] == stage]) for stage in (1, 2, 3)] == [24, 60, 48]
-    assert len({(u['arm'], u['task'], u['repetition']) for u in units}) == 276
-    assert len([u for u in units if u['stage'] == 4]) == 144
+    assert len({(u['arm'], u['task'], u['repetition']) for u in units}) == 300
+    assert len([u for u in units if u['stage'] == 4]) == 168
 
 
 def test_server_and_profile_follow_arm_config():

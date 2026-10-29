@@ -37,19 +37,22 @@ Leitura, com cautela:
 - **KV cache:** q8_0 acertou 9 de 12 e f16 acertou 7 de 12. O q4_0 do controle acertou 16 de 24. As diferenças estão dentro do ruído. Entre os braços de KV, o f16 tem o maior pico de VRAM (5 754 MiB).
 - **Pesos:** Q6_K (unsloth) acertou 10 de 12 e Q8_0 (unsloth) acertou 8 de 12. O controle usa outro quantizador (bartowski), então não é possível separar o efeito dos bits do efeito do quantizador.
 - **Cache de prompt:** sem cache, o TTFT mediano sobe de 296 ms para cerca de 7,5 s e o tempo mediano dos episódios vai de 42 s para 115 s. A taxa de acerto não mudou de forma detectável (9 de 12, pareado p = 1,0).
-- **Thinking:** 11 de 12 (92%), contra 16 de 24 no controle. O tempo mediano dos sucessos foi 109 s, contra 36 s. O pareamento dá 3 vitórias e nenhuma derrota (p = 0,25).
+- **Thinking:** 11 de 12 (92%), contra 16 de 24 no controle. O tempo mediano dos sucessos foi 109 s, contra 36 s. O pareamento dá 3 vitórias e nenhuma derrota (p = 0,25). Na replicação da etapa 4, o thinking acertou 16 de 24 (67%). Somando as duas, são 27 de 36 (75%), dentro do ruído do controle.
+- **Etapa 4 (replicação e servidor):** controle 25/36, Q6_K 27/36, MTP com decode 55% mais rápido, checkpoints de contexto com tempo dos sucessos 34% menor. Tabela completa em [docs/RESULTS.md](docs/RESULTS.md), seção 7.
 - **Significância:** nenhuma comparação atinge p < 0,05. No braço de 16K, com 5 derrotas e nenhuma vitória, o p bilateral é 0,0625, que é o menor valor possível com cinco pares discordantes na mesma direção. Use estes números como sinais para a próxima etapa, não como ranking.
 
-## Configuração recomendada (provisória)
+## Configuração recomendada
 
-Estas recomendações saem das etapas 1 a 3. Ficam provisórias até a etapa 4 separar os efeitos de quantizador e de amostragem.
+Estas recomendações saem das etapas 1 a 4 (detalhes da etapa 4 em [docs/RESULTS.md](docs/RESULTS.md), seção 7).
 
 - **Contexto:** 32K é o mínimo, e 64K dá margem. Com OpenCode, 16K não serve neste corpus.
 - **KV cache:** q4_0. Não houve perda mensurável e é o de menor VRAM.
-- **Pesos:** Q4_K_M ou Q6_K. A escolha depende da etapa 4.
+- **Pesos:** Q4_K_M ou Q6_K. Somando as etapas, Q6_K teve 77% (37/48) e Q4_K_M 68% (41/60), diferença não significativa. Q6_K usa cerca de 550 MiB a mais. O Q4_K_M da unsloth não foi melhor que o do bartowski (7/12).
 - **Cache de prompt:** ligado. Sem ele, a latência cresce cerca de 25 vezes.
-- **Thinking:** ligado quando a qualidade importa mais que o tempo. Desligado para respostas rápidas.
-- **Passos do OpenCode:** 40 no protocolo v5/v6. A etapa 4 testa 80.
+- **Thinking:** desligado. A vantagem da etapa 3 (11/12) não se repetiu na etapa 4 (16/24), e o tempo cresce cerca de 3,3 vezes.
+- **Servidor:** MTP (`--spec-type draft-mtp --spec-draft-n-max 2`) aumenta o decode de 74 para 115 tok/s (aceitação 91%). Checkpoints de contexto (`--ctx-checkpoints 64 --checkpoint-min-step 1024`) reduzem o tempo dos sucessos de 37 para 25 s. Nenhum dos dois teve efeito mensurável no acerto.
+- **Amostragem:** temperatura 0. A amostragem recomendada pela Qwen teve 6/12.
+- **Passos do OpenCode:** 40. Com 80 o resultado foi 10/12, sem ganho claro.
 
 ## Como reproduzir
 
@@ -133,8 +136,7 @@ reports/                  relatórios das etapas F0, F1, F3 e T1, copiados sem l
 - **TTFT por proxy.** O TTFT mede o tempo até o primeiro conteúdo, reasoning ou chamada de ferramenta, visto pelo proxy local. Pode estar indisponível para algumas requisições.
 - **Campos ausentes nos resultados v5 e v6.** A taxonomia automática de término e as métricas de qualidade do diff (linhas, escopo, testes enfraquecidos) foram adicionadas depois. Os resultados das etapas 1 a 3 trazem esses campos vazios ou nulos. As causas de falha vêm dos rótulos `failure` gravados pelo runner.
 - **Retentativas por infraestrutura.** Duas unidades de v6 tiveram a primeira tentativa anulada por falha do avaliador. A segunda tentativa, que passou, entrou no acerto. Isso segue o protocolo. Em v5, uma falha do modelo foi classificada como infraestrutura e repetida. Essa classificação foi corrigida em v6.
-- **Etapa 4 sem resultados nesta PR.** O config atual tem 168 episódios na etapa 4, com braço C4-think e checkpoints de cache. O relatório T1 descreve uma versão com 144. A diferença é explicada em [docs/RESULTS.md](docs/RESULTS.md).
-- **Teste desatualizado.** `tests/test_opencode_baseline.py::test_schedule_matches_matrix` espera 276 unidades. O config atual gera 300. Esse teste falha antes e depois da refatoração, e não foi alterado de propósito, porque a expectativa é uma decisão de protocolo.
+- **Etapa 4 com uma repetição na maioria dos braços.** Os braços `S-*` têm 12 episódios e só detectam diferenças acima de cerca de 25 pontos.
 - **Corpus piloto.** As 12 tarefas não foram calibradas com o modelo nem são um conjunto de confirmação. O `bottle.py` tem cerca de 51 mil tokens, estimados por caracteres.
 - **Reprodução em outra máquina.** O config tem caminhos e SHA-256 do laboratório. Para outra máquina, é preciso um novo `protocol_id`, pois o manifesto recusa misturar protocolos.
 

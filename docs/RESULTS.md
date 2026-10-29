@@ -1,6 +1,6 @@
 # Resultados completos
 
-Este documento reúne todas as tabelas das etapas 1 a 3. O resumo e a leitura estão no [README](../README.md).
+Este documento reúne todas as tabelas das etapas 1 a 4. O resumo e a leitura estão no [README](../README.md).
 
 ## Fontes e escopo
 
@@ -11,7 +11,7 @@ Este documento reúne todas as tabelas das etapas 1 a 3. O resumo e a leitura es
 
 ## 1. Configuração de cada braço
 
-A tabela lista todos os braços do config atual (`benchmark/configs/qwen-4b-opencode-baseline.json`), inclusive a etapa 4. As etapas 1 a 3 rodaram com as mesmas especificações. Nenhum resultado da etapa 4 entra nesta PR.
+A tabela lista todos os braços do config atual (`benchmark/configs/qwen-4b-opencode-baseline.json`), inclusive a etapa 4. As etapas 1 a 3 rodaram com as mesmas especificações. Os resultados da etapa 4 estão na seção 7.
 
 | Etapa | Braço | Repetições | Pesos | Contexto (tokens) | KV K/V | Cache de prompt | Thinking | Amostragem | Passos | Argumentos extra do servidor |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -125,12 +125,22 @@ Com doze pares por braço, nenhuma comparação chega a p < 0,05. No braço de 1
 - **Quantizador.** O controle usa o Q4_K_M de bartowski. Q6_K e Q8_0 são de unsloth. Um efeito de quantização não pode ser separado do efeito de quantizador sem a etapa 4, que inclui Q4_K_M de unsloth.
 - **Ruído entre repetições.** No controle, as tarefas `cont_path`, `js_sign`, `recover_date` e `tests_range` trocaram de resultado entre a repetição 1 e a 2.
 
-### Etapa 4: o que está configurado e o que o relatório T1 descreve
+## 7. Etapa 4: replicação e opções de servidor (v7)
 
-Nenhum resultado da etapa 4 entra nesta PR. O relatório T1 descreve 144 episódios. O config atual tem 168, e a diferença é esta:
+Dados brutos: `qwen-4b-opencode-baseline-bwrap-v7` (168 episódios, protocolo v7, 40 passos, nenhuma falha de infraestrutura). Agregados: [arm-summary-v5-v6-v7.txt](../results/3070-benchmark/arm-summary-v5-v6-v7.txt) e [stage4-detail.txt](../results/3070-benchmark/stage4-detail.txt). Análise: [B-etapa4-replicacao-e-servidor.md](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/B-etapa4-replicacao-e-servidor.md).
 
-- O braço `C4-think`, com 2 repetições (24 episódios), foi acrescentado ao config depois do relatório T1, no commit `c2cf750`.
-- O braço `S-cache-reuse` do T1 (`--cache-reuse 256 --ctx-checkpoints 16`) virou `S-checkpoints` (`--ctx-checkpoints 64 --checkpoint-min-step 1024`), no commit `bb93df2`.
-- O braço `S-mtp` ganhou `--spec-draft-n-max 2`, no mesmo commit `bb93df2`.
+| Braço | Mudança | Acertos | Taxa | Tempo mediano, sucessos (s) | Geração mediana (tok/s) | VRAM pico (MiB) |
+| --- | --- | --- | --- | --- | --- | --- |
+| `C4-q4` | controle, 3 repetições | 25/36 | 69% | 37.5 | 74 | 4584 |
+| `C4-q6` | Q6_K (unsloth), 3 repetições | 27/36 | 75% | 32.0 | 67 | 5127 |
+| `C4-think` | thinking on, 2 repetições | 16/24 | 67% | 123.0 | 74 | 4529 |
+| `S-ctx48` | contexto 48K | 11/12 | 92% | 45.4 | 76 | 4307 |
+| `S-steps80` | 80 passos | 10/12 | 83% | 39.0 | 78 | 4531 |
+| `S-checkpoints` | `--ctx-checkpoints 64 --checkpoint-min-step 1024` | 9/12 | 75% | 24.5 | 76 | 4531 |
+| `S-mtp` | MTP, `--spec-draft-n-max 2` (aceitação 91%) | 8/12 | 67% | 24.8 | **115** | 5129 |
+| `S-q4-unsloth` | Q4_K_M (unsloth) | 7/12 | 58% | 36.0 | 77 | 4379 |
+| `S-qwen-sampling` | amostragem recomendada pela Qwen | 6/12 | 50% | 36.7 | 72 | 4531 |
 
-A listagem `--dry-run` do config atual soma 300 unidades: 24 da etapa 1, 60 da etapa 2, 48 da etapa 3 e 168 da etapa 4. O teste `test_schedule_matches_matrix` espera 276 unidades, que é a soma com a etapa 4 do T1 (144). Por isso ele falha. A correção depende de uma decisão sobre o protocolo, e não foi feita nesta refatoração.
+Agregando as etapas 1 a 4 (IC 95% de Wilson): Q4_K_M 41/60 = 68% (56%–79%); Q6_K 37/48 = 77% (63%–87%); thinking 27/36 = 75% (59%–86%). No pareamento C4-q4 × C4-q6, por tarefa e repetição, há 4 casos só do Q4 e 6 só do Q6, sem significância.
+
+Leitura: a vantagem do thinking na etapa 3 (92%) não se repetiu, e ele custa cerca de 3,3 vezes mais tempo. MTP (+55% de decode) e checkpoints de contexto reduzem o tempo mediano dos sucessos em cerca de um terço, sem efeito mensurável no acerto. Q6_K continua sendo o melhor peso, sem diferença significativa. Com o protocolo v7 e a etapa 4, o teste `test_schedule_matches_matrix` espera 300 unidades, igual ao config.
