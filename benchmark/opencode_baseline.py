@@ -8,16 +8,17 @@ import hashlib
 import http.client
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import signal
 import socket
+import statistics
 import subprocess
 import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.request import urlopen
 
 from benchmark.harness_runner import summarize_usage
@@ -39,13 +40,14 @@ def digest(path):
 
 def schedule(config):
     return [{'stage': arm['stage'], 'arm': name, 'task': task, 'repetition': rep}
-            for name, arm in config['arms'].items() for rep in range(1, arm['repetitions'] + 1)
+            for name, arm in config['arms'].items() if arm.get('enabled', True)
+            for rep in range(1, arm['repetitions'] + 1)
             for task in config['tasks']]
 
 
 def server_command(config, arm, port):
-    sampling = config['sampling']['on' if arm['thinking'] else 'off']
-    return [config['server'], '--model', config['models'][arm['model']]['path'],
+    sampling = {**config['sampling']['on' if arm['thinking'] else 'off'], **arm.get('sampling', {})}
+    command = [config['server'], '--model', config['models'][arm['model']]['path'],
             '--host', '127.0.0.1', '--port', str(port), '--alias', 'local-qwen',
             '--ctx-size', str(arm['context']), '--parallel', '1', '-ngl', '99',
             '--fit', 'off', '--flash-attn', 'on', '--cache-type-k', arm['kv_k'],
@@ -54,21 +56,29 @@ def server_command(config, arm, port):
             json.dumps({'enable_thinking': arm['thinking']}), '--temp', str(sampling['temperature']),
             '--top-p', str(sampling.get('top_p', 0.95)), '--top-k', str(sampling.get('top_k', 20)),
             '--cache-prompt' if arm['cache_prompt'] else '--no-cache-prompt', '--no-webui']
+    for name, flag in [('min_p', '--min-p'), ('presence_penalty', '--presence-penalty')]:
+        if name in sampling:
+            command += [flag, str(sampling[name])]
+    return command + arm.get('server_extra_args', [])
 
 
 def profile(config, arm, port):
     base = json.loads((ROOT / 'benchmark/configs/harnesses/opencode.json').read_text())
     base.update(autoupdate=False, model='local/local-qwen', subagent_depth=0)
-    base['agent'] = {'build': {'mode': 'primary', 'steps': config['steps'], 'permission': {
+    base['agent'] = {'build': {'mode': 'primary', 'steps': arm.get('steps', config['steps']), 'permission': {
         'task': {'*': 'deny'}, 'bash': {'*': 'allow'}, 'edit': {'*': 'allow'},
         'external_directory': {'*': 'deny'}, 'webfetch': 'deny',
         'websearch': 'deny'}}}
     provider = base['provider']['local']
     provider['options']['baseURL'] = f'http://127.0.0.1:{port}/v1'
-    sampling = config['sampling']['on' if arm['thinking'] else 'off']
+    sampling = {**config['sampling']['on' if arm['thinking'] else 'off'], **arm.get('sampling', {})}
     options = {'temperature': sampling['temperature']}
     if arm['thinking']:
         options.update(topP=sampling['top_p'], topK=sampling['top_k'])
+    for key, target in [('top_p', 'topP'), ('top_k', 'topK'),
+                        ('min_p', 'minP'), ('presence_penalty', 'presencePenalty')]:
+        if key in arm.get('sampling', {}):
+            options[target] = sampling[key]
     provider['models'] = {'local-qwen': {'name': 'local-qwen',
         'limit': {'context': arm['context'], 'output': config['output_tokens']}, 'options': options}}
     return base
@@ -336,6 +346,142 @@ def workspace_diff(before, after):
     return ''.join(chunks)
 
 
+def path_in(path, entries):
+    return any(path == name.rstrip('/') or path.startswith(name.rstrip('/') + '/') for name in entries)
+
+
+def diff_quality(before, after, task):
+    changed = sorted(name for name in before.keys() | after.keys() if before.get(name) != after.get(name))
+    added = removed = 0
+    deleted_tests, weakened_tests = [], []
+    binary = False
+    for name in changed:
+        old, new = before.get(name, b''), after.get(name, b'')
+        is_test = bool(re.search(r'(^|/)(test|tests)(/|_|\.)|(^|/)test[^/]*\.', name, re.IGNORECASE))
+        if is_test and name in before and name not in after:
+            deleted_tests.append(name)
+        try:
+            old_lines, new_lines = old.decode('utf-8').splitlines(), new.decode('utf-8').splitlines()
+        except UnicodeDecodeError:
+            binary = True
+            continue
+        changes = list(difflib.ndiff(old_lines, new_lines))
+        added += sum(line.startswith('+ ') for line in changes)
+        removed += sum(line.startswith('- ') for line in changes)
+        if is_test and name in before and name in after:
+            pattern = r'\bassert(?:\w+)?\b|\b(?:expect|should)\s*\('
+            old_asserts = len(re.findall(pattern, '\n'.join(old_lines), re.IGNORECASE))
+            new_asserts = len(re.findall(pattern, '\n'.join(new_lines), re.IGNORECASE))
+            trivial = re.compile(r'\bassert\s+(?:True|1)\b|\bassert(?:Equal|True)\s*\(\s*(?:True|1)\s*[,)]', re.IGNORECASE)
+            if new_asserts < old_asserts or len(trivial.findall('\n'.join(new_lines))) > len(trivial.findall('\n'.join(old_lines))):
+                weakened_tests.append(name)
+    return {'lines_added': None if binary else added, 'lines_removed': None if binary else removed,
+            'files_touched': changed, 'outside_writable': [p for p in changed if not path_in(p, task['writable_files'])],
+            'outside_relevant': [p for p in changed if not path_in(p, task['relevant_files'])],
+            'new_files': [p for p in changed if p not in before],
+            'deleted_test_files': deleted_tests, 'weakened_test_files': weakened_tests}
+
+
+def tokens_after_last_edit(events, diffs):
+    # Require an explicit tool diff and evidence that it remains in the final diff.
+    if not diffs:
+        return None
+    edits = [i for i, event in enumerate(events) if event.get('type') == 'tool_use'
+             and event.get('part', {}).get('tool') in {'edit', 'write', 'patch', 'apply_patch'}
+             and event.get('part', {}).get('state', {}).get('status') == 'completed']
+    if not edits:
+        return None
+    state = events[edits[-1]]['part']['state']
+    path = state.get('input', {}).get('filePath', '').removeprefix('/workspace/')
+    tool_diff = state.get('metadata', {}).get('diff', '')
+    def changes(text):
+        return {line for line in text.splitlines() if line.startswith(('+', '-'))
+                and not line.startswith(('+++', '---'))}
+    if path not in diffs or not changes(tool_diff) & changes(diffs[path]):
+        return None
+    after = events[edits[-1] + 1:]
+    if any(e.get('type') == 'tool_use' and e.get('part', {}).get('tool') == 'bash'
+           and e.get('part', {}).get('state', {}).get('status') == 'completed' for e in after):
+        return None
+    finishes = [event for event in after if event.get('type') == 'step_finish']
+    # The first finish accounts for the model response that requested the edit.
+    if not finishes:
+        return None
+    tail = finishes[1:]
+    if any(not usage_available(e) for e in tail):
+        return None
+    usage = summarize_usage('opencode', tail)
+    return {key: usage[key] for key in ('prompt_tokens', 'completion_tokens')}
+
+
+def usage_available(event):
+    tokens = event.get('part', {}).get('tokens')
+    return (isinstance(tokens, dict) and isinstance(tokens.get('input'), (int, float))
+            and isinstance(tokens.get('output'), (int, float))
+            and isinstance((tokens.get('cache') or {}).get('read'), (int, float)))
+
+
+def failure_taxonomy(failure, visible, oracle, quality, events, steps, phase_steps=None, stderr=''):
+    if failure is None and visible.get('passed') is True and oracle.get('passed') is True:
+        return {'primary': None, 'secondary': []}
+    evidence = (json.dumps(events, ensure_ascii=False) + stderr).lower()
+    tags = []
+    if failure == 'model_wall_timeout':
+        tags.append('wall_timeout')
+    if re.search(r'exceeds? (?:the )?available context|context (?:size|length|window).{0,50}(?:exceed|overflow|too (?:large|long))', evidence):
+        tags.append('context_overflow')
+    errors = {}
+    for event in events:
+        part = event.get('part', {})
+        state = part.get('state', {})
+        exit_code = state.get('metadata', {}).get('exit')
+        if event.get('type') == 'tool_use' and (state.get('status') in {'error', 'failed'}
+                                                 or (isinstance(exit_code, int) and exit_code != 0)):
+            error = state.get('error') or state.get('output')
+            if error:
+                key = (part.get('tool'), json.dumps(error, sort_keys=True))
+                errors[key] = errors.get(key, 0) + 1
+    if any(count >= 3 for count in errors.values()):
+        tags.append('tool_error_loop')
+    if (phase_steps if phase_steps is not None else sum(e.get('type') == 'step_finish' for e in events)) >= steps:
+        tags.append('step_cap')
+    files = quality.get('files_touched')
+    if files is not None and not files:
+        tags.append('no_edit')
+        last_text = max((i for i, e in enumerate(events) if e.get('type') == 'text'
+                         and e.get('part', {}).get('text')), default=-1)
+        last_tool = max((i for i, e in enumerate(events) if e.get('type') == 'tool_use'), default=-1)
+        if (last_text > last_tool and failure in {'model_oracle_failed', 'model_visible_failed',
+                                                 'model_phase1_incomplete'} and 'step_cap' not in tags):
+            tags.append('gave_up')
+    if files and quality.get('outside_relevant'):
+        tags.append('wrong_file')
+    if visible.get('passed') is False:
+        tags.append('broke_visible')
+    if visible.get('passed') is True and oracle.get('passed') is False:
+        tags.append('oracle_only')
+    return {'primary': tags[0] if tags else None, 'secondary': tags[1:]}
+
+
+def request_metrics(rows):
+    timings = [row.get('timings', [])[-1] for row in rows if row.get('timings')]
+    result = {}
+    for source, target in [('prompt_per_second', 'median_prefill_tokens_per_second'),
+                           ('predicted_per_second', 'median_decode_tokens_per_second')]:
+        values = [t[source] for t in timings if isinstance(t.get(source), (int, float))]
+        result[target] = statistics.median(values) if values else None
+    for source, target in [('prompt_n', 'prompt_processed_tokens'), ('cache_n', 'prompt_cached_tokens')]:
+        values = [t[source] for t in timings if isinstance(t.get(source), (int, float))]
+        result[target] = sum(values) if values and len(values) == len(rows) else None
+    result['requests_with_timings'] = len(timings)
+    result['requests_total'] = len(rows)
+    if result['prompt_processed_tokens'] is None or result['prompt_cached_tokens'] is None:
+        result['prompt_total_tokens'] = None
+    else:
+        result['prompt_total_tokens'] = result['prompt_processed_tokens'] + result['prompt_cached_tokens']
+    return result
+
+
 def check_visible(config, task_id, workspace, phase1=False, timeout=120):
     script = CORPUS / 'tasks' / task_id / ('verify_phase1.py' if phase1 else 'verify.py')
     env = {'PATH': str(Path(config['node']).parent) + ':/usr/bin:/bin', 'HOME': str(workspace.parent / 'home'),
@@ -373,14 +519,57 @@ def write_json(path, value):
 
 
 def sample_vram(stop, rows):
+    """Collect host resources without blocking the one-second sampling loop on interop."""
+    host = {'value': None, 'at': 0}
+    def windows_memory():
+        while not stop.is_set():
+            try:
+                raw = subprocess.check_output(['powershell.exe', '-NoProfile', '-NonInteractive',
+                    '-Command', '(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory'],
+                    text=True, timeout=0.8, stderr=subprocess.DEVNULL)
+                host.update(value=int(raw.strip()) / 1024, at=time.monotonic())
+            except (OSError, ValueError, subprocess.SubprocessError):
+                host.update(value=None, at=time.monotonic())
+            stop.wait(1)
+    host_thread = threading.Thread(target=windows_memory, daemon=True)
+    host_thread.start()
+    previous = None
     while not stop.is_set():
+        start = time.monotonic()
+        row = {'cpu_percent': None, 'wsl_available_mib': None,
+               'windows_available_mib': host['value'] if start - host['at'] < 2 else None,
+               'vram_mib': None}
+        try:
+            fields = Path('/proc/stat').read_text().splitlines()[0].split()[1:]
+            values = [int(v) for v in fields]
+            total, idle = sum(values[:8]), values[3] + values[4]
+            if previous and total > previous[0]:
+                row['cpu_percent'] = 100 * (1 - (idle - previous[1]) / (total - previous[0]))
+            previous = total, idle
+            mem = re.search(r'^MemAvailable:\s+(\d+)\s+kB', Path('/proc/meminfo').read_text(), re.MULTILINE)
+            if mem:
+                row['wsl_available_mib'] = int(mem.group(1)) / 1024
+        except (OSError, ValueError, IndexError):
+            pass
         try:
             raw = subprocess.check_output(['nvidia-smi', '--query-gpu=memory.used',
-                                           '--format=csv,noheader,nounits'], text=True, timeout=5)
-            rows.append(int(raw.splitlines()[0]))
+                                           '--format=csv,noheader,nounits'], text=True, timeout=0.8)
+            row['vram_mib'] = int(raw.splitlines()[0])
         except (OSError, ValueError, subprocess.SubprocessError):
-            rows.append(None)
-        stop.wait(1)
+            pass
+        row['monotonic_seconds'] = start
+        rows.append(row)
+        stop.wait(max(0, 1 - (time.monotonic() - start)))
+    host_thread.join(timeout=1)
+
+
+def resource_summary(rows):
+    summary = {}
+    for key in ('cpu_percent', 'wsl_available_mib', 'windows_available_mib', 'vram_mib'):
+        values = [r[key] for r in rows if isinstance(r.get(key), (int, float))]
+        summary[key] = {'min': min(values) if values else None, 'max': max(values) if values else None,
+                        'mean': statistics.mean(values) if values else None}
+    return summary
 
 
 def run_attempt(config, unit, output, server, port, log_path):
@@ -391,7 +580,9 @@ def run_attempt(config, unit, output, server, port, log_path):
     stop, samples = threading.Event(), []
     sampler = threading.Thread(target=sample_vram, args=(stop, samples), daemon=True)
     sampler.start()
-    result = {'unit': unit, 'category': 'infrastructure', 'failure': 'unexpected_error'}
+    result = {'unit': unit, 'category': 'infrastructure', 'failure': 'unexpected_error',
+              'diff_quality': None, 'taxonomy': None, 'tokens_after_last_edit': None,
+              'request_metrics': None}
     try:
         task = prepare_workspace(config, unit['task'], workspace)
         before = snapshot(workspace)
@@ -423,11 +614,22 @@ def run_attempt(config, unit, output, server, port, log_path):
                                         timeout=min(60, deadline - time.monotonic() - 60))
                 visible_phase.append(checked)
                 return checked['passed']
-            phases = run_phases(run, phase_check, lambda: release_followup(unit['task'], workspace),
+            def followup():
+                text = release_followup(unit['task'], workspace)
+                for name in ('TASK.md', 'verify.py', 'visible.py'):
+                    before[name] = (workspace / name).read_bytes()
+                return text
+            phases = run_phases(run, phase_check, followup,
                                 (workspace / 'TASK.md').read_text(), task['class'] == 'continuation')
         events = [event for phase in phases['phases'] for event in phase['events']]
         (output / 'events.jsonl').write_text(''.join(json.dumps(e) + '\n' for e in events), encoding='utf-8')
-        (output / 'workspace.diff').write_text(workspace_diff(before, snapshot(workspace)), encoding='utf-8')
+        after = snapshot(workspace)
+        quality = diff_quality(before, after, task)
+        diff = workspace_diff(before, after)
+        diffs = {name: workspace_diff({name: before[name]} if name in before else {},
+                                      {name: after[name]} if name in after else {})
+                 for name in quality['files_touched']}
+        (output / 'workspace.diff').write_text(diff, encoding='utf-8')
         raw = log_path.read_bytes()[offset:].decode(errors='replace')
         (output / 'server-segment.log').write_text(raw, encoding='utf-8')
         visible = check_visible(config, unit['task'], workspace,
@@ -454,21 +656,36 @@ def run_attempt(config, unit, output, server, port, log_path):
         if failure is None and not visible['passed']:
             failure = 'model_visible_failed'
         category = classify(failure, oracle, visible)
+        arm = config['arms'][unit['arm']]
+        usage = summarize_usage('opencode', events)
+        finished = [e for e in events if e.get('type') == 'step_finish']
+        if not finished or any(not usage_available(e) for e in finished):
+            usage['prompt_tokens'] = usage['completion_tokens'] = None
+        phase_steps = max((sum(e.get('type') == 'step_finish' for e in p['events'])
+                           for p in phases['phases']), default=0)
+        taxonomy = failure_taxonomy(failure, visible, oracle, quality, events,
+                                    arm.get('steps', config['steps']), phase_steps,
+                                    ' '.join(p['stderr'] for p in phases['phases']))
         result = {'unit': unit, 'category': category, 'failure': failure,
                   'visible': visible, 'phase1_visible': visible_phase, 'oracle': oracle,
                   'continuation_released': phases['released'],
                   'phases': [{k: v for k, v in p.items() if k != 'events'} for p in phases['phases']],
-                  'usage': summarize_usage('opencode', events), 'server_metrics': parse_server_metrics(raw),
+                  'usage': usage, 'server_metrics': parse_server_metrics(raw),
+                  'diff_quality': quality, 'taxonomy': taxonomy,
+                  'tokens_after_last_edit': tokens_after_last_edit(events, diffs),
+                  'request_metrics': request_metrics(proxy.rows),
                   'proxy_requests': proxy.rows, 'oom_evidence': bool(re.search(
-                      r'out of memory|cudamalloc failed|failed to allocate cuda', raw, re.I))}
+                      r'out of memory|cudamalloc failed|failed to allocate cuda', raw, re.IGNORECASE))}
     except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
         result.update(error=f'{type(exc).__name__}: {exc}')
     finally:
         stop.set()
         sampler.join(timeout=10)
         result['total_seconds'] = time.monotonic() - started
-        result['vram_samples_mib'] = samples
-        result['peak_vram_mib'] = max((x for x in samples if x is not None), default=None)
+        result['resource_samples'] = samples
+        result['resources'] = resource_summary(samples)
+        result['vram_samples_mib'] = [x['vram_mib'] for x in samples]
+        result['peak_vram_mib'] = result['resources']['vram_mib']['max']
         write_json(output / 'result.json', result)
     return result
 
@@ -582,7 +799,7 @@ def execute(config, selected, smoke=False):
             epoch = len(list(arm_dir.glob('server-*')))
             server = None
 
-            def start_server():
+            def start_server(arm_dir=arm_dir, arm_name=arm_name):
                 nonlocal epoch
                 for startup in range(2):
                     epoch += 1
@@ -595,7 +812,7 @@ def execute(config, selected, smoke=False):
                         log = directory / 'server.log'
                         raw = log.read_text(errors='replace') if log.exists() else ''
                         write_json(directory / 'startup-error.json', {'error': str(exc), 'attempt': startup + 1,
-                            'oom_evidence': bool(re.search(r'out of memory|cudamalloc failed|failed to allocate cuda', raw, re.I))})
+                            'oom_evidence': bool(re.search(r'out of memory|cudamalloc failed|failed to allocate cuda', raw, re.IGNORECASE))})
                 raise RuntimeError(f'server startup failed twice: {arm_name}')
 
             try:
@@ -607,11 +824,11 @@ def execute(config, selected, smoke=False):
                     if existing and json.loads(existing[-1].read_text())['category'] != 'infrastructure':
                         continue
                     index = len(existing)
-                    def attempt():
+                    def attempt(unit=unit, unit_dir=unit_dir):
                         nonlocal index
                         index += 1
                         return run_attempt(config, unit, unit_dir / f'attempt-{index:02d}',
-                                           server.process, server.port, server.path)
+                                           server.process, server.port, server.path)  # noqa: B023
                     if index >= 2:
                         raise RuntimeError(f'infrastructure retries exhausted: {unit}')
                     result = attempt()
@@ -631,9 +848,9 @@ def execute(config, selected, smoke=False):
 def main(argv=None):
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--dry-run', action='store_true')
     mode.add_argument('--smoke', action='store_true')
-    mode.add_argument('--stage', type=int, choices=(1, 2, 3))
+    mode.add_argument('--stage', type=int, choices=(1, 2, 3, 4))
     parser.add_argument('--arm')
     parser.add_argument('--task', help='select a task for smoke only')
     args = parser.parse_args(argv)

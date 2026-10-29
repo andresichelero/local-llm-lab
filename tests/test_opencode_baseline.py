@@ -1,6 +1,7 @@
 import json
 import subprocess
 import urllib.request
+
 import pytest
 
 from benchmark import opencode_baseline as baseline
@@ -36,24 +37,26 @@ def test_bwrap_denies_host_paths_with_runner_mounts(tmp_path):
     assert '--unshare-net' not in proof['command']
 
 
-def test_real_opencode_accepts_sandbox_profile(tmp_path):
+@pytest.mark.parametrize('arm_name', ['B0', 'S-qwen-sampling'])
+def test_real_opencode_accepts_sandbox_profile(tmp_path, arm_name):
     config = baseline.load_config()
     workspace, home = tmp_path / 'workspace', tmp_path / 'home'
     workspace.mkdir()
     config_dir = home / '.config/opencode'
     config_dir.mkdir(parents=True)
-    (config_dir / 'opencode.json').write_text(json.dumps(baseline.profile(config, config['arms']['B0'], 1234)))
+    (config_dir / 'opencode.json').write_text(json.dumps(baseline.profile(config, config['arms'][arm_name], 1234)))
     command = baseline.bwrap_command(config, workspace, home, ['/opt/opencode/opencode.exe', 'debug', 'config'])
-    result = subprocess.run(command, env=baseline.sandbox_environment(), capture_output=True, text=True, timeout=30)
+    result = subprocess.run(command, env=baseline.sandbox_environment(), capture_output=True, text=True, timeout=30, check=False)
     assert result.returncode == 0, result.stderr
 
 
 def test_schedule_matches_matrix():
     config = baseline.load_config()
     units = baseline.schedule(config)
-    assert len(units) == 132
+    assert len(units) == 276
     assert [len([u for u in units if u['stage'] == stage]) for stage in (1, 2, 3)] == [24, 60, 48]
-    assert len({(u['arm'], u['task'], u['repetition']) for u in units}) == 132
+    assert len({(u['arm'], u['task'], u['repetition']) for u in units}) == 276
+    assert len([u for u in units if u['stage'] == 4]) == 144
 
 
 def test_server_and_profile_follow_arm_config():
@@ -263,3 +266,88 @@ def test_fake_continuation_attempt_grades_only_after_followup(tmp_path, monkeypa
     assert result['category'] == 'model'
     assert (tmp_path / 'episode/oracle-probe.json').is_file()
     assert not list((tmp_path / 'episode/workspace').rglob('oracle.py'))
+
+
+def test_arm_overrides_and_stage4_dry_run(monkeypatch, capsys):
+    config = baseline.load_config()
+    arm = dict(config['arms']['B0'], stage=4, repetitions=1, steps=80,
+               sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20,
+                         'min_p': 0, 'presence_penalty': 1.5},
+               server_extra_args=['--cache-reuse', '256'])
+    config['arms'] = {'test': arm, 'disabled': dict(arm, enabled=False)}
+    cmd = baseline.server_command(config, arm, 1)
+    assert cmd[cmd.index('--min-p') + 1] == '0'
+    assert cmd[cmd.index('--presence-penalty') + 1] == '1.5'
+    assert cmd[-2:] == ['--cache-reuse', '256']
+    options = baseline.profile(config, arm, 1)['provider']['local']['models']['local-qwen']['options']
+    assert options['topP'] == 0.8 and options['presencePenalty'] == 1.5
+    assert baseline.profile(config, arm, 1)['agent']['build']['steps'] == 80
+    monkeypatch.setattr(baseline, 'load_config', lambda: config)
+    baseline.main(['--dry-run', '--stage', '4'])
+    assert 'disabled' not in capsys.readouterr().out
+
+
+def test_diff_quality_detects_regressions_and_writable_paths():
+    before = {'test/test_old.py': b'def test_x():\n    assert x == 1\n', 'src/a.py': b'x=1\n'}
+    after = {'test/test_old.py': b'def test_x():\n    assert True\n', 'src/a.py': b'x=2\n',
+             'src/new.py': b'hello\n'}
+    quality = baseline.diff_quality(before, after, {'writable_files': ['src/a.py'],
+                                                     'relevant_files': ['src']})
+    assert quality['lines_added'] == 3 and quality['lines_removed'] == 2
+    assert quality['new_files'] == ['src/new.py']
+    assert quality['outside_writable'] == ['src/new.py', 'test/test_old.py']
+    assert quality['weakened_test_files'] == ['test/test_old.py']
+
+
+def test_taxonomy_and_tokens_after_last_edit():
+    events = [
+        {'type': 'tool_use', 'part': {'tool': 'edit', 'state': {'status': 'completed',
+            'input': {'filePath': '/workspace/x'}, 'metadata': {'diff': '-old\n+new\n'}}}},
+        {'type': 'step_finish', 'part': {'tokens': {'input': 200, 'output': 10, 'cache': {'read': 0}}}},
+        {'type': 'step_finish', 'part': {'tokens': {'input': 10, 'output': 2, 'cache': {'read': 3}}}},
+        {'type': 'tool_use', 'part': {'tool': 'bash', 'state': {'status': 'error', 'error': 'oops'}}},
+        {'type': 'tool_use', 'part': {'tool': 'bash', 'state': {'status': 'error', 'error': 'oops'}}},
+        {'type': 'tool_use', 'part': {'tool': 'bash', 'state': {'status': 'error', 'error': 'oops'}}},
+    ]
+    assert baseline.tokens_after_last_edit(events, {'x': '--- a/x\n+++ b/x\n-old\n+new\n'}) == {'prompt_tokens': 13, 'completion_tokens': 2}
+    tags = baseline.failure_taxonomy('model_oracle_failed', {'passed': True}, {'passed': False},
+                                     {'files_touched': ['x'], 'outside_relevant': ['x']}, events, 40)
+    assert 'wrong_file' in tags['secondary'] or tags['primary'] == 'wrong_file'
+    assert 'oracle_only' in tags['secondary'] or tags['primary'] == 'oracle_only'
+    assert 'tool_error_loop' in tags['secondary'] or tags['primary'] == 'tool_error_loop'
+    assert baseline.tokens_after_last_edit([], {}) is None
+    assert baseline.tokens_after_last_edit(events, {'elsewhere': '-old\n+new\n'}) is None
+    assert baseline.tokens_after_last_edit(events, {'x': '-other\n+other2\n', 'elsewhere': '-old\n+new\n'}) is None
+
+
+def test_tool_error_loop_counts_nonzero_bash_exit():
+    event = {'type': 'tool_use', 'part': {'tool': 'bash', 'state': {'status': 'completed',
+             'metadata': {'exit': 1}, 'output': 'file not found'}}}
+    tags = baseline.failure_taxonomy('model_cli_failure', {'passed': None}, {'passed': None},
+                                     {'files_touched': []}, [event] * 3, 40)
+    assert 'tool_error_loop' in [tags['primary'], *tags['secondary']]
+
+
+def test_gave_up_requires_terminal_text_and_no_timeout():
+    text_event = {'type': 'text', 'part': {'text': 'I cannot solve this.'}}
+    tool_event = {'type': 'tool_use', 'part': {'tool': 'read'}}
+    kwargs = {'visible': {'passed': False}, 'oracle': {'passed': False},
+              'quality': {'files_touched': []}, 'steps': 40}
+    assert 'gave_up' not in baseline.failure_taxonomy('model_wall_timeout', events=[text_event], **kwargs)['secondary']
+    assert 'gave_up' not in baseline.failure_taxonomy('model_oracle_failed', events=[text_event, tool_event], **kwargs)['secondary']
+    assert 'gave_up' in baseline.failure_taxonomy('model_oracle_failed', events=[tool_event, text_event], **kwargs)['secondary']
+
+
+def test_request_metrics_and_resource_summary():
+    rows = [{'timings': [{'prompt_n': 10, 'cache_n': 5, 'prompt_per_second': 100,
+                         'predicted_per_second': 20}]}]
+    result = baseline.request_metrics(rows)
+    assert result['prompt_processed_tokens'] == 10 and result['prompt_cached_tokens'] == 5
+    assert result['median_prefill_tokens_per_second'] == 100
+    assert result['median_decode_tokens_per_second'] == 20
+    assert baseline.request_metrics([{'timings': []}])['prompt_processed_tokens'] is None
+    assert baseline.request_metrics(rows + [{'timings': []}])['prompt_processed_tokens'] is None
+    summary = baseline.resource_summary([{'cpu_percent': 50, 'wsl_available_mib': 100,
+                                          'windows_available_mib': None, 'vram_mib': 5}])
+    assert summary['cpu_percent']['mean'] == 50
+    assert summary['windows_available_mib']['mean'] is None
