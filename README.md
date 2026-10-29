@@ -41,7 +41,7 @@ Leitura, com cautela:
 - **Etapa 4 (replicação e servidor):** controle 25/36, Q6_K 27/36, MTP com decode 55% mais rápido, checkpoints de contexto com tempo dos sucessos 34% menor. Tabela completa em [docs/RESULTS.md](docs/RESULTS.md), seção 7.
 - **Etapa 5 (pesos, ferramentas e cascatas):** a cascata que repete com thinking ligado quando a verificação visível falha passou de 7/12 para 11/12 (4 de 4 resgates). A cascata para o 9B resgatou 1 de 3. O plugin RTK piorou (6/12). LSP, Q6_K_L, UD-Q6_K_XL e UD-Q4_K_XL ficaram entre 9 e 10/12, sem diferença significativa. Ver [docs/RESULTS.md](docs/RESULTS.md), seção 8.
 - **Tarefas longas (T2):** em maratonas de 5 a 6 objetivos, o contexto grande passou em 9/9 oráculos. Headroom ficou em 7/9, a compactação do OpenCode em 6/9 e o reset com `PROGRESS.md` em 5/9. Ver seção 9.
-- **Prefixo do repositório em cache (T3b):** com cerca de 46 mil tokens já no cache, o TTFT cai de 16,1 s para 0,16 s. A qualidade não pôde ser medida por defeitos de desenho; ver seção 10.
+- **Prefixo do repositório em cache (T3b):** com cerca de 46 mil tokens já no cache, o TTFT cai de 16,1 s para 0,16 s. Na v3, com o desenho corrigido, o acerto ficou igual nos três braços (2/12): o contexto longo não melhora a qualidade do worker de chamada única. Ver seção 10.
 - **Significância:** nenhuma comparação atinge p < 0,05. No braço de 16K, com 5 derrotas e nenhuma vitória, o p bilateral é 0,0625, que é o menor valor possível com cinco pares discordantes na mesma direção. Use estes números como sinais para a próxima etapa, não como ranking.
 
 ## Configuração recomendada
@@ -142,7 +142,7 @@ reports/                  relatórios das etapas F0, F1, F3 e T1, copiados sem l
 - **Campos ausentes nos resultados v5 e v6.** A taxonomia automática de término e as métricas de qualidade do diff (linhas, escopo, testes enfraquecidos) foram adicionadas depois. Os resultados das etapas 1 a 3 trazem esses campos vazios ou nulos. As causas de falha vêm dos rótulos `failure` gravados pelo runner.
 - **Retentativas por infraestrutura.** Duas unidades de v6 tiveram a primeira tentativa anulada por falha do avaliador. A segunda tentativa, que passou, entrou no acerto. Isso segue o protocolo. Em v5, uma falha do modelo foi classificada como infraestrutura e repetida. Essa classificação foi corrigida em v6.
 - **Etapas 4 e 5 com uma repetição na maioria dos braços.** Os braços `S-*`, `Q5-*`, `T5-*` e `X-*` têm 12 episódios e só detectam diferenças acima de cerca de 25 pontos. As maratonas do T2 têm uma repetição cada.
-- **T3b mede só a cópia exata na primeira tentativa.** O prefixo comum mascara as linhas das tarefas, e o modelo copia o marcador para o bloco SEARCH. O worker F3 também não oferece reparo quando a edição não aplica. Com temperatura 0, as três repetições saíram idênticas.
+- **T3b mede o protocolo de edição, não o contexto.** O 4B escreve o bloco SEARCH de memória, e não por cópia. Com temperatura 0, reenvia a mesma edição rejeitada. Mesmo com o desenho corrigido (v3), o acerto ficou em 2/12 nos três braços.
 - **Landlock em drvfs.** O sandbox Landlock do verificador não funciona em `/mnt/d`. O T3b roda de uma cópia do repositório no ext4 do WSL.
 - **Corpus piloto.** As 12 tarefas não foram calibradas com o modelo nem são um conjunto de confirmação. O `bottle.py` tem cerca de 51 mil tokens, estimados por caracteres.
 - **Reprodução em outra máquina.** O config tem caminhos e SHA-256 do laboratório. Para outra máquina, é preciso um novo `protocol_id`, pois o manifesto recusa misturar protocolos.
@@ -154,12 +154,11 @@ Fonte da etapa 4: [relatório T1](reports/analise-estrategia-4b-2026-10-28/execu
 Concluídos em 29/10/2026: etapa 4, etapa 5 (pesos, LSP, RTK e cascatas), tarefas longas (T2) e prefixo em cache (T3b).
 
 1. **Confirmar as direções fortes:** replicar a cascata com thinking e o RTK em 3 repetições, e o T2 (contexto grande contra Headroom) em 3 repetições.
-2. **T3b v3:** trecho real no pacote WL, reparo também após edição rejeitada e 1 repetição por tarefa, para medir se o contexto longo melhora a qualidade.
-3. **Campanha combinada:** MTP, checkpoints e a cascata com thinking, com Q4_K_M e com Q6_K.
-4. **MCP** e quantizações novas, conforme forem lançadas.
-5. **Backlog P1:** consolidar a configuração de uso; ampliar o corpus de 12 para 24 a 36 tarefas inéditas; comparar ExLlamaV3 com TabbyAPI contra llama.cpp, depois de verificar as tool calls do Qwen3.5 híbrido; comparar o custo com um modelo grande no mesmo corpus.
-6. **Backlog P2:** mistral.rs com o mesmo GGUF; trabalhador delimitado em escala; llama.cpp nativo no Windows contra WSL2; recompilar com `GGML_CUDA_FA_QUANTS` para KV misto.
-7. **Backlog P3, fora do escopo do 4B:** vLLM ou LMDeploy com AWQ e GPTQ-Marlin; offload de MoE maior que a VRAM; modelos de 7 a 14B; LoRA de agente.
+2. **Campanha combinada:** MTP, checkpoints e a cascata com thinking, com Q4_K_M e com Q6_K.
+3. **MCP** e quantizações novas, conforme forem lançadas.
+4. **Backlog P1:** consolidar a configuração de uso; ampliar o corpus de 12 para 24 a 36 tarefas inéditas; comparar ExLlamaV3 com TabbyAPI contra llama.cpp, depois de verificar as tool calls do Qwen3.5 híbrido; comparar o custo com um modelo grande no mesmo corpus.
+5. **Backlog P2:** mistral.rs com o mesmo GGUF; trabalhador delimitado em escala; llama.cpp nativo no Windows contra WSL2; recompilar com `GGML_CUDA_FA_QUANTS` para KV misto.
+6. **Backlog P3, fora do escopo do 4B:** vLLM ou LMDeploy com AWQ e GPTQ-Marlin; offload de MoE maior que a VRAM; modelos de 7 a 14B; LoRA de agente.
 
 ## Histórico
 

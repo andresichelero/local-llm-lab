@@ -193,7 +193,7 @@ Os dados brutos estão em `qwen-4b-opencode-long-tasks-20261029-v2`: 8 maratonas
 
 Não houve regressão nem OOM. A instrumentação registra o pedido de compactação, mas não confirma que ela terminou.
 
-## 10. Prefixo do repositório em cache (T3b, protocolo prefix-cache-v2)
+## 10. Prefixo do repositório em cache (T3b, protocolos prefix-cache-v2 e v3)
 
 Os dados brutos estão em `qwen-4b-prefix-cache-v2`: 108 unidades (3 braços × 12 tarefas × 3 repetições), sem nenhuma falha de infraestrutura. As repetições saíram idênticas com temperatura 0, então a amostra efetiva é de 12 tarefas por braço.
 
@@ -211,3 +211,23 @@ Conclusões:
 - A qualidade é inconclusiva, por dois motivos:
   - o prefixo mascarado induz o marcador `# task-specific line withheld` no bloco SEARCH;
   - o worker F3 não repara edições rejeitadas.
+
+### v3: desenho corrigido
+
+Os dados brutos estão em `qwen-4b-prefix-cache-v3`: 36 unidades (3 braços × 12 tarefas × 1 repetição), sem nenhuma falha de infraestrutura. A v3 fez três mudanças:
+- mostra nos pacotes WL o texto atual das linhas mascaradas;
+- permite reparar uma edição rejeitada, com até 2 reparos por episódio;
+- usa 1 repetição.
+
+| Braço | Tarefas aprovadas | TTFT mediano | Tempo mediano (s) |
+| --- | --- | --- | --- |
+| `P-W16` | 2/12 | 1,0 s | 11.9 |
+| `P-WL-cold` | 2/12 | 17,8 s | 32.3 |
+| `P-WL-warm` | 2/12 | 2,1 s | 13.8 |
+
+Conclusões:
+- O marcador sumiu do SEARCH (0 de 36), mas o acerto não mudou: são as mesmas duas tarefas nos três braços.
+- O 4B escreve o SEARCH de memória, e não por cópia.
+- Com temperatura 0, ele reenvia a mesma edição rejeitada em 29 de 33 reparos WL.
+- Neste worker de chamada única, o contexto longo não melhora a qualidade. O gargalo é o protocolo de edição.
+- O prefixo em cache traz só ganho de latência.
