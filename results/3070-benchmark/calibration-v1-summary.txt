@@ -1,0 +1,30 @@
+protocol qwen-4b-opencode-calibration-v1
+arm CAL-q4: Q4_K_M, KV q4_0, 64K, prompt cache, MTP n-max 2, checkpoints, cache-ram 2048, thinking off, no retry
+units 48, passed 30, oracle failures 17, CLI failures 1, infrastructure failures 0
+median episode 30.4 s, total 37.2 min, peak VRAM 5546 MiB
+
+task                  r1    r2
+cont_cache            pass  pass
+cont_forms            fail  pass
+cont_plugins          fail  pass
+cont_redirect         pass  pass
+js_decimal            fail  fail
+js_invalid            fail  fail
+js_units              fail  fail
+mcp_groups            fail  fail
+mcp_import            pass  pass
+mcp_render            fail  fail
+py_auth               pass  pass
+py_config             pass  fail
+py_cookie             pass  fail
+py_headers            pass  pass
+py_multi              pass  pass
+py_route              pass  pass
+py_template           pass  pass
+py_urlbuild           pass  fail
+recover_cookieformat  pass  pass
+recover_httpdate      fail  fail
+recover_hvalue        pass  pass
+tests_compare         pass  pass
+tests_escape          pass  pass
+tests_list            pass  fail
