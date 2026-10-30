@@ -67,43 +67,43 @@ development-only option does not establish corpus integrity.
 
 ## Corpus v2
 
-O corpus tem 36 tarefas: 10 python_fix, 5 javascript_fix, 6 continuation, 5 mcp, 5 tool_recovery e 5 authored_tests. As 12 originais permanecem intactas. A tabela cobre as 24 novas. As linhas do bug contam linhas originais alteradas; `1→2` substitui uma linha por duas. Em authored_tests não há patch de bug: o modelo escreve uma suíte, que o oráculo executa na referência e em dois mutantes distintos.
+The corpus has 36 tasks: 10 python_fix, 5 javascript_fix, 6 continuation, 5 mcp, 5 tool_recovery and 5 authored_tests. The original 12 remain intact. The table covers the 24 new tasks. Bug lines count changed original lines; `1→2` replaces one line with two. In authored_tests there is no bug patch: the model writes a suite, which the oracle runs against the reference and two distinct mutants.
 
-| ID | Classe | Área | Linhas do bug | Causa → sintoma | Visível | Só oráculo |
+| ID | Class | Area | Bug lines | Cause → symptom | Visible | Oracle only |
 |---|---|---|---:|---|---|---|
-| py_route | python_fix | filtros de rota | 1 | conversão do filtro → parâmetro da rota | inteiro positivo | negativo, zero e entrada inválida |
-| py_template | python_fix | precedência de variáveis | 1 | render → resultado do template | keyword sobre dicionário | múltiplos dicionários e escape/raw |
-| py_cookie | python_fix | cookies assinados | 1 | leitura do cookie → resultado por nome | nome diferente | assinatura, segredo errado e ausente |
-| py_config | python_fix | ConfigDict | 1 | carga de namespace → chaves criadas | chave aninhada simples | prefixo e múltiplos ramos |
-| py_multi | python_fix | MultiDict | 1 | busca indexada → valor retornado | primeiro valor | índice ausente, conversão e padrão |
-| py_headers | python_fix | HeaderDict | 1 | normalização de busca → cabeçalho retornado | nome minúsculo | caixa mista, índice e padrão |
-| py_auth | python_fix | Basic auth | 1 | separação de credenciais → senha | senha com dois pontos | senha vazia, entrada inválida e esquema |
-| py_urlbuild | python_fix | construção de URL | 1 | montagem → URL e query | valor e espaço | conversão, parâmetros e rota posicional |
-| js_units | javascript_fix | unidades e formatação | 4 | constantes e limites → API ms | ano | semanas, decimais e limites longo/curto |
-| js_decimal | javascript_fix | parsing decimal | 2 | parser → API ms | decimal positivo | negativo, espaços e unidade implícita |
-| js_invalid | javascript_fix | entradas inválidas | 2 | despacho → retorno/erro | infinito e espaços | outros tipos, NaN e entradas válidas |
-| cont_forms | continuation | FormsDict e codificação | 2 | _fix → getunicode/decode | caractere acentuado e decode | múltiplos valores, fallback e latin1 |
-| cont_redirect | continuation | redirecionamento | 2 | status e URL → resposta | relativo no HTTP/1.1 | HTTP/1.0, absoluto e status explícito |
-| cont_plugins | continuation | precedência de plugins | 2 | all_plugins → callback da rota | precedência e exclusão por tipo | exclusão por nome, global e todos |
-| cont_cache | continuation | cache HTTP | 2 | comparações → status do arquivo | data igual e ETag distinta | data anterior/posterior, inválida e ETag exata |
-| mcp_render | mcp | interpolação HTML | 2 | process_inline → template | escape padrão | interpolação raw e escape |
-| mcp_import | mcp | carregamento de objetos | 2 | load → objeto ou expressão | literal com maiúsculas | classe com nome em caixa mista |
-| mcp_groups | mcp | grupos de expressão regular | 2 | _re_flatten → padrão convertido | grupo comum | grupo nomeado e parênteses escapados |
-| recover_hvalue | tool_recovery | valor de cabeçalho | 2 | normalização → valor retornado | espaços preservados | controles LF, CR e NUL |
-| recover_httpdate | tool_recovery | formatação de data HTTP | 2 | formatação → valor do cabeçalho | epoch em GMT | dia seguinte e string preservada |
-| recover_cookieformat | tool_recovery | detecção de formato de cookie | 1→2 | detecção → reconhecimento | prefixo e separador | espaço inicial e ausência de marcador |
-| tests_escape | authored_tests | escape HTML | — | suíte escrita → regressões de escape | suíte passa na referência | mutantes de ampersand e aspas |
-| tests_list | authored_tests | normalização de listas | — | suíte escrita → conversão de valores | suíte passa na referência | mutantes de coleção e escalar falso |
-| tests_compare | authored_tests | comparação de strings | — | suíte escrita → igualdade | suíte passa na referência | mutantes de conteúdo e comprimento |
+| py_route | python_fix | route filters | 1 | filter conversion → route parameter | positive integer | negative, zero and invalid input |
+| py_template | python_fix | variable precedence | 1 | render → template result | keyword over dictionary | multiple dictionaries and escape/raw |
+| py_cookie | python_fix | signed cookies | 1 | cookie reading → result by name | different name | signature, wrong secret and missing value |
+| py_config | python_fix | ConfigDict | 1 | namespace loading → created keys | simple nested key | prefix and multiple branches |
+| py_multi | python_fix | MultiDict | 1 | indexed lookup → returned value | first value | missing index, conversion and default |
+| py_headers | python_fix | HeaderDict | 1 | lookup normalization → returned header | lowercase name | mixed case, index and default |
+| py_auth | python_fix | Basic auth | 1 | credential splitting → password | password with colon | empty password, invalid input and scheme |
+| py_urlbuild | python_fix | URL construction | 1 | assembly → URL and query | value and space | conversion, parameters and positional route |
+| js_units | javascript_fix | units and formatting | 4 | constants and limits → ms API | year | weeks, decimals and long/short limits |
+| js_decimal | javascript_fix | decimal parsing | 2 | parser → ms API | positive decimal | negative, spaces and implicit unit |
+| js_invalid | javascript_fix | invalid inputs | 2 | dispatch → return/error | infinity and spaces | other types, NaN and valid inputs |
+| cont_forms | continuation | FormsDict and encoding | 2 | _fix → getunicode/decode | accented character and decode | multiple values, fallback and latin1 |
+| cont_redirect | continuation | redirection | 2 | status and URL → response | relative in HTTP/1.1 | HTTP/1.0, absolute and explicit status |
+| cont_plugins | continuation | plugin precedence | 2 | all_plugins → route callback | precedence and exclusion by type | exclusion by name, global and all |
+| cont_cache | continuation | HTTP cache | 2 | comparisons → file status | equal date and different ETag | earlier/later date, invalid date and exact ETag |
+| mcp_render | mcp | HTML interpolation | 2 | process_inline → template | default escape | raw interpolation and escape |
+| mcp_import | mcp | object loading | 2 | load → object or expression | uppercase literal | class with mixed-case name |
+| mcp_groups | mcp | regular expression groups | 2 | _re_flatten → converted pattern | ordinary group | named group and escaped parentheses |
+| recover_hvalue | tool_recovery | header value | 2 | normalization → returned value | preserved spaces | LF, CR and NUL controls |
+| recover_httpdate | tool_recovery | HTTP date formatting | 2 | formatting → header value | epoch in GMT | next day and preserved string |
+| recover_cookieformat | tool_recovery | cookie format detection | 1→2 | detection → recognition | prefix and separator | leading space and missing marker |
+| tests_escape | authored_tests | HTML escape | — | written suite → escape regressions | suite passes on reference | ampersand and quote mutants |
+| tests_list | authored_tests | list normalization | — | written suite → value conversion | suite passes on reference | collection and false scalar mutants |
+| tests_compare | authored_tests | string comparison | — | written suite → equality | suite passes on reference | content and length mutants |
 
-Os stubs são determinísticos. Fornecem evidência externa local. Não medem transporte MCP real. Os casos de duas ou mais linhas e as duas fases aumentam a necessidade de investigar. A dificuldade média é uma hipótese até a calibração. As oito python_fix do lote 1 alteram uma linha na mesma função do sintoma; podem saturar.
+The stubs are deterministic. They provide local external evidence. They do not measure real MCP transport. Cases with two or more lines and the two phases increase the need for investigation. Medium difficulty is a hypothesis until calibration. The eight python_fix tasks in batch 1 change one line in the same function as the symptom; they may saturate.
 
-Em `py_range`, o objetivo menciona extremidades explícitas, mas não descreve o caso de sufixo que o oráculo também testa. Essa lacuna é uma hipótese para a dificuldade observada, não uma causa comprovada.
+In `py_range`, the objective mentions explicit endpoints but does not describe the suffix case that the oracle also tests. This gap is a hypothesis for the observed difficulty, not a proven cause.
 
-## Manifesto e histórico
+## Manifest and history
 
-Os prefixos e o manifesto foram regenerados para o corpus ampliado. Os resultados históricos continuam válidos para o corpus de 12, com seus hashes e prefixos originais; não devem ser misturados com novas execuções. `benchmark/configs/qwen-4b-prefix-cache.json` lista os 12 IDs antigos. O T3b agora seleciona pelos IDs do config e rejeita IDs ausentes, mas uma retomada de campanha com manifesto antigo deve manter seu snapshot original. As campanhas T3b de prefixo e os runners OpenCode baseline, combined, stage5, stage5-rep3 e long-tasks registram ou conferem hashes do corpus no manifesto de saída. Seus configs antigos e resultados existentes não são convertidos para v2; execução nova exige protocolo e diretório novos.
+The prefixes and manifest were regenerated for the expanded corpus. Historical results remain valid for the 12-task corpus, with their original hashes and prefixes; they must not be mixed with new runs. `benchmark/configs/qwen-4b-prefix-cache.json` lists the 12 old IDs. T3b now selects by config IDs and rejects missing IDs, but a campaign resumed with an old manifest must retain its original snapshot. The T3b prefix campaigns and OpenCode baseline, combined, stage5, stage5-rep3 and long-tasks runners record or check corpus hashes in the output manifest. Their old configs and existing results are not converted to v2; a new run requires a new protocol and directory.
 
-## Próximo passo
+## Next step
 
-Calibrar na GPU, sem escalada: controle Q4_K_M, KV q4_0, 64K, cache e temperatura zero; comparar a configuração recomendada com MTP n-max 2 e checkpoints, thinking desligado. Fazer duas repetições nas 24 tarefas novas. Manter as tarefas com acerto aproximadamente entre 20% e 80%. Não há calibração executada nesta mudança.
+Calibrate on the GPU, without escalation: Q4_K_M control, KV q4_0, 64K, cache and zero temperature; compare the recommended configuration with MTP n-max 2 and checkpoints, thinking off. Run two repetitions on the 24 new tasks. Keep tasks with a pass rate of approximately 20% to 80%. No calibration was performed in this change.
