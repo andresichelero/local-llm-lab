@@ -1,0 +1,11 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -2919,7 +2919,7 @@
+     if etag:
+         headers['ETag'] = etag
+         check = getenv('HTTP_IF_NONE_MATCH')
+-        if check and check.lower() == etag.lower():
++        if check and check == etag:
+             return HTTPResponse(status=304, **headers)
+ 
+     ims = getenv('HTTP_IF_MODIFIED_SINCE')

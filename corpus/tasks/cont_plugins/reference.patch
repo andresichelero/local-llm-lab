@@ -1,0 +1,11 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -551,7 +551,7 @@
+             if True in self.skiplist: break
+             name = getattr(p, 'name', False)
+             if name and (name in self.skiplist or name in unique): continue
+-            if p in self.skiplist: continue
++            if p in self.skiplist or type(p) in self.skiplist: continue
+             if name: unique.add(name)
+             yield p
+ 

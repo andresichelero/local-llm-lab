@@ -1,0 +1,5 @@
+{
+  "phase": 2,
+  "objective": "Complete FormsDict.decode: decode both byte and WSGI Latin-1 text keys and values with the requested encoding, preserve duplicates, and retain the getunicode behavior from the first delivery.",
+  "visible_test": "verify.py"
+}

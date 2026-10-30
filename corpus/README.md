@@ -3,7 +3,7 @@
 This corpus is for pilot development, not a held-out confirmation set. All
 episodes for a task must begin from the same snapshot with its `bug.patch`
 applied. The `reference.patch`, `bug.patch`, `oracles/`, `manifest.json`,
-`validate_corpus.py` and supervisor fixture builder must never be given to a
+`reference_phase1.patch`, `validate_corpus.py` and supervisor fixture builder must never be given to a
 worker. A coordinator may provide the task metadata, the relevant stub, the
 visible check and the prepared host workspace. For continuation, give only
 `task.json`, `verify_phase1.py` and `visible_phase1.py` at first; release
@@ -44,6 +44,9 @@ discovery, call traces, idempotency or retries. The validator runs each stub
 twice and checks its sample against both the buggy and corrected code.
 Continuation tasks provide separate phase-one and follow-up material; a future
 runner must actually sequence them.
+For newer continuation tasks, the validator also checks that phase one fails
+initially, applies the private `reference_phase1.patch`, checks the follow-up
+oracle fails, and confirms the final reference still satisfies phase one.
 
 Run from the repository root with the approved validation environment:
 

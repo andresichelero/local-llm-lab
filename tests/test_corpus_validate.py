@@ -97,12 +97,23 @@ def test_continuation_keeps_followup_out_of_first_metadata():
     import json
 
     validator = load_validator()
-    for task in ("cont_path", "cont_quote"):
+    for task in ("cont_path", "cont_quote", "cont_forms", "cont_redirect", "cont_plugins", "cont_cache"):
         folder = validator.ROOT / "tasks" / task
         first = json.loads((folder / "task.json").read_text(encoding="utf-8"))
         second = json.loads((folder / "followup.json").read_text(encoding="utf-8"))
         assert first["phase"] == 1 and second["phase"] == 2
         assert second["objective"] not in json.dumps(first)
+
+
+@pytest.mark.parametrize(('body', 'expected'), [
+    ('assert False', 1), ('raise RuntimeError("broken")', 2),
+    ('raise SystemExit(1)', 2), ('pass', 0),
+])
+def test_phase1_classifies_assertion_separately_from_infrastructure(tmp_path, body, expected):
+    validator = load_validator()
+    script = tmp_path / 'verify_phase1.py'
+    script.write_text(body, encoding='utf-8')
+    assert validator.run_phase1(script, tmp_path, dict(os.environ)) == expected
 
 
 @pytest.mark.parametrize(

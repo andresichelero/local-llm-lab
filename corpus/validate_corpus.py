@@ -84,6 +84,14 @@ def run(cmd, cwd, env):
     return result.returncode
 
 
+def run_phase1(script, cwd, env):
+    program = ("import runpy,sys\n"
+               "try: runpy.run_path(sys.argv[1], run_name='__main__')\n"
+               "except AssertionError: sys.exit(1)\n"
+               "except BaseException: sys.exit(2)\n")
+    return run([sys.executable, '-c', program, str(script)], cwd, env)
+
+
 def classify_pytest(code, evidence):
     if code == 0 and evidence == {"assertions": 0, "errors": 0}:
         return 0
@@ -160,14 +168,27 @@ def validate_task(task_dir, node):
         buggy = hash_tree(workspace)
         if changed_paths(before, buggy) - writable:
             raise ValueError("bug patch changes files outside writable scope")
-        if task["class"] == "continuation" and run([sys.executable, str(task_dir / "verify_phase1.py")], workspace, env):
-            raise ValueError("continuation phase-one check failed")
+        phase1_patch = task_dir / "reference_phase1.patch"
+        if task["class"] == "continuation":
+            phase1 = task_dir / "verify_phase1.py"
+            if phase1_patch.exists():
+                if run_phase1(phase1, workspace, env) != 1:
+                    raise ValueError("phase one must initially fail by assertion")
+                apply_patch(phase1_patch, workspace, env)
+                intermediate = hash_tree(workspace)
+                if not changed_paths(buggy, intermediate) or changed_paths(buggy, intermediate) - writable:
+                    raise ValueError("phase-one reference is empty or outside writable scope")
+                buggy = intermediate
+            if run_phase1(phase1, workspace, env) != 0:
+                raise ValueError("continuation phase-one check failed")
         bug = run_oracle(oracle, workspace, env, "bug")
         bug_stub = check_stub(stub, workspace, env) if stub else None
         apply_patch(task_dir / "reference.patch", workspace, env)
         fixed = hash_tree(workspace)
         if not changed_paths(buggy, fixed) or changed_paths(buggy, fixed) - writable:
             raise ValueError("reference patch is empty or changes files outside writable scope")
+        if task["class"] == "continuation" and run_phase1(task_dir / "verify_phase1.py", workspace, env) != 0:
+            raise ValueError("final reference regresses phase one")
         reference = run_oracle(oracle, workspace, env, "reference")
         reference_stub = check_stub(stub, workspace, env) if stub else None
         visible = run([sys.executable, str(task_dir / "verify.py")], workspace, env)

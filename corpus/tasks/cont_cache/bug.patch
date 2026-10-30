@@ -1,0 +1,18 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -2919,13 +2919,13 @@
+     if etag:
+         headers['ETag'] = etag
+         check = getenv('HTTP_IF_NONE_MATCH')
+-        if check and check == etag:
++        if check and check.lower() == etag.lower():
+             return HTTPResponse(status=304, **headers)
+ 
+     ims = getenv('HTTP_IF_MODIFIED_SINCE')
+     if ims:
+         ims = parse_date(ims.split(";")[0].strip())
+-        if ims is not None and ims >= int(stats.st_mtime):
++        if ims is not None and ims > int(stats.st_mtime):
+             return HTTPResponse(status=304, **headers)
+ 
+     body = '' if request.method == 'HEAD' else open(filename, 'rb')
