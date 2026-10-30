@@ -235,7 +235,7 @@ class cached_property(object):
     def __get__(self, obj, cls):
         if obj is None: return self
         value = obj.__dict__[self.func.__name__] = self.func(obj)
-        return value
+# task-specific line withheld
 
 
 class lazy_attribute(object):
@@ -248,7 +248,7 @@ class lazy_attribute(object):
     def __get__(self, obj, cls):
         value = self.getter(cls)
         setattr(cls, self.__name__, value)
-        return value
+# task-specific line withheld
 
 
 ###############################################################################
@@ -290,10 +290,10 @@ class RouteBuildError(RouteError):
 def _re_flatten(p):
     """ Turn all capturing groups in a regular expression pattern into
         non-capturing groups. """
-    if '(' not in p:
+# task-specific line withheld
         return p
     return re.sub(r'(\\*)(\(\?P<[^>]+>|\((?!\?))', lambda m: m.group(0) if
-                  len(m.group(1)) % 2 else m.group(1) + '(?:', p)
+# task-specific line withheld
 
 
 class Router(object):
@@ -411,7 +411,7 @@ class Router(object):
                 url_args = re_match(path).groupdict()
                 for name, wildcard_filter in filters:
                     try:
-                        url_args[name] = wildcard_filter(url_args[name])
+# task-specific line withheld
                     except ValueError:
                         raise HTTPError(400, 'Path has wrong format.')
                 return url_args
@@ -457,7 +457,7 @@ class Router(object):
         try:
             for i, value in enumerate(anons):
                 query['anon%d' % i] = value
-            url = ''.join([f(query.pop(n)) if n else f for (n, f) in builder])
+# task-specific line withheld
             return url if not query else url + '?' + urlencode(query)
         except KeyError as E:
             raise RouteBuildError('Missing URL argument: %r' % E.args[0])
@@ -550,8 +550,8 @@ class Route(object):
         for p in reversed(self.app.plugins + self.plugins):
             if True in self.skiplist: break
             name = getattr(p, 'name', False)
-            if name and (name in self.skiplist or name in unique): continue
-            if p in self.skiplist or type(p) in self.skiplist: continue
+# task-specific line withheld
+# task-specific line withheld
             if name: unique.add(name)
             yield p
 
@@ -1226,7 +1226,7 @@ class BaseRequest(object):
                 hash = hmac.new(tob(secret), msg, digestmod=digestmod).digest()
                 if _lscmp(sig, base64.b64encode(hash)):
                     dst = pickle.loads(base64.b64decode(msg))
-                    if dst and dst[0] == key:
+# task-specific line withheld
                         return dst[1]
             return default
         return value or default
@@ -1609,8 +1609,8 @@ def _hkey(key):
 
 
 def _hval(value):
-    value = tonat(value)
-    if '\n' in value or '\r' in value or '\0' in value:
+# task-specific line withheld
+# task-specific line withheld
         raise ValueError("Header value must not contain control characters: %r" % value)
     return value
 
@@ -2188,7 +2188,7 @@ class MultiDict(DictMixin):
                     the default value to be returned.
         """
         try:
-            val = self.dict[key][index]
+# task-specific line withheld
             return type(val) if type else val
         except Exception:
             pass
@@ -2227,9 +2227,9 @@ class FormsDict(MultiDict):
 
     def _fix(self, s, encoding=None):
         if isinstance(s, unicode) and self.recode_unicode:  # Python 3 WSGI
-            return s.encode('latin1').decode(encoding or self.input_encoding)
+# task-specific line withheld
         elif isinstance(s, bytes):  # Python 2 WSGI
-            return s.decode(encoding or self.input_encoding)
+# task-specific line withheld
         else:
             return s
 
@@ -2287,7 +2287,7 @@ class HeaderDict(MultiDict):
         return self.dict.get(_hkey(key)) or []
 
     def get(self, key, default=None, index=-1):
-        return MultiDict.get(self, _hkey(key), default, index)
+# task-specific line withheld
 
     def filter(self, names):
         for name in (_hkey(n) for n in names):
@@ -2438,7 +2438,7 @@ class ConfigDict(dict):
             if isinstance(key, basestring):
                 nskey = (namespace + '.' + key).strip('.')
                 if isinstance(value, dict):
-                    self.load_dict(value, namespace=nskey)
+# task-specific line withheld
                 else:
                     self[nskey] = value
             else:
@@ -2609,7 +2609,7 @@ class AppStack(list):
         if not isinstance(value, Bottle):
             value = Bottle()
         self.append(value)
-        return value
+# task-specific line withheld
     new_app = push
 
     @property
@@ -2816,11 +2816,11 @@ def redirect(url, code=None):
     """ Aborts execution and causes a 303 or 302 redirect, depending on
         the HTTP protocol version. """
     if not code:
-        code = 303 if request.get('SERVER_PROTOCOL') == "HTTP/1.1" else 302
+# task-specific line withheld
     res = response.copy(cls=HTTPResponse)
     res.status = code
     res.body = ""
-    res.set_header('Location', urljoin(request.url, url))
+# task-specific line withheld
     raise res
 
 
@@ -2919,13 +2919,13 @@ def static_file(filename, root,
     if etag:
         headers['ETag'] = etag
         check = getenv('HTTP_IF_NONE_MATCH')
-        if check and check == etag:
+# task-specific line withheld
             return HTTPResponse(status=304, **headers)
 
     ims = getenv('HTTP_IF_MODIFIED_SINCE')
     if ims:
         ims = parse_date(ims.split(";")[0].strip())
-        if ims is not None and ims >= int(stats.st_mtime):
+# task-specific line withheld
             return HTTPResponse(status=304, **headers)
 
     body = '' if request.method == 'HEAD' else open(filename, 'rb')
@@ -2959,7 +2959,7 @@ def debug(mode=True):
 
 def http_date(value):
     if isinstance(value, basestring):
-        return value
+# task-specific line withheld
     if isinstance(value, datetime):
         # aware datetime.datetime is converted to UTC time
         # naive datetime.datetime is treated as UTC time
@@ -2970,7 +2970,7 @@ def http_date(value):
     if not isinstance(value, (int, float)):
         # convert struct_time in UTC to UNIX timestamp
         value = calendar.timegm(value)
-    return email.utils.formatdate(value, usegmt=True)
+# task-specific line withheld
 
 
 def parse_date(ims):
@@ -2987,7 +2987,7 @@ def parse_auth(header):
     try:
         method, data = header.split(None, 1)
         if method.lower() == 'basic':
-            user, pwd = touni(base64.b64decode(tob(data))).split(':', 1)
+# task-specific line withheld
             return user, pwd
     except (KeyError, ValueError):
         return None
@@ -3095,7 +3095,7 @@ def cookie_is_encoded(data):
     """ Return True if the argument looks like a encoded cookie."""
     depr(0, 13, "cookie_is_encoded() will be removed soon.",
                 "Do not use this API directly.")
-    return bool(data.startswith(tob('!')) and tob('?') in data)
+# task-specific line withheld
 
 
 def html_escape(string):
@@ -3857,10 +3857,10 @@ def load(target, **namespace):
     module, target = target.split(":", 1) if ':' in target else (target, None)
     if module not in sys.modules: __import__(module)
     if not target: return sys.modules[module]
-    if target.isalnum(): return getattr(sys.modules[module], target)
+# task-specific line withheld
     package_name = module.split('.')[0]
     namespace[package_name] = sys.modules[package_name]
-    return eval('%s.%s' % (module, target), namespace)
+# task-specific line withheld
 
 
 def load_app(target):
@@ -4235,14 +4235,14 @@ class SimpleTemplate(BaseTemplate):
 
     def _include(self, _env, _name=None, **kwargs):
         env = _env.copy()
-        env.update(kwargs)
+# task-specific line withheld
         if _name not in self.cache:
             self.cache[_name] = self.__class__(name=_name, lookup=self.lookup, syntax=self.syntax)
         return self.cache[_name].execute(env['_stdout'], env)
 
     def execute(self, _stdout, kwargs):
         env = self.defaults.copy()
-        env.update(kwargs)
+# task-specific line withheld
         env.update({
             '_stdout': _stdout,
             '_printlist': _stdout.extend,
@@ -4269,7 +4269,7 @@ class SimpleTemplate(BaseTemplate):
         stdout = []
         for dictarg in args:
             env.update(dictarg)
-        env.update(kwargs)
+# task-specific line withheld
         self.execute(stdout, env)
         return ''.join(stdout)
 
@@ -4460,8 +4460,8 @@ class StplParser(object):
 
     @staticmethod
     def process_inline(chunk):
-        if chunk[0] == '!': return '_str(%s)' % chunk[1:]
-        return '_escape(%s)' % chunk
+# task-specific line withheld
+# task-specific line withheld
 
     def write_code(self, line, comment=''):
         code = '  ' * (self.indent + self.indent_mod)

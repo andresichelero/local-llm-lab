@@ -56,6 +56,23 @@ def test_prefix_masks_all_original_solution_lines():
     assert 40000 < len(prefix) / 3.5 < 100000
 
 
+def test_corpus_v2_distribution_and_frozen_prefixes():
+    import json
+    from collections import Counter
+
+    validator = load_validator()
+    tasks = [json.loads(path.read_text(encoding="utf-8"))
+             for path in (validator.ROOT / "tasks").glob("*/task.json")]
+    assert Counter(task["class"] for task in tasks) == {
+        "python_fix": 10, "javascript_fix": 5, "continuation": 6,
+        "mcp": 5, "tool_recovery": 5, "authored_tests": 5,
+    }
+    assert len({task["id"] for task in tasks}) == 36
+    for host in ("bottle-0.13.2", "ms-2.1.3"):
+        frozen = (validator.ROOT / "prefixes" / f"{host}.txt").read_text(encoding="utf-8")
+        assert frozen == validator.masked_prefix(validator.ROOT, host)
+
+
 @pytest.mark.parametrize(
     ("statement", "expected"), [("assert False", 1), ("pytest.fail('failure')", 1), ("raise RuntimeError('error')", 2), ("pass", 0)]
 )
