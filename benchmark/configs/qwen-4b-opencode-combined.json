@@ -1,0 +1,52 @@
+{
+  "protocol_id": "qwen-4b-opencode-combined-v1",
+  "output": "/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-combined-v1",
+  "models": {
+    "q4": {
+      "path": "/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q4_K_M.gguf",
+      "sha256": "13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983"
+    },
+    "q6kl": {
+      "path": "/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/Qwen_Qwen3.5-4B-Q6_K_L.gguf",
+      "sha256": "0d7931a7f143ccfdf675c0d84d542c387cd9255af94ee9c8fb5fa6f6df7c08a0",
+      "revision": "4168f45a16a1290d65a4ec0fa312ae917a4c15d6",
+      "url": "https://huggingface.co/bartowski/Qwen_Qwen3.5-4B-GGUF/resolve/4168f45a16a1290d65a4ec0fa312ae917a4c15d6/Qwen_Qwen3.5-4B-Q6_K_L.gguf"
+    }
+  },
+  "arms": {
+    "R-q4": {
+      "stage": 5,
+      "repetitions": 3,
+      "model": "q4",
+      "context": 65536,
+      "kv_k": "q4_0",
+      "kv_v": "q4_0",
+      "cache_prompt": true,
+      "thinking": false,
+      "cascade": "think",
+      "server_extra_args": [
+        "--spec-type", "draft-mtp",
+        "--spec-draft-n-max", "2",
+        "--ctx-checkpoints", "64",
+        "--checkpoint-min-step", "1024"
+      ]
+    },
+    "R-q6": {
+      "stage": 5,
+      "repetitions": 3,
+      "model": "q6kl",
+      "context": 65536,
+      "kv_k": "q4_0",
+      "kv_v": "q4_0",
+      "cache_prompt": true,
+      "thinking": false,
+      "cascade": "think",
+      "server_extra_args": [
+        "--spec-type", "draft-mtp",
+        "--spec-draft-n-max", "2",
+        "--ctx-checkpoints", "64",
+        "--checkpoint-min-step", "1024"
+      ]
+    }
+  }
+}
