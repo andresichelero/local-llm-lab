@@ -113,6 +113,65 @@ def test_stage5_rep3_config_has_two_three_repeat_arms_and_72_units(capsys):
     assert capsys.readouterr().out.rstrip().endswith('Total: 72')
 
 
+def test_combined_config_schedules_72_units_and_dry_run(capsys):
+    selected = stage5.CONFIG.with_name('qwen-4b-opencode-combined.json')
+    config = stage5.load_config(selected)
+
+    assert config['protocol_id'] == 'qwen-4b-opencode-combined-v2'
+    assert config['output'] == '/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-combined-v2'
+    assert list(config['arms']) == ['R-q4', 'R-q6']
+    assert [arm['repetitions'] for arm in config['arms'].values()] == [3, 3]
+    assert [config['arms'][name]['model'] for name in ('R-q4', 'R-q6')] == ['q4', 'q6kl']
+    assert all(config['arms'][name]['cascade'] == 'think' for name in ('R-q4', 'R-q6'))
+    assert len(stage5.baseline.schedule(config)) == 72
+
+    stage5.main(['--config', str(selected), '--dry-run'])
+    assert capsys.readouterr().out.rstrip().endswith('Total: 72')
+
+
+@pytest.mark.parametrize('arm_name', ['R-q4', 'R-q6'])
+def test_combined_server_extra_args_survive_think_escalation(tmp_path, monkeypatch, arm_name):
+    selected = stage5.CONFIG.with_name('qwen-4b-opencode-combined.json')
+    config = stage5.load_config(selected)
+    config['output'] = str(tmp_path)
+    config['tasks'] = ['py_query']
+    config['arms'] = {arm_name: {**config['arms'][arm_name], 'repetitions': 1}}
+    commands = []
+
+    class Pool:
+        def __init__(self, config, output):
+            self.switches = []
+
+        def get(self, arm):
+            commands.append(stage5.baseline.server_command(config, arm, 1234))
+            return type('Server', (), {'process': None, 'port': 1234, 'path': tmp_path})(), arm
+
+        def close(self):
+            pass
+
+    def fake_run(runtime_config, unit, output, process, port, log):
+        output.mkdir(parents=True, exist_ok=True)
+        thinking = runtime_config['arms'][arm_name]['thinking']
+        return {'unit': unit, 'failure': None if thinking else 'model_visible_failed',
+                'visible': {'passed': thinking}, 'phase1_visible': [],
+                'category': 'success' if thinking else 'model', 'total_seconds': 1}
+
+    monkeypatch.setattr(stage5, 'manifest', lambda *_: {'protocol_id': 'test'})
+    monkeypatch.setattr(stage5.subprocess, 'run', lambda *a, **k: type('P', (), {'returncode': 1})())
+    monkeypatch.setattr(stage5, 'ServerPool', Pool)
+    monkeypatch.setattr(stage5.baseline, 'run_attempt', fake_run)
+    monkeypatch.setattr(stage5.baseline, 'sample_vram', lambda stop, rows: stop.wait())
+
+    stage5.execute(config, stage5.baseline.schedule(config))
+
+    expected = ['--spec-type', 'draft-mtp', '--spec-draft-n-max', '2',
+                '--ctx-checkpoints', '64', '--checkpoint-min-step', '1024', '--cache-ram', '2048']
+    assert len(commands) == 2
+    assert all(command[-len(expected):] == expected for command in commands)
+    assert commands[0][commands[0].index('--reasoning') + 1] == 'off'
+    assert commands[1][commands[1].index('--reasoning') + 1] == 'on'
+
+
 def test_execute_cascade_uses_new_workspace_and_thinking_server(tmp_path, monkeypatch):
     config = stage5.load_config()
     config['output'] = str(tmp_path)
