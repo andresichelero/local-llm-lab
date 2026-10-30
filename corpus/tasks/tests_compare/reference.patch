@@ -1,0 +1,10 @@
+--- /dev/null
++++ b/test/test_tests_compare.py
+@@ -0,0 +1,7 @@
++import bottle
++
++def test_compare():
++    assert bottle._lscmp('abc', 'abc')
++    assert bottle._lscmp('', '')
++    assert not bottle._lscmp('abc', 'abd')
++    assert not bottle._lscmp('abc', 'abcd')

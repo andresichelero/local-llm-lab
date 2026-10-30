@@ -1,0 +1,10 @@
+--- /dev/null
++++ b/test/test_tests_list.py
+@@ -0,0 +1,7 @@
++import bottle
++
++def test_makelist():
++    assert bottle.makelist(('a', 'b')) == ['a', 'b']
++    assert bottle.makelist('x') == ['x']
++    assert bottle.makelist(None) == []
++    assert bottle.makelist(0) == []
