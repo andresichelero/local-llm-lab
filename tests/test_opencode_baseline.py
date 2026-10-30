@@ -62,6 +62,17 @@ def test_timeout_does_not_override_server_failure(failure, expected):
     assert baseline.timeout_failure(failure, True, 'model_wall_timeout') == expected
 
 
+@pytest.mark.parametrize('rows, timed_out, expected', [
+    ([{'status': 200}, {'error': 'ConnectionResetError'}], True, False),
+    ([{'error': 'BrokenPipeError'}], True, False),
+    ([{'error': 'ConnectionResetError'}], False, True),
+    ([{'error': 'TimeoutError'}], True, True),
+    ([{'status': 500}], True, True),
+])
+def test_timeout_disconnect_is_not_a_server_failure(rows, timed_out, expected):
+    assert baseline.proxy_server_failure(rows, timed_out) is expected
+
+
 def test_later_server_failure_takes_priority():
     assert baseline.first_failure(['model_cli_failure', 'server_exited']) == 'server_exited'
 

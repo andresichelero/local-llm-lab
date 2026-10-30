@@ -19,9 +19,9 @@ CONFIG = baseline.ROOT / 'benchmark/configs/qwen-4b-opencode-stage5.json'
 CONTEXTS_9B = (65536, 49152, 32768, 16384, 8192)
 
 
-def load_config():
+def load_config(config_path=CONFIG):
     config = baseline.load_config()
-    stage = json.loads(CONFIG.read_text(encoding='utf-8'))
+    stage = json.loads(Path(config_path).read_text(encoding='utf-8'))
     models = {'q4': config['models']['q4'], **stage.pop('models')}
     config.update(stage)
     config['models'] = models
@@ -163,9 +163,14 @@ def lsp_evidence(output):
             'lsp_started': None}
 
 
-def manifest(config):
+def manifest(config, config_path=CONFIG):
     value = baseline.manifest(config)
-    value['files_sha256'][str(CONFIG.relative_to(baseline.ROOT))] = baseline.digest(CONFIG)
+    config_path = Path(config_path).resolve()
+    try:
+        config_name = config_path.relative_to(baseline.ROOT).as_posix()
+    except ValueError:
+        config_name = config_path.as_posix()
+    value['files_sha256'][config_name] = baseline.digest(config_path)
     value['files_sha256'][str(Path(__file__).relative_to(baseline.ROOT))] = baseline.digest(__file__)
     prefix = Path(config['lsp_prefix'])
     modules = prefix / 'node_modules'
@@ -256,12 +261,12 @@ class ServerPool:
         raise RuntimeError('9B did not meet 500 MiB headroom at any configured context')
 
 
-def execute(config, units):
+def execute(config, units, config_path=CONFIG):
     output = Path(config['output'])
     output.mkdir(parents=True, exist_ok=True)
     with (output / 'supervisor.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        baseline.ensure_manifest(output / 'manifest.json', manifest(config))
+        baseline.ensure_manifest(output / 'manifest.json', manifest(config, config_path))
         running = subprocess.run(['pgrep', '-x', 'llama-server'], capture_output=True, check=False)
         if running.returncode != 1:
             raise RuntimeError('another llama-server is running or process inspection failed')
@@ -388,13 +393,14 @@ def execute(config, units):
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=Path, default=CONFIG)
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--stage', type=int, choices=[5])
     parser.add_argument('--arm')
     args = parser.parse_args(argv)
     if not (args.dry_run or args.stage or args.arm):
         parser.error('select --dry-run, --stage 5 or --arm')
-    config = load_config()
+    config = load_config(args.config)
     if args.arm and (args.arm not in config['arms'] or not config['arms'][args.arm].get('enabled', True)):
         parser.error('unknown or disabled arm')
     units = baseline.schedule(config)
@@ -408,7 +414,7 @@ def main(argv=None):
                 print(f"disabled arm={name}: {arm.get('disabled_reason', 'unspecified')}")
         print(f'Total: {len(units)}')
         return
-    execute(config, units)
+    execute(config, units, args.config)
 
 
 if __name__ == '__main__':
