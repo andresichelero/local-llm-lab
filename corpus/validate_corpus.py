@@ -18,6 +18,11 @@ ROOT = Path(__file__).resolve().parent
 CLASSES = {"python_fix", "javascript_fix", "authored_tests", "continuation", "mcp", "tool_recovery"}
 
 
+def valid_distribution(metadata):
+    return (all(t["class"] in CLASSES for t in metadata)
+            and all(sum(t["class"] == c for t in metadata) >= 2 for c in CLASSES))
+
+
 def detect_node():
     override = os.environ.get("CORPUS_NODE")
     if override:
@@ -180,7 +185,11 @@ def main():
     parser.add_argument("--task")
     parser.add_argument("--node")
     parser.add_argument("--write-manifest", action="store_true")
+    parser.add_argument("--skip-manifest-for-development", action="store_true",
+                        help="validate one task before freezing manifest and prefixes")
     args = parser.parse_args()
+    if args.skip_manifest_for_development and (not args.task or args.write_manifest):
+        parser.error("--skip-manifest-for-development requires --task and cannot write the manifest")
     if args.node is None:
         try:
             args.node = detect_node()
@@ -195,20 +204,23 @@ def main():
         manifest.write_text(json.dumps(corpus_hashes(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print("manifest written")
         return 0
-    expected = json.loads(manifest.read_text(encoding="utf-8"))
-    actual = corpus_hashes()
-    mismatches = sorted(key for key in expected.keys() | actual.keys() if expected.get(key) != actual.get(key))
-    if mismatches:
-        print("manifest mismatch:", ", ".join(mismatches))
-        return 1
-    for host in ("bottle-0.13.2", "ms-2.1.3"):
-        prefix = (ROOT / "prefixes" / f"{host}.txt").read_text(encoding="utf-8")
-        if prefix != masked_prefix(ROOT, host):
-            print(f"invalid prefix: {host}")
+    if not args.skip_manifest_for_development:
+        expected = json.loads(manifest.read_text(encoding="utf-8"))
+        actual = corpus_hashes()
+        mismatches = sorted(key for key in expected.keys() | actual.keys() if expected.get(key) != actual.get(key))
+        if mismatches:
+            print("manifest mismatch:", ", ".join(mismatches))
             return 1
+        for host in ("bottle-0.13.2", "ms-2.1.3"):
+            prefix = (ROOT / "prefixes" / f"{host}.txt").read_text(encoding="utf-8")
+            if prefix != masked_prefix(ROOT, host):
+                print(f"invalid prefix: {host}")
+                return 1
+    else:
+        print("DEVELOPMENT: manifest and prefixes are not checked")
     tasks = sorted((ROOT / "tasks").iterdir())
     metadata = [json.loads((task / "task.json").read_text(encoding="utf-8")) for task in tasks]
-    if len(tasks) != 12 or any(sum(t["class"] == c for t in metadata) != 2 for c in CLASSES):
+    if not valid_distribution(metadata):
         print("invalid task count or class distribution")
         return 1
     if args.task:

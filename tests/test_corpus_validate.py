@@ -148,3 +148,19 @@ def test_detect_node_reports_invalid_override(tmp_path, monkeypatch):
     monkeypatch.setenv('CORPUS_NODE', str(tmp_path / 'missing-node'))
     with pytest.raises(RuntimeError, match='CORPUS_NODE.*executable'):
         validator.detect_node()
+
+
+def test_distribution_accepts_extra_tasks_and_rejects_missing_or_unknown_classes():
+    validator = load_validator()
+    metadata = [{'class': name} for name in validator.CLASSES for _ in range(2)]
+    assert validator.valid_distribution(metadata + [{'class': 'python_fix'}])
+    assert not validator.valid_distribution(metadata[:-1])
+    assert not validator.valid_distribution(metadata + [{'class': 'unknown'}])
+
+
+def test_development_manifest_bypass_requires_single_task():
+    validator = load_validator()
+    result = subprocess.run([sys.executable, str(validator.ROOT / 'validate_corpus.py'),
+                             '--skip-manifest-for-development'], capture_output=True, text=True)
+    assert result.returncode != 0
+    assert 'requires --task' in result.stderr

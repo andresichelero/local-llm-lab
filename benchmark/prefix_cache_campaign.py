@@ -580,13 +580,19 @@ def main(argv=None):
         print(json.dumps(verification_worker(json.load(sys.stdin))))
         return
     config = json.loads(CONFIG.read_text(encoding='utf-8'))
-    tasks = tasks_with_prefix()
-    if sorted(config['tasks']) != sorted(task['id'] for task in tasks):
-        raise RuntimeError('configured task list differs from corpus')
+    tasks = select_configured_tasks(config, tasks_with_prefix())
     if args.dry_run:
         dry_plan(config, tasks)
     else:
         campaign(config, tasks)
+
+
+def select_configured_tasks(config, available):
+    by_id = {task['id']: task for task in available}
+    missing = sorted(set(config['tasks']) - by_id.keys())
+    if missing:
+        raise RuntimeError(f'configured tasks missing from corpus: {missing}')
+    return [by_id[task_id] for task_id in config['tasks']]
 
 
 if __name__ == '__main__':

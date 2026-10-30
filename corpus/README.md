@@ -57,4 +57,7 @@ requires an assertion failure for the bug, success for the reference, visible
 check and upstream tests. The authored-test private oracles additionally run
 the reference suite against the correct code and two distinct mutants.
 `--task ID` selects one task while retaining the complete manifest check.
+Before freezing a changed corpus, `--task ID --skip-manifest-for-development`
+validates one task without checking the manifest or generated prefixes. This
+development-only option does not establish corpus integrity.
 `--write-manifest` is for deliberate corpus freezing, never routine checks.

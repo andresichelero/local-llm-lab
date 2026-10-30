@@ -420,3 +420,13 @@ def test_terminate_last_marker_restores_final_newline():
     assert terminate_last_marker(block) == block + '\n'
     assert terminate_last_marker(block + '\n\n') == block + '\n'
     assert terminate_last_marker('BLOCKED: insufficient_context') == 'BLOCKED: insufficient_context'
+
+
+def test_config_selects_tasks_and_rejects_unknown_ids():
+    import pytest
+    from benchmark.prefix_cache_campaign import select_configured_tasks
+
+    available = [{'id': 'old', 'host': 'h'}, {'id': 'new', 'host': 'h'}]
+    assert select_configured_tasks({'tasks': ['old']}, available) == [available[0]]
+    with pytest.raises(RuntimeError, match='missing'):
+        select_configured_tasks({'tasks': ['missing']}, available)
