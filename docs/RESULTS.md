@@ -43,7 +43,7 @@ Definitions:
 - **95% CI.** Wilson interval.
 - **Median time, all.** Median total time of the arm's episodes.
 - **Median time, successes.** Median total time of successful episodes only.
-- **Median TTFT.** Median, per episode, of median request TTFT. Stage reports (`B-etapa1` through `B-etapa3`) use the median across all requests, so they give different values, such as 273 ms in the control and 7 704 ms without cache.
+- **Median TTFT.** Median, per episode, of median request TTFT. Stage reports (`B-stage1` through `B-stage3`) use the median across all requests, so they give different values, such as 273 ms in the control and 7 704 ms without cache.
 - **Peak VRAM.** Maximum across the arm's episodes, for the whole device.
 - **Cached prompt fraction.** Sum of `cache_n` divided by the sum of `prompt_n` plus `cache_n`, across all requests in the arm.
 - **Paired with control.** Wins, losses, and ties in pairs with the same task and repetition 1, versus v5 B0. The p is from the exact, two-sided McNemar test.
@@ -119,7 +119,7 @@ With twelve pairs per arm, no comparison reaches p < 0,05. The 16K arm has five 
 
 ## 6. Reading notes
 
-- **Different definitions in stage texts.** Reports `B-etapa1` through `B-etapa3` use the median across all requests for TTFT and the median of successes for time. This document's tables use the definitions above. Both sets of numbers are correct and show the same result.
+- **Different definitions in stage texts.** Reports `B-stage1` through `B-stage3` use the median across all requests for TTFT and the median of successes for time. This document's tables use the definitions above. Both sets of numbers are correct and show the same result.
 - **Missing fields.** In v5 and v6 results, `taxonomy` is null for failures, and diff (`diff_quality`) and request metrics (`request_metrics`) fields do not exist. Therefore analyses of produced code quality and termination tags are unavailable for stages 1 through 3.
 - **Storage deviation.** Arms `B-q6` and `B-q8` read GGUF files from D:, and this was not measured (see [HARDWARE](HARDWARE.md)).
 - **Quantizer.** The control uses bartowski Q4_K_M. Q6_K and Q8_0 are from unsloth. A quantization effect cannot be separated from the quantizer effect without stage 4, which includes unsloth Q4_K_M.
@@ -127,7 +127,7 @@ With twelve pairs per arm, no comparison reaches p < 0,05. The 16K arm has five 
 
 ## 7. Stage 4: replication and server options (v7)
 
-Raw data: `qwen-4b-opencode-baseline-bwrap-v7` (168 episodes, protocol v7, 40 steps, no infrastructure failures). Aggregates: [arm-summary-v5-v6-v7.txt](../results/3070-benchmark/arm-summary-v5-v6-v7.txt) and [stage4-detail.txt](../results/3070-benchmark/stage4-detail.txt). Analysis: [B-etapa4-replicacao-e-servidor.md](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/B-etapa4-replicacao-e-servidor.md).
+Raw data: `qwen-4b-opencode-baseline-bwrap-v7` (168 episodes, protocol v7, 40 steps, no infrastructure failures). Aggregates: [arm-summary-v5-v6-v7.txt](../results/3070-benchmark/arm-summary-v5-v6-v7.txt) and [stage4-detail.txt](../results/3070-benchmark/stage4-detail.txt). Analysis: [B-stage4-replication-and-server.md](../reports/strategy-analysis-4b-2026-10-28/execution/F1/B-stage4-replication-and-server.md).
 
 | Arm | Change | Passes | Rate | Median time, successes (s) | Median generation (tok/s) | Peak VRAM (MiB) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -150,7 +150,7 @@ Interpretation: thinking's advantage in stage 3 (92%) did not repeat, and it cos
 Raw data are in `qwen-4b-opencode-stage5-v2`: 96 episodes (8 arms × 12 tasks × 1 repetition), with no infrastructure failures.
 
 - Aggregate: [stage5-detail.txt](../results/3070-benchmark/stage5-detail.txt).
-- Analysis: [B-etapa5-pesos-ferramentas-cascatas.md](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/B-etapa5-pesos-ferramentas-cascatas.md).
+- Analysis: [B-stage5-weights-tools-cascades.md](../reports/strategy-analysis-4b-2026-10-28/execution/F1/B-stage5-weights-tools-cascades.md).
 
 The first attempt counts.
 
@@ -182,7 +182,7 @@ Interpretation:
 Raw data are in `qwen-4b-opencode-long-tasks-20261029-v2`: 8 marathons (4 arms × 2 marathons × 1 repetition), with no infrastructure failures.
 
 - Aggregate: [t2-long-tasks-summary.txt](../results/3070-benchmark/t2-long-tasks-summary.txt).
-- Analysis: [T2-resultados-tarefas-longas.md](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/T2-resultados-tarefas-longas.md).
+- Analysis: [T2-long-task-results.md](../reports/strategy-analysis-4b-2026-10-28/execution/F1/T2-long-task-results.md).
 
 | Arm | M1 (of 4 oracles) | M2 (of 5 oracles) | Total | Prompt tokens | Peak VRAM (MiB) |
 | --- | --- | --- | --- | --- | --- |
@@ -198,7 +198,7 @@ There was no regression or OOM. Instrumentation records the compaction request b
 Raw data are in `qwen-4b-prefix-cache-v2`: 108 units (3 arms × 12 tasks × 3 repetitions), with no infrastructure failures recorded in the final classification. Revalidation found environmental verifier failures in some units; see below. Repetitions were identical at temperature 0, so the effective sample is 12 tasks per arm.
 
 - Aggregate: [t3b-prefix-cache-summary.json](../results/3070-benchmark/t3b-prefix-cache-summary.json).
-- Analysis: [T3b-prefixo-em-cache.md](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/T3b-prefixo-em-cache.md).
+- Analysis: [T3b-cached-prefix.md](../reports/strategy-analysis-4b-2026-10-28/execution/F1/T3b-cached-prefix.md).
 
 | Arm | Tasks passed | Median TTFT | Cached tokens | Median time (s) | Median episode peak VRAM (MiB) |
 | --- | --- | --- | --- | --- | --- |
@@ -234,14 +234,14 @@ Conclusions:
 - The quality comparison is inconclusive: verification failed due to denied access to OpenSSL configuration, and the diagnoses affected repairs.
 - The cached prefix only improves latency.
 
-In revalidation, 9 v2 and 5 v3 private grades passed in isolated copies, although they failed in the historical run due to an environmental error. All 14 submissions were rejected; this does not allow reconstruction of repairs that would have occurred with a healthy verifier. In addition, `P-W16/js_sign` was rejected due to an environmental diagnosis, with no proven model failure: excluding that task changes P-W16 from **2/12 to 2/11** in both v2 (three repetitions) and v3 (one). The tables retain historical records. Other episodes received environmental diagnoses, so 2/11 does not make the quality comparison conclusive. In stages 4 and 5, 11 timed-out attempts also recorded a connection reset: literal application of the new priority would classify 9 final results and 2 intermediate attempts as infrastructure, but logs do not show whether the reset preceded the timeout. The tables preserve historical classifications. Details and log limitations are in the [PR 45 review](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/revisao-pr45-correcoes.md).
+In revalidation, 9 v2 and 5 v3 private grades passed in isolated copies, although they failed in the historical run due to an environmental error. All 14 submissions were rejected; this does not allow reconstruction of repairs that would have occurred with a healthy verifier. In addition, `P-W16/js_sign` was rejected due to an environmental diagnosis, with no proven model failure: excluding that task changes P-W16 from **2/12 to 2/11** in both v2 (three repetitions) and v3 (one). The tables retain historical records. Other episodes received environmental diagnoses, so 2/11 does not make the quality comparison conclusive. In stages 4 and 5, 11 timed-out attempts also recorded a connection reset: literal application of the new priority would classify 9 final results and 2 intermediate attempts as infrastructure, but logs do not show whether the reset preceded the timeout. The tables preserve historical classifications. Details and log limitations are in the [PR 45 review](../reports/strategy-analysis-4b-2026-10-28/execution/F1/pr45-review-fixes.md).
 
 ## 11. Stage 5 replication (stage5-rep3-v2)
 
 Raw data: /home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-stage5-rep3-v2 (72 episodes: 2 arms × 12 tasks × 3 repetitions, no infrastructure failure).
 
 - Aggregate: [stage5-rep3-summary.txt](../results/3070-benchmark/stage5-rep3-summary.txt).
-- Analysis: [B-etapa5-replicacao-rep3.md](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/B-etapa5-replicacao-rep3.md).
+- Analysis: [stage5-replication-rep3.md](../reports/strategy-analysis-4b-2026-10-28/execution/F1/stage5-replication-rep3.md).
 
 | Arm | 1st attempt | Final | Escalations | Rescues |
 | --- | --- | --- | ---: | ---: |
@@ -284,7 +284,7 @@ Conclusions:
 Raw data: /home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-combined-v2 (72 episodes: 2 arms × 12 tasks × 3 repetitions, no infrastructure failure). X-think is the stage5-rep3-v2 replication reference (36 episodes).
 
 - Aggregate: [combined-summary.txt](../results/3070-benchmark/combined-summary.txt).
-- Analysis: [B-campanha-combinada.md](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/B-campanha-combinada.md).
+- Analysis: [B-combined-campaign.md](../reports/strategy-analysis-4b-2026-10-28/execution/F1/B-combined-campaign.md).
 
 | Arm | 1st attempt | Final | Escalations (rescues) | Median per episode (s) | Median first-attempt success time (s) | Peak VRAM (MiB) | Total time |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |

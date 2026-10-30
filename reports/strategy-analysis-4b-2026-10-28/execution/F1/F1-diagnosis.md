@@ -51,7 +51,7 @@ The typical trigger is **resumption after compaction**: the checkpoint says "rer
 
 ## Historical audit (Luna, 28/10, 23h)
 
-See [auditoria-workspace-historico.md](auditoria-workspace-historico.md). The same `safe_path` was in the `-final-oom-v2` campaign. There were 101 `/workspace` calls, 95 of which were rejected, almost all after compaction.
+See [historical-workspace-audit.md](historical-workspace-audit.md). The same `safe_path` was in the `-final-oom-v2` campaign. There were 101 `/workspace` calls, 95 of which were rejected, almost all after compaction.
 
 Even so, **only 2 of the 14 4B failures** (python_fix and continuation) end with that pattern. Another attempt had 20 rejections and ended with budget exhausted. The other repetition failures **have no `/workspace` calls**.
 

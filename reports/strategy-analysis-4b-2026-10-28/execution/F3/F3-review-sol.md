@@ -5,7 +5,7 @@ Date: 2026-10-28. **Verdict: REJECT the commit as the F3 gate for F4 until the f
 ## Scope and execution
 
 - Worktree: `<workspace>`, branch `feat/4b-worker-f3`, HEAD `f2970caab86e541210541ffb896c9977828b17f8`; comparison `git diff a459b11 f2970ca`.
-- Read: F3/F4 section of `PLANO-ESTRATEGICO-v2.md`, `execucao/F3/F3-implementacao.md`, the four changed modules and associated tests. Additional reading of local llama.cpp to check the tokenization contract.
+- Read: F3/F4 section of `PLANO-ESTRATEGICO-v2.md`, `execution/F3/F3-implementation.md`, the four changed modules and associated tests. Additional reading of local llama.cpp to check the tokenization contract.
 - Read-only code review. No installation, network, GPU, inference, commit, push or merge. Proofs executed via stdin with disposable files exclusively in WSL `/tmp` and bytecode disabled. This report is the only deliverable written; the worktree remained clean.
 - Results below are offline reproductions. There is no claim that they have contaminated a scientific run or that any real server was validated.
 

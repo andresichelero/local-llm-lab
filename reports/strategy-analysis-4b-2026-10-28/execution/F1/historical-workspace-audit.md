@@ -15,7 +15,7 @@ In protocol `-final`, 9 attempts are recorded, all 9B, and no `/workspace` calls
 
 ## Scope and method
 
-- I read `F1-diagnostico.md`, `tentativas.csv`, `resultados-completos.json`, and relevant manifests/states inside the raw archive. I listed the archive's **8.170 members** without extracting it in full. For attempts, I selectively read `client/metrics.json`, `client/request-*.json`, `client/response-*.json`, `messages.json`, `compaction-*.json`, and, when available, `episode-progress.json`.
+- I read `F1-diagnosis.md`, `tentativas.csv`, `resultados-completos.json`, and relevant manifests/states inside the raw archive. I listed the archive's **8.170 members** without extracting it in full. For attempts, I selectively read `client/metrics.json`, `client/request-*.json`, `client/response-*.json`, `messages.json`, `compaction-*.json`, and, when available, `episode-progress.json`.
 - The attempt key is `(protocolo, unit_id, tentativa)`. The CSV records 9 `-final` attempts and 36 `-final-oom-v2` attempts (18 per model). The `-final` state shows 42 scheduled `development` units: 18 4B and 24 9B; only 9 9B attempts were executed/recorded.
 - I counted calls once per `tool_call` ID emitted in `client/response-####.json`. I matched results by the same ID in tool messages in `client/request-*.json` and `messages.json`; this avoids recounting history repeated in later requests. Argument content counts only when the `path` field literally begins with `/workspace`.
 - A call counts as **rejected** only if the corresponding response contains `path must stay inside /workspace`. The phase is **pre-compaction** if there is no previous `kind=compaction` generation in the `client/metrics.json` sequence; otherwise it is **post-compaction**. The `compaction-N.json` files corroborate these boundaries.
@@ -132,7 +132,7 @@ Both manifests name `<workspace-root>/.worktrees/practical-agent-v2/benchmark/qw
 
 ## Sources consulted
 
-- `reports/analise-estrategia-4b-2026-10-28/execucao/F1/F1-diagnostico.md`
+- `reports/strategy-analysis-4b-2026-10-28/execution/F1/F1-diagnosis.md`
 - `reports/outputs/qwen-final-encerrado/tentativas.csv`
 - `reports/outputs/qwen-final-encerrado/resultados-completos.json`
 - `reports/outputs/qwen-final-encerrado/evidencias-brutas.tar.gz` — manifests, `state.json`/`summary.json` snapshots, and selective evidence under `qwen-quant-harness-optimization-final/units/` and `qwen-quant-harness-optimization-final-oom-v2/units/`

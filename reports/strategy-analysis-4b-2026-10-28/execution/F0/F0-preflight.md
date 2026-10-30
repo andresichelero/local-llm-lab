@@ -95,7 +95,7 @@ scripts/check_qwen_readiness.py uses sys.executable and does not itself pin an i
 
 Command run in practical-agent-v2, with temporary files in /tmp:
 
-    cd <workspace>/.worktrees/practical-agent-v2
+    cd /path/to/workspace/.worktrees/practical-agent-v2
     PYTHONDONTWRITEBYTECODE=1 TMPDIR=/tmp TMP=/tmp TEMP=/tmp \
       /home/foxtrot/local-llm-benchmark/envs/lab-validation/bin/python -m pytest \
       -p no:cacheprovider -q \

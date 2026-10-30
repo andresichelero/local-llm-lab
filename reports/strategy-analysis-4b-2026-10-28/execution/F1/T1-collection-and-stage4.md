@@ -30,7 +30,7 @@ The first tag in the order below is primary and the others are secondary. Signal
 
 It selects the first attempt except `server_exited`, `server_http_error`, `harness_configuration_error` or `grader_infrastructure`, using `failure`, not `category`. This retains the first attempt incorrectly classified as infrastructure in v5. Infrastructure-only attempts are excluded and not converted into model failures. Older results without taxonomy or complete timings do not receive invented values.
 
-Run only on v5, without reading v6: B0 **16/24**, rate 0,6667, Wilson 95% [0,4671; 0,8203]; median time 42,2508 s; 6.722.306 prompt tokens, 85.053 generated and 1.528,6387 s in unsuccessful episodes. Server totals remained blank because not all requests had complete timings. Outputs persisted alongside this report: `T1-analise-v5.md` and `T1-analise-v5.csv`.
+Run only on v5, without reading v6: B0 **16/24**, rate 0,6667, Wilson 95% [0,4671; 0,8203]; median time 42,2508 s; 6.722.306 prompt tokens, 85.053 generated and 1.528,6387 s in unsuccessful episodes. Server totals remained blank because not all requests had complete timings. Outputs persisted alongside this report: `T1-analysis-v5.md` and `T1-analysis-v5.csv`.
 
 ## Stage 4
 
@@ -70,11 +70,11 @@ $ /home/foxtrot/local-llm-benchmark/envs/lab-validation-20261028/bin/python -m b
 Total: 144
 ```
 
-The `compileall` above used the same validation Python. The complete listing is in `T1-etapa4-dry-run.txt` alongside this report. No typecheck configuration was identified in the project; compilation does not replace a type checker.
+The `compileall` above used the same validation Python. The complete listing is in `T1-stage4-dry-run.txt` alongside this report. No typecheck configuration was identified in the project; compilation does not replace a type checker.
 
 Command for later execution, **not run in this task**:
 
 ```sh
-cd <workspace>
+cd /path/to/worktree
 /home/foxtrot/local-llm-benchmark/envs/lab-validation-20261028/bin/python -m benchmark.opencode_baseline --stage 4
 ```

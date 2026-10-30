@@ -63,7 +63,7 @@ Independent static review by Sol 6.1 High: no actionable findings remained after
 
 ## Post-review fixes
 
-The adversarial review `F3-revisao-sol.md` rejected commit `f2970ca`; the earlier statement of no findings refers only to the earlier review and does not supersede that verdict. The fixes below are in commit `b296ad6` on the same branch. This section records implementation and checks without claiming that Sol has already reassessed or approved the new commit.
+The adversarial review `F3-review-sol.md` rejected commit `f2970ca`; the earlier statement of no findings refers only to the earlier review and does not supersede that verdict. The fixes below are in commit `b296ad6` on the same branch. This section records implementation and checks without claiming that Sol has already reassessed or approved the new commit.
 
 1. **Finalization and journal:** before persisting the terminal record, the runner blocks `SIGALRM`, disarms the timer and checks the deadline and pending signal with a nonblocking wait. An already recorded finalization is recovered from JSONL and returns a consistent result without another terminal record. The `prepared` record is also protected by timeout handling. The deadline check occurs before terminal persistence starts: if a write started before the deadline is slow, it completes without timer interruption and the result agrees with the record.
 2. **Oracle timeout:** the handler retains the expiration flag even when the callback catches `TimeoutError`; after `private_oracle()` the runner checks the flag and clock before interpreting the return. Expiration ends as `infrastructure_error`/`TimeoutError`, with `oracle_passed=null`.

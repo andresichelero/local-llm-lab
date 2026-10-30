@@ -25,7 +25,7 @@ The runner stores evaluations after each released objective and at the end, regr
 The `--dry-run` mode lists the eight units, interleaving arms and marathons. The smoke uses the first two M1 objectives in `L-compact` and `L-reset`. The full campaign is left to the orchestrator:
 
 ```sh
-cd <workspace>
+cd /path/to/worktree
 /home/foxtrot/local-llm-benchmark/envs/lab-validation-20261028/bin/python -m benchmark.long_tasks --dry-run
 /home/foxtrot/local-llm-benchmark/envs/lab-validation-20261028/bin/python -m benchmark.long_tasks --smoke
 # Somente pelo orquestrador, depois de avaliar as limitações acima:
