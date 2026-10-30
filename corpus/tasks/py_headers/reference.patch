@@ -1,0 +1,7 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -2289,3 +2289,3 @@
+     def get(self, key, default=None, index=-1):
+-        return MultiDict.get(self, key, default, index)
++        return MultiDict.get(self, _hkey(key), default, index)
+ 

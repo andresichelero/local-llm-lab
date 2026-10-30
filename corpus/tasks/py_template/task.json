@@ -1,0 +1,17 @@
+{
+  "id": "py_template",
+  "class": "python_fix",
+  "host": "bottle-0.13.2",
+  "objective": "Restore SimpleTemplate variable precedence: later positional mappings override earlier mappings and keyword arguments override all positional mappings. Rendering must preserve normal HTML escaping and raw expressions.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium"
+}

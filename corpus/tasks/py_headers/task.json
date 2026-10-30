@@ -1,0 +1,17 @@
+{
+  "id": "py_headers",
+  "class": "python_fix",
+  "host": "bottle-0.13.2",
+  "objective": "Restore case-insensitive HeaderDict indexed lookup: get must recognize header names regardless of case, return the newest value by default, support an explicit index, and return the default for absent names.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "py_route",
+  "class": "python_fix",
+  "host": "bottle-0.13.2",
+  "objective": "Restore dynamic route filter conversion: matched named wildcards use the registered input converter, while unfiltered wildcards stay strings. Conversion failures must retain their existing HTTP error behavior.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium"
+}

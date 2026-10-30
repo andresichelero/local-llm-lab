@@ -1,0 +1,11 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -411,7 +411,7 @@
+                 url_args = re_match(path).groupdict()
+                 for name, wildcard_filter in filters:
+                     try:
+-                        url_args[name] = wildcard_filter(url_args[name])
++                        url_args[name] = str(url_args[name])
+                     except ValueError:
+                         raise HTTPError(400, 'Path has wrong format.')
+                 return url_args

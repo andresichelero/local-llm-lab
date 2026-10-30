@@ -1,0 +1,17 @@
+{
+  "id": "py_multi",
+  "class": "python_fix",
+  "host": "bottle-0.13.2",
+  "objective": "Restore MultiDict indexed lookup: get returns the requested value by index, defaults to the latest value, applies the optional type conversion, and returns the default for missing keys, invalid indices, or failed conversion.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium"
+}
