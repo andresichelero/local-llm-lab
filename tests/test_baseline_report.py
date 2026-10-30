@@ -48,7 +48,10 @@ def test_report_files_and_empty_metrics(tmp_path):
     output = tmp_path / 'report.md'
     csv = tmp_path / 'report.csv'
     report.main([str(data), '--markdown', str(output), '--csv', str(csv)])
-    assert 'McNemar' in output.read_text(encoding='utf-8')
+    markdown = output.read_text(encoding='utf-8')
+    assert '# OpenCode baseline report' in markdown
+    assert '## Paired comparisons: exact McNemar test' in markdown
+    assert 'First attempt per unit, excluding explicit infrastructure failures' in markdown
     assert 'comparison' in csv.read_text(encoding='utf-8')
     assert report.summarize(report.read_results([data]))['arms'][0]['ttft_ms_median'] is None
 

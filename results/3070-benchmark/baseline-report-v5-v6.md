@@ -1,9 +1,9 @@
-# Relatório da linha de base OpenCode
+# OpenCode baseline report
 
-Primeira tentativa por unidade, exceto falhas de infraestrutura explícitas; unidades sem tentativa elegível são excluídas. Diretórios são analisados separadamente.
-Pares usam tarefa e repetição idênticas; uma repetição sem par é excluída. Taxas de tokens e TTFT são medianas das medianas por episódio; campos vazios indicam dados indisponíveis.
+First attempt per unit, except explicit infrastructure failures; units without an eligible attempt are excluded. Directories are analyzed separately.
+Pairs use identical task and repetition; an unpaired repetition is excluded. Token rates and TTFT are medians of per-episode medians; empty fields indicate unavailable data.
 
-## Por braço
+## By arm
 
 | source | arm | n | successes | success_rate | wilson_low | wilson_high | seconds_mean | seconds_median | ttft_ms_median | prefill_tok_s_median | decode_tok_s_median | peak_vram_mib_median | processed_tokens_total | cache_tokens_total | wasted_prompt_tokens | wasted_completion_tokens | wasted_seconds | taxonomy |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -18,7 +18,7 @@ Pares usam tarefa e repetição idênticas; uma repetição sem par é excluída
 | results/qwen-4b-opencode-baseline-bwrap-v6 | B-q8 | 12 | 8 | 0.6667 | 0.3906 | 0.8619 | 54.3222 | 38.5133 | 316.9142 | 758.1371 | 59.0274 | 6033.0000 | 316622 | 5383176 | 3330224 | 14923 | 364.7615 | {} |
 | results/qwen-4b-opencode-baseline-bwrap-v6 | B-think | 12 | 11 | 0.9167 | 0.6461 | 0.9851 | 122.5981 | 110.1327 | 214.3930 | 1112.9678 | 78.4802 | 4528.0000 | 258757 | 4975323 | 570250 | 10376 | 177.7484 | {} |
 
-## Por tarefa e braço
+## By task and arm
 
 | source | arm | task | n | successes | outcomes | stability |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -143,7 +143,7 @@ Pares usam tarefa e repetição idênticas; uma repetição sem par é excluída
 | results/qwen-4b-opencode-baseline-bwrap-v6 | B-think | tests_query | 1 | 1 | 1 | insufficient |
 | results/qwen-4b-opencode-baseline-bwrap-v6 | B-think | tests_range | 1 | 1 | 1 | insufficient |
 
-## Comparação entre braços por tarefa e diretório
+## Comparison between arms by task and directory
 
 | source | task | arms |
 | --- | --- | --- |
@@ -172,7 +172,7 @@ Pares usam tarefa e repetição idênticas; uma repetição sem par é excluída
 | results/qwen-4b-opencode-baseline-bwrap-v6 | tests_query | {"B-ctx128": {"n": 1, "successes": 0}, "B-ctx16": {"n": 1, "successes": 0}, "B-ctx32": {"n": 1, "successes": 0}, "B-kv16": {"n": 1, "successes": 0}, "B-kv8": {"n": 1, "successes": 0}, "B-nocache": {"n": 1, "successes": 1}, "B-q6": {"n": 1, "successes": 1}, "B-q8": {"n": 1, "successes": 1}, "B-think": {"n": 1, "successes": 1}} |
 | results/qwen-4b-opencode-baseline-bwrap-v6 | tests_range | {"B-ctx128": {"n": 1, "successes": 1}, "B-ctx16": {"n": 1, "successes": 0}, "B-ctx32": {"n": 1, "successes": 1}, "B-kv16": {"n": 1, "successes": 0}, "B-kv8": {"n": 1, "successes": 0}, "B-nocache": {"n": 1, "successes": 0}, "B-q6": {"n": 1, "successes": 0}, "B-q8": {"n": 1, "successes": 0}, "B-think": {"n": 1, "successes": 1}} |
 
-## Comparações pareadas: McNemar exato
+## Paired comparisons: exact McNemar
 
 | source | arm | control | control_source | pairs | wins | losses | ties | mcnemar_p |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |

@@ -1,4 +1,4 @@
-"""Guarded Edit wrapper with SHA-256 block uniqueness and AST preservation (Trilha B / Roadmap Tarefa 8).
+"""Guarded Edit wrapper with SHA-256 block uniqueness and AST preservation (Track B / Roadmap Task 8).
 
 Implements deterministic safety gates for code modifications:
 1. File verification: rejects symlinks, checks file existence.

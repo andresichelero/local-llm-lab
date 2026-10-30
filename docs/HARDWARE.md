@@ -1,64 +1,64 @@
-# Máquina, versões e armazenamento
+# Machine, versions, and storage
 
-Este documento descreve o ambiente em que as etapas 1 a 3 rodaram, entre 28 e 29 de outubro de 2026. Qualquer mudança de versão ou de hardware exige uma nova linha de base, porque os números dependem do ambiente.
+This document describes the environment in which stages 1 through 3 ran, between October 28 and 29, 2026. Any version or hardware change requires a new baseline because the numbers depend on the environment.
 
 ## Host
 
-| Item | Valor |
+| Item | Value |
 |---|---|
-| Sistema operacional | Windows 10 Pro 22H2 (build 19045) |
+| Operating system | Windows 10 Pro 22H2 (build 19045) |
 | CPU | AMD Ryzen 5 5600X |
-| Memória | 32 GB |
-| GPU | NVIDIA GeForce RTX 3070, 8 GB (8 192 MiB), arquitetura Ampere (`sm_86`) |
-| Driver NVIDIA | 610.62 (Windows) |
-| Compartilhamento da GPU | o desktop do Windows usa a mesma GPU |
+| Memory | 32 GB |
+| GPU | NVIDIA GeForce RTX 3070, 8 GB (8 192 MiB), Ampere architecture (`sm_86`) |
+| NVIDIA driver | 610.62 (Windows) |
+| GPU sharing | the Windows desktop uses the same GPU |
 
 ## WSL2
 
-| Item | Valor |
+| Item | Value |
 |---|---|
-| Distribuição | Ubuntu 24.04 |
-| Memória | limite de 8 GB, configurado no `.wslconfig` |
+| Distribution | Ubuntu 24.04 |
+| Memory | 8 GB limit, configured in `.wslconfig` |
 | CUDA Toolkit | 13.0 (`nvcc` 13.0.88) |
-| Diretório do laboratório | `~/local-llm-benchmark` (ext4 do WSL) |
+| Laboratory directory | `~/local-llm-benchmark` (WSL ext4) |
 
 ## Software
 
-| Componente | Versão | Observação |
+| Component | Version | Notes |
 |---|---|---|
-| llama.cpp (`llama-server`) | v0.8.0, commit `8642541b255bfb5dc39cd351a178be09013a55d6` | `llama-server 0.8.0-dev`, build 1. SHA-256 do binário em `benchmark/configs/qwen-4b-opencode-baseline.json`. |
-| Compilação do llama.cpp | `Release`, `GGML_CUDA=ON`, `GGML_NATIVE=ON`, `CMAKE_CUDA_ARCHITECTURES=86` | Compilado no WSL com o `nvcc` 13.0. A versão anterior, v0.7.0 (commit `620d222`), foi usada só na pré-verificação da F0. |
-| OpenCode | 1.19.5 | SHA-256 do binário em `benchmark/configs/qwen-4b-opencode-baseline.json`. |
-| bubblewrap | 0.9.0 | Em `/usr/bin/bwrap`. |
-| Node.js | v25.5.0 | Instalado pelo NVM. O caminho está no config. |
-| Python | 3.12.3 | Ambiente `lab-validation-20261028`. |
-| pytest | 9.1.1 | Mesmo ambiente. |
-| ruff | 0.17.3 | Atualizado de 0.15.17 em 28/10/2026. Não há configuração de ruff no repositório. |
-| git (WSL) | 2.43.0 | Versão do git no WSL. Não faz parte do benchmark. |
+| llama.cpp (`llama-server`) | v0.8.0, commit `8642541b255bfb5dc39cd351a178be09013a55d6` | `llama-server 0.8.0-dev`, build 1. Binary SHA-256 in `benchmark/configs/qwen-4b-opencode-baseline.json`. |
+| llama.cpp build | `Release`, `GGML_CUDA=ON`, `GGML_NATIVE=ON`, `CMAKE_CUDA_ARCHITECTURES=86` | Built in WSL with `nvcc` 13.0. The previous version, v0.7.0 (commit `620d222`), was used only in the F0 preflight. |
+| OpenCode | 1.19.5 | Binary SHA-256 in `benchmark/configs/qwen-4b-opencode-baseline.json`. |
+| bubblewrap | 0.9.0 | At `/usr/bin/bwrap`. |
+| Node.js | v25.5.0 | Installed through NVM. The path is in the config. |
+| Python | 3.12.3 | `lab-validation-20261028` environment. |
+| pytest | 9.1.1 | Same environment. |
+| ruff | 0.17.3 | Updated from 0.15.17 on 28/10/2026. There is no ruff configuration in the repository. |
+| git (WSL) | 2.43.0 | WSL git version. Not part of the benchmark. |
 
-## Pesos (GGUF)
+## Weights (GGUF)
 
-Os pesos não estão no repositório. Os hashes abaixo são a verificação de integridade do runner.
+The weights are not in the repository. The hashes below are used by the runner for integrity verification.
 
-| Rótulo no config | Quantização | Quantizador | Tamanho (bytes) | SHA-256 (início) | Onde fica |
+| Config label | Quantization | Quantizer | Size (bytes) | SHA-256 (prefix) | Location |
 |---|---|---|---:|---|---|
-| `q4` (controle) | Q4_K_M | bartowski | 3 013 027 808 | `13c16f42…` | ext4 do WSL |
-| `q6` | Q6_K | unsloth | 3 525 956 768 | `fdedd781…` | disco D: (lido por `/mnt/d`) |
-| `q8` | Q8_0 | unsloth | 4 482 403 488 | `10cc391b…` | disco D: (lido por `/mnt/d`) |
-| `q4_unsloth` | Q4_K_M | unsloth | 2 740 937 888 | `00fe7986…` | ext4 do WSL |
+| `q4` (control) | Q4_K_M | bartowski | 3 013 027 808 | `13c16f42…` | WSL ext4 |
+| `q6` | Q6_K | unsloth | 3 525 956 768 | `fdedd781…` | D: drive (read via `/mnt/d`) |
+| `q8` | Q8_0 | unsloth | 4 482 403 488 | `10cc391b…` | D: drive (read via `/mnt/d`) |
+| `q4_unsloth` | Q4_K_M | unsloth | 2 740 937 888 | `00fe7986…` | WSL ext4 |
 
-O runner confere o SHA-256 de cada GGUF antes de cada execução (função `manifest()` de `benchmark/opencode_baseline.py`), e para se o hash divergir. O Q4_K_M de unsloth tem revisão `e87f176479d0855a907a41277aca2f8ee7a09523`.
+The runner checks each GGUF's SHA-256 before each run (the `manifest()` function in `benchmark/opencode_baseline.py`) and stops if the hash differs. The unsloth Q4_K_M has revision `e87f176479d0855a907a41277aca2f8ee7a09523`.
 
-## Armazenamento
+## Storage
 
-- **Regra do laboratório.** Benchmarks rodam a partir do ext4 do WSL, que fica em SSD. Os discos D: e E: são usados para arquivo e checkout. Essa regra está registrada na documentação anterior do laboratório, de 11/10/2026.
-- **Desvio conhecido.** Os braços `B-q6` e `B-q8` leem os GGUF de D:, pelo caminho `/mnt/d`. O carregamento acontece antes de cada episódio medido, e o efeito sobre as métricas não foi medido. Os demais braços leem do ext4 do WSL.
-- **Resultados brutos.** Ficam em `~/local-llm-benchmark/results/`, fora do repositório.
+- **Laboratory rule.** Benchmarks run from WSL ext4 on an SSD. The D: and E: drives are used for archives and checkouts. This rule was recorded in the laboratory's earlier documentation, dated 11/10/2026.
+- **Known deviation.** Arms `B-q6` and `B-q8` read the GGUFs from D: through `/mnt/d`. Loading takes place before each measured episode, and its effect on metrics was not measured. The other arms read from WSL ext4.
+- **Raw results.** Stored in `~/local-llm-benchmark/results/`, outside the repository.
 
-## Medições de sistema
+## System measurements
 
-- **VRAM.** Amostrada por `nvidia-smi` a cerca de 1 Hz. O valor é do dispositivo inteiro, e não da memória do processo do `llama-server`. Quando o desktop usa a GPU, o valor inclui esse uso.
-- **Memória e CPU do WSL.** Lidas de `/proc` a cada amostra.
-- **Memória do Windows.** Lida por interoperabilidade (PowerShell) em thread separada, com timeout. Pode ficar indisponível.
+- **VRAM.** Sampled by `nvidia-smi` at approximately 1 Hz. The value covers the entire device, not just the `llama-server` process memory. It includes any GPU use by the desktop.
+- **WSL memory and CPU.** Read from `/proc` at each sample.
+- **Windows memory.** Read through interoperability (PowerShell) in a separate thread, with a timeout. It may be unavailable.
 
-As amostras brutas ficam em `resource_samples` de cada `result.json`, fora do repositório.
+Raw samples are in `resource_samples` in each `result.json`, outside the repository.

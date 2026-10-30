@@ -1,71 +1,71 @@
-# Benchmark de LLM local: Qwen3.5-4B em RTX 3070 (8 GB)
+# Local LLM benchmark: Qwen3.5-4B on RTX 3070 (8 GB)
 
 > **English summary.** This repository benchmarks a local coding agent on one RTX 3070 8 GB under WSL2. Qwen3.5-4B runs on llama.cpp v0.8.0 and OpenCode 1.19.5. The 12-task pilot corpus uses private oracles. A three-repeat stage 5 replication confirmed that retrying a visibly failed attempt with thinking enabled raises accuracy from 29/48 to 41/48 across the original stage 5 and its replication (McNemar p=0.008 in the replication). RTK scored 17/36 against 22/36 for the paired control (p=0.23). The combined MTP, context-checkpoint and 2 GiB prompt-cache profile kept final accuracy near the control (29/36 vs 30/36) and used fewer escalations; Q6_K_L gave no accuracy gain and used 0.8 GB more VRAM. The cache limit addresses a WSL out-of-memory event, but its effect was not isolated. Long-task marathons favoured a large context over compaction or resets, and a cached 46K-token repository prefix cut time to first token from 16 s to 0.16 s. Campaigns before 2026-10-28 were removed from this tree and remain in the git history.
 
-## Resumo
+## Summary
 
-Este repositório mede, em uma única máquina, quanto cada escolha de runtime muda a taxa de acerto e o custo de um agente de programação local.
+This repository measures, on one machine, how much each runtime choice changes a local coding agent's pass rate and cost.
 
-- **Modelo e runtime:** Qwen3.5-4B em GGUF, servido pelo `llama-server` do llama.cpp v0.8.0 (commit `8642541`) com CUDA. Uma instância por braço, `--parallel 1`, execução serial.
-- **Agente:** OpenCode 1.19.5 (`opencode run --format json --pure`), isolado em bubblewrap 0.9.0. O sandbox não monta o repositório, `/mnt/d`, `/home` nem os oráculos.
-- **Corpus:** 12 tarefas de piloto em 6 classes (2 por classe), com oráculo privado avaliado uma vez ao fim de cada tentativa. O oráculo nunca entra no prompt.
-- **Matriz:** as etapas iniciais variam um fator por vez a partir do controle B0 (Q4_K_M, KV q4_0, 64K, cache de prompt ligado, thinking desligado, temperatura 0). Depois vieram a replicação da cascata e a campanha combinada.
+- **Model and runtime:** Qwen3.5-4B in GGUF, served by llama.cpp v0.8.0 `llama-server` (commit `8642541`) with CUDA. One instance per arm, `--parallel 1`, serial execution.
+- **Agent:** OpenCode 1.19.5 (`opencode run --format json --pure`), isolated in bubblewrap 0.9.0. The sandbox does not mount the repository, `/mnt/d`, `/home`, or the oracles.
+- **Corpus:** 12 pilot tasks in 6 classes (2 per class), with a private oracle evaluated once at the end of each attempt. The oracle never enters the prompt.
+- **Matrix:** the initial stages vary one factor at a time from control B0 (Q4_K_M, KV q4_0, 64K, prompt cache on, thinking off, temperature 0). The cascade replication and combined campaign followed.
 
-Detalhes: [método](docs/METHODOLOGY.md), [máquina e versões](docs/HARDWARE.md), [todas as tabelas](docs/RESULTS.md).
+Details: [methodology](docs/METHODOLOGY.md), [machine and versions](docs/HARDWARE.md), [all tables](docs/RESULTS.md).
 
-## Principais resultados
+## Main results
 
-A tabela abaixo preserva os resultados das etapas 1 a 3, com intervalo de Wilson de 95%. "Pareado" compara cada braço com o controle, por tarefa e repetição 1 (McNemar exato, bilateral).
+The table below preserves results for stages 1 through 3, with 95% Wilson intervals. "Paired" compares each arm with the control by task and repetition 1 (exact, two-sided McNemar).
 
-| Etapa | Braço | Mudança em relação ao controle | Acertos | Taxa (IC 95%) | Tempo mediano, todos (s) | Tempo mediano, sucessos (s) | TTFT mediano (ms) | VRAM pico, máximo (MiB) | Fração do prompt em cache | Pareado com o controle (vitórias / derrotas / empates; p exato) |
+| Stage | Arm | Change relative to control | Passes | Rate (95% CI) | Median time, all (s) | Median time, successes (s) | Median TTFT (ms) | Peak VRAM, maximum (MiB) | Cached prompt fraction | Paired with control (wins / losses / ties; exact p) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Etapa 1 | `B0` | controle: Q4_K_M, KV q4_0, 64K, cache on, thinking off, temp 0 | 16/24 | 67% (47%–82%) | 42.3 | 36.4 | 296 | 4567 | 0.94 | controle |
-| Etapa 2 | `B-ctx16` | contexto 16K | 3/12 | 25% (9%–53%) | 16.4 | 27.6 | 448 | 3858 | 0.87 | 0 / 5 / 7; p = 0.0625 |
-| Etapa 2 | `B-ctx32` | contexto 32K | 9/12 | 75% (47%–91%) | 46.1 | 38.1 | 235 | 4105 | 0.92 | 2 / 1 / 9; p = 1.0000 |
-| Etapa 2 | `B-ctx128` | contexto 128K | 9/12 | 75% (47%–91%) | 58.2 | 37.8 | 294 | 5422 | 0.94 | 1 / 0 / 11; p = 1.0000 |
-| Etapa 2 | `B-kv8` | KV q8_0 | 9/12 | 75% (47%–91%) | 39.0 | 30.5 | 265 | 5038 | 0.92 | 1 / 0 / 11; p = 1.0000 |
-| Etapa 2 | `B-kv16` | KV f16 | 7/12 | 58% (32%–81%) | 34.6 | 32.0 | 306 | 5754 | 0.91 | 1 / 2 / 9; p = 1.0000 |
-| Etapa 3 | `B-q6` | Q6_K (unsloth) | 10/12 | 83% (55%–95%) | 37.0 | 34.3 | 301 | 5162 | 0.92 | 2 / 0 / 10; p = 0.5000 |
-| Etapa 3 | `B-q8` | Q8_0 (unsloth) | 8/12 | 67% (39%–86%) | 38.5 | 32.2 | 317 | 6033 | 0.94 | 1 / 1 / 10; p = 1.0000 |
-| Etapa 3 | `B-nocache` | cache de prompt off | 9/12 | 75% (47%–91%) | 115.5 | 81.7 | 7498 | 4521 | 0.00 | 2 / 1 / 9; p = 1.0000 |
-| Etapa 3 | `B-think` | thinking on (temp 0,6, top_p 0,95, top_k 20) | 11/12 | 92% (65%–99%) | 110.1 | 108.9 | 214 | 4535 | 0.95 | 3 / 0 / 9; p = 0.2500 |
+| Stage 1 | `B0` | control: Q4_K_M, KV q4_0, 64K, cache on, thinking off, temp 0 | 16/24 | 67% (47%–82%) | 42.3 | 36.4 | 296 | 4567 | 0.94 | control |
+| Stage 2 | `B-ctx16` | context 16K | 3/12 | 25% (9%–53%) | 16.4 | 27.6 | 448 | 3858 | 0.87 | 0 / 5 / 7; p = 0.0625 |
+| Stage 2 | `B-ctx32` | context 32K | 9/12 | 75% (47%–91%) | 46.1 | 38.1 | 235 | 4105 | 0.92 | 2 / 1 / 9; p = 1.0000 |
+| Stage 2 | `B-ctx128` | context 128K | 9/12 | 75% (47%–91%) | 58.2 | 37.8 | 294 | 5422 | 0.94 | 1 / 0 / 11; p = 1.0000 |
+| Stage 2 | `B-kv8` | KV q8_0 | 9/12 | 75% (47%–91%) | 39.0 | 30.5 | 265 | 5038 | 0.92 | 1 / 0 / 11; p = 1.0000 |
+| Stage 2 | `B-kv16` | KV f16 | 7/12 | 58% (32%–81%) | 34.6 | 32.0 | 306 | 5754 | 0.91 | 1 / 2 / 9; p = 1.0000 |
+| Stage 3 | `B-q6` | Q6_K (unsloth) | 10/12 | 83% (55%–95%) | 37.0 | 34.3 | 301 | 5162 | 0.92 | 2 / 0 / 10; p = 0.5000 |
+| Stage 3 | `B-q8` | Q8_0 (unsloth) | 8/12 | 67% (39%–86%) | 38.5 | 32.2 | 317 | 6033 | 0.94 | 1 / 1 / 10; p = 1.0000 |
+| Stage 3 | `B-nocache` | prompt cache off | 9/12 | 75% (47%–91%) | 115.5 | 81.7 | 7498 | 4521 | 0.00 | 2 / 1 / 9; p = 1.0000 |
+| Stage 3 | `B-think` | thinking on (temp 0,6, top_p 0,95, top_k 20) | 11/12 | 92% (65%–99%) | 110.1 | 108.9 | 214 | 4535 | 0.95 | 3 / 0 / 9; p = 0.2500 |
 
-Leitura, com cautela:
+Interpretation, with caution:
 
-- **Controle:** 16 de 24 episódios (67%, IC 95% 47–82%).
-- **Contexto:** com 16K o acerto cai para 3 de 12. Nove episódios terminaram com erro do CLI, e o relatório da etapa 2 registra a mensagem de contexto excedido (16 384 tokens). Com 32K, 64K (controle) e 128K o acerto fica entre 67% e 75%, sem diferença detectável. O 128K usa mais VRAM (pico de 5 422 MiB, contra 4 567 MiB no controle).
-- **KV cache:** q8_0 acertou 9 de 12 e f16 acertou 7 de 12. O q4_0 do controle acertou 16 de 24. As diferenças estão dentro do ruído. Entre os braços de KV, o f16 tem o maior pico de VRAM (5 754 MiB).
-- **Pesos:** Q6_K (unsloth) acertou 10 de 12 e Q8_0 (unsloth) acertou 8 de 12. O controle usa outro quantizador (bartowski), então não é possível separar o efeito dos bits do efeito do quantizador.
-- **Cache de prompt:** sem cache, o TTFT mediano sobe de 296 ms para cerca de 7,5 s e o tempo mediano dos episódios vai de 42 s para 115 s. A taxa de acerto não mudou de forma detectável (9 de 12, pareado p = 1,0).
-- **Thinking sempre ligado:** 11/12 na etapa 3 e 16/24 na etapa 4; a vantagem não se repetiu. Como escalada, porém, o thinking foi confirmado: na replicação da etapa 5, a cascata passou de 22/36 para 30/36 (McNemar p = 0,008). Somada à etapa 5 original, passou de 29/48 para 41/48.
-- **Etapa 4 (replicação e servidor):** controle 25/36, Q6_K 27/36, MTP com decode 55% mais rápido, checkpoints de contexto com tempo dos sucessos 34% menor. Tabela completa em [docs/RESULTS.md](docs/RESULTS.md), seção 7.
-- **Etapa 5 e replicação:** a cascata com thinking passou de 7/12 para 11/12 na primeira coleta e de 22/36 para 30/36 na replicação. O RTK marcou 17/36 contra 22/36 do controle replicado (p = 0,23), sem diferença significativa. Ver [docs/RESULTS.md](docs/RESULTS.md), seções 8 e 11.
-- **Campanha combinada:** MTP, checkpoints e o limite de cache de 2 GiB mantiveram o acerto final do Q4 próximo ao controle (29/36 contra 30/36) e reduziram as escaladas de 10 para 3. Q6_K_L fez 28/36, sem ganho sobre o Q4 (29/36), e usou 0,8 GB a mais de VRAM. O cache RAM mudou junto com os outros fatores. Ver [docs/RESULTS.md](docs/RESULTS.md), seção 12.
-- **Tarefas longas (T2):** em maratonas de 5 a 6 objetivos, o contexto grande passou em 9/9 oráculos. Headroom ficou em 7/9, a compactação do OpenCode em 6/9 e o reset com `PROGRESS.md` em 5/9. Ver seção 9.
-- **Prefixo do repositório em cache (T3b):** com cerca de 46 mil tokens já no cache, o TTFT cai de 16,1 s para 0,16 s. A v3 registrou 2/12 nos três braços. Excluindo a tarefa `js_sign` do P-W16 por falha comprovada do verificador, esse braço fica em 2/11; outros episódios também sofreram diagnósticos ambientais. A comparação de qualidade é inconclusiva. Ver seção 10.
-- **Significância:** a cascata com thinking na replicação da etapa 5 é a única comparação nova com resultado significativo (p = 0,008). As comparações pareadas da campanha combinada e do RTK não atingem p < 0,05. No braço de 16K, com 5 derrotas e nenhuma vitória, p = 0,0625 é o menor valor possível com cinco pares discordantes na mesma direção. Use os demais números como sinais, não como ranking.
+- **Control:** 16 of 24 episodes (67%, 95% CI 47–82%).
+- **Context:** at 16K, passes fall to 3 of 12. Nine episodes ended in a CLI error, and the stage 2 report records a context exceeded message (16 384 tokens). At 32K, 64K (control), and 128K, pass rates are between 67% and 75%, with no detectable difference. 128K uses more VRAM (peak 5 422 MiB, versus 4 567 MiB in the control).
+- **KV cache:** q8_0 passed 9 of 12 and f16 passed 7 of 12. The control's q4_0 passed 16 of 24. The differences are within the noise. Among KV arms, f16 has the highest peak VRAM (5 754 MiB).
+- **Weights:** Q6_K (unsloth) passed 10 of 12 and Q8_0 (unsloth) passed 8 of 12. The control uses another quantizer (bartowski), so the effect of bit width cannot be separated from the quantizer effect.
+- **Prompt cache:** without caching, median TTFT increases from 296 ms to about 7,5 s and median episode time from 42 s to 115 s. The pass rate did not change detectably (9 of 12, paired p = 1,0).
+- **Thinking always on:** 11/12 in stage 3 and 16/24 in stage 4; the advantage did not repeat. Thinking as escalation was confirmed, however: in the stage 5 replication, the cascade rose from 22/36 to 30/36 (McNemar p = 0,008). Combined with the original stage 5, it rose from 29/48 to 41/48.
+- **Stage 4 (replication and server):** control 25/36, Q6_K 27/36, MTP with 55% faster decode, context checkpoints with 34% lower success time. Full table in [docs/RESULTS.md](docs/RESULTS.md), section 7.
+- **Stage 5 and replication:** the thinking cascade rose from 7/12 to 11/12 in the first collection and from 22/36 to 30/36 in replication. RTK scored 17/36 versus 22/36 for the replicated control (p = 0,23), with no significant difference. See [docs/RESULTS.md](docs/RESULTS.md), sections 8 and 11.
+- **Combined campaign:** MTP, checkpoints, and the 2 GiB cache limit kept Q4's final pass rate close to control (29/36 versus 30/36) and reduced escalations from 10 to 3. Q6_K_L scored 28/36, with no gain over Q4 (29/36), and used 0,8 GB more VRAM. RAM cache changed alongside the other factors. See [docs/RESULTS.md](docs/RESULTS.md), section 12.
+- **Long tasks (T2):** in marathons of 5 to 6 objectives, large context passed 9/9 oracles. Headroom scored 7/9, OpenCode compaction 6/9, and reset with `PROGRESS.md` 5/9. See section 9.
+- **Cached repository prefix (T3b):** with about 46 thousand tokens already cached, TTFT falls from 16,1 s to 0,16 s. v3 recorded 2/12 in all three arms. Excluding `js_sign` from P-W16 due to a proven verifier failure leaves that arm at 2/11; other episodes also received environmental diagnoses. The quality comparison is inconclusive. See section 10.
+- **Significance:** the thinking cascade in the stage 5 replication is the only new comparison with a significant result (p = 0,008). Paired comparisons in the combined campaign and RTK do not reach p < 0,05. In the 16K arm, with 5 losses and no wins, p = 0,0625 is the smallest possible value with five discordant pairs in the same direction. Treat the other numbers as signals, not a ranking.
 
-## Configuração recomendada
+## Recommended configuration
 
-Estas recomendações saem das etapas 1 a 5, da replicação da etapa 5 e das campanhas combinada, T2 e T3b (detalhes em [docs/RESULTS.md](docs/RESULTS.md), seções 7 a 12).
+These recommendations come from stages 1 through 5, the stage 5 replication, and the combined, T2, and T3b campaigns (details in [docs/RESULTS.md](docs/RESULTS.md), sections 7 through 12).
 
-- **Contexto:** 32K é o mínimo, e 64K dá margem. Com OpenCode, 16K não serve neste corpus.
-- **KV cache:** q4_0. Não houve perda mensurável e é o de menor VRAM.
-- **Pesos:** Q4_K_M. Q6_K_L fez 28/36 contra 29/36 no Q4 combinado e usou 818 MiB a mais. A etapa 4 também não mostrou diferença significativa entre Q4_K_M e Q6_K.
-- **Cache de prompt:** ligado. Sem ele, a latência cresce cerca de 25 vezes.
-- **Thinking:** desligado na primeira tentativa e ligado só na escalada. A replicação passou de 22/36 para 30/36 (8 resgates em 10 escaladas; McNemar p = 0,008). Somada à etapa 5 original, a cascata passou de 29/48 para 41/48.
-- **RTK:** manter desligado. Na replicação, fez 17/36 contra 22/36 do controle, sem diferença significativa (p = 0,23).
-- **MTP e checkpoints:** habilitar `--spec-type draft-mtp --spec-draft-n-max 2` e `--ctx-checkpoints 64 --checkpoint-min-step 1024`. Na campanha combinada, o Q4 manteve o acerto final (29/36 contra 30/36) e usou 3 escaladas contra 10. Como os fatores mudaram juntos, não se pode atribuir esse resultado a um só deles.
-- **Cache RAM:** limitar com `--cache-ram 2048`. O padrão de 8 GiB coincide com toda a RAM configurada para o WSL e causou OOM durante a campanha combinada. O braço de comparação usou o padrão de 8 GiB; o efeito do limite não foi isolado.
-- **Ferramentas:** manter o RTK desligado. A coleta inicial fez 6/12; a replicação marcou 17/36 contra 22/36 do controle (p = 0,23). O LSP foi neutro, e o modelo não chamou a ferramenta lsp por conta própria.
-- **Tarefas longas:** contexto grande com cache, enquanto couber na VRAM (pico de 5,4 GB). Se for preciso limitar o contexto, Headroom foi melhor que a compactação nativa e que o reset.
-- **Servidor:** MTP elevou o decode de 74 para 115 tok/s na etapa 4 (aceitação 91%). Checkpoints reduziram o tempo dos sucessos de 37 para 25 s. Na campanha combinada, os dois foram usados junto com a cascata; o desenho não separa seus efeitos.
-- **Amostragem:** temperatura 0 na primeira tentativa. Na escalada com thinking, temperatura 0,6, top_p 0,95 e top_k 20. A amostragem recomendada pela Qwen teve 6/12.
-- **Passos do OpenCode:** 40. Com 80 o resultado foi 10/12, sem ganho claro.
+- **Context:** 32K is the minimum, and 64K provides headroom. With OpenCode, 16K is unsuitable for this corpus.
+- **KV cache:** q4_0. There was no measurable loss and it uses the least VRAM.
+- **Weights:** Q4_K_M. Q6_K_L scored 28/36 versus 29/36 for combined Q4 and used 818 MiB more. Stage 4 also showed no significant difference between Q4_K_M and Q6_K.
+- **Prompt cache:** on. Without it, latency increases about 25 times.
+- **Thinking:** off on the first attempt and on only for escalation. Replication rose from 22/36 to 30/36 (8 rescues in 10 escalations; McNemar p = 0,008). Combined with the original stage 5, the cascade rose from 29/48 to 41/48.
+- **RTK:** keep off. In replication it scored 17/36 versus 22/36 for the control, with no significant difference (p = 0,23).
+- **MTP and checkpoints:** enable `--spec-type draft-mtp --spec-draft-n-max 2` and `--ctx-checkpoints 64 --checkpoint-min-step 1024`. In the combined campaign, Q4 maintained final passes (29/36 versus 30/36) and used 3 escalations versus 10. Because factors changed together, this result cannot be attributed to one alone.
+- **RAM cache:** limit with `--cache-ram 2048`. The 8 GiB default equals all RAM configured for WSL and caused OOM during the combined campaign. The comparison arm used the 8 GiB default; the limit's effect was not isolated.
+- **Tools:** keep RTK off. The initial collection scored 6/12; replication scored 17/36 versus 22/36 for the control (p = 0,23). LSP was neutral, and the model did not call the lsp tool on its own.
+- **Long tasks:** large context with caching, while it fits in VRAM (peak 5,4 GB). If context must be limited, Headroom was better than native compaction and reset.
+- **Server:** MTP raised decode from 74 to 115 tok/s in stage 4 (91% acceptance). Checkpoints reduced success time from 37 to 25 s. In the combined campaign, both were used with the cascade; the design does not separate their effects.
+- **Sampling:** temperature 0 on the first attempt. For thinking escalation, temperature 0,6, top_p 0,95, and top_k 20. Qwen's recommended sampling scored 6/12.
+- **OpenCode steps:** 40. With 80 the result was 10/12, with no clear gain.
 
-### Perfil pronto
+### Ready-to-use profile
 
-Substitua `<models>` pelo diretório que contém o GGUF e inicie o servidor recomendado:
+Replace `<models>` with the directory containing the GGUF and start the recommended server:
 
 ```sh
 llama-server \
@@ -83,7 +83,7 @@ llama-server \
   --cache-ram 2048
 ```
 
-Trecho de `opencode.json` para o provider local. O thinking fica desligado no servidor; os 40 passos e a temperatura 0 ficam no perfil do modelo.
+An `opencode.json` snippet for the local provider. Thinking is off on the server; the 40 steps and temperature 0 are in the model profile.
 
 ```json
 {
@@ -113,7 +113,7 @@ Trecho de `opencode.json` para o provider local. O thinking fica desligado no se
 }
 ```
 
-Para escalar manualmente, suba um segundo servidor ou reinicie o mesmo servidor trocando as opções de thinking e amostragem:
+To escalate manually, start a second server or restart the same server with different thinking and sampling options:
 
 ```sh
 --reasoning on \
@@ -121,114 +121,116 @@ Para escalar manualmente, suba um segundo servidor ou reinicie o mesmo servidor 
 --temp 0.6 --top-p 0.95 --top-k 20
 ```
 
-No perfil do OpenCode, use também `"options": { "temperature": 0.6, "topP": 0.95, "topK": 20 }`. O benchmark faz essa escalada automaticamente pelo runner quando a tentativa falha na verificação visível; no uso manual, ela é um segundo passo.
+In the OpenCode profile, also use `"options": { "temperature": 0.6, "topP": 0.95, "topK": 20 }`. The benchmark runner escalates automatically when an attempt fails the visible test; in manual use, this is a second step.
 
-## Como reproduzir
+## Reproduction
 
-### Pré-requisitos
+### Prerequisites
 
-- Windows com WSL2 (Ubuntu 24.04) e GPU NVIDIA de 8 GB. Testado com RTX 3070, driver 610.62 e CUDA Toolkit 13.0 (ver [docs/HARDWARE.md](docs/HARDWARE.md)).
-- Binários e pesos nos caminhos e com os SHA-256 de `benchmark/configs/qwen-4b-opencode-baseline.json`: `llama-server` do llama.cpp v0.8.0, OpenCode 1.19.5, Node, bubblewrap e os GGUF. Nada disso está no repositório.
-- Python 3.12 com pytest e ruff. Versões usadas: pytest 9.1.1 e ruff 0.17.3.
+- Windows with WSL2 (Ubuntu 24.04) and an 8 GB NVIDIA GPU. Tested with RTX 3070, driver 610.62, and CUDA Toolkit 13.0 (see [docs/HARDWARE.md](docs/HARDWARE.md)).
+- Binaries and weights at the paths and with the SHA-256 hashes in `benchmark/configs/qwen-4b-opencode-baseline.json`: llama.cpp v0.8.0 `llama-server`, OpenCode 1.19.5, Node, bubblewrap, and the GGUF files. None are in the repository.
+- Python 3.12 with pytest and ruff. Versions used: pytest 9.1.1 and ruff 0.17.3.
 
-### Comandos sem GPU
+### Commands without GPU
 
-A partir da raiz do repositório:
+From the repository root:
 
 ```sh
 export PYTHONDONTWRITEBYTECODE=1
-PY=python3   # use o Python 3.12 do ambiente de validação
-$PY -m pytest -p no:cacheprovider -q                  # 19 arquivos de teste, ver Limitações
-$PY -m benchmark.opencode_baseline --dry-run          # lista as 300 unidades do protocolo atual
-$PY -m benchmark.opencode_baseline --dry-run --arm B0 # 24 unidades
-PYTHONDONTWRITEBYTECODE=1 $PY corpus/validate_corpus.py --node /caminho/para/node   # 12/12 PASS, cerca de 2 min
+PY=python3   # use the Python 3.12 validation environment
+$PY -m pytest -p no:cacheprovider -q                  # 20 test files, see Limitations
+$PY -m benchmark.opencode_baseline --dry-run          # lists the 300 units of the current protocol
+$PY -m benchmark.opencode_baseline --dry-run --arm B0 # 24 units
+PYTHONDONTWRITEBYTECODE=1 $PY corpus/validate_corpus.py --node /path/to/node   # 36/36 PASS, a few minutes
 ```
 
-### Comandos com GPU
+### Commands with GPU
 
-Estes comandos iniciam o `llama-server`. Rode somente com a GPU livre. O runner se recusa a começar se já houver um `llama-server` ativo.
+These commands start `llama-server`. Run only when the GPU is free. The runner refuses to start if a `llama-server` is already active.
 
 ```sh
-$PY -m benchmark.opencode_baseline --smoke                  # 1 episódio: B0, tarefa py_query
-$PY -m benchmark.opencode_baseline --smoke --task cont_path # outra tarefa
-$PY -m benchmark.opencode_baseline --arm B-kv8              # um braço
-$PY -m benchmark.opencode_baseline --stage N                # todas as unidades da etapa N (N de 1 a 4)
+$PY -m benchmark.opencode_baseline --smoke                  # 1 episode: B0, task py_query
+$PY -m benchmark.opencode_baseline --smoke --task cont_path # another task
+$PY -m benchmark.opencode_baseline --arm B-kv8              # one arm
+$PY -m benchmark.opencode_baseline --stage N                # every unit of stage N (N from 1 to 4)
 ```
 
-O protocolo atual grava em `results/qwen-4b-opencode-baseline-bwrap-v7`, porque `benchmark/configs/qwen-4b-opencode-baseline.json` já é a revisão v7 da etapa 4. Para reproduzir as etapas 1 a 3, use o config das revisões v5 e v6, que está em commits anteriores do histórico do git (o último commit antes desta refatoração é `c2cf750`). Resultados com manifesto diferente não são misturados: o runner recusa.
+The current protocol writes to `results/qwen-4b-opencode-baseline-bwrap-v7` because `benchmark/configs/qwen-4b-opencode-baseline.json` is already the stage 4 v7 revision. To reproduce stages 1 through 3, use the v5 and v6 configs from earlier commits in the git history (the last commit before this refactoring is `c2cf750`). Results with different manifests are not mixed: the runner refuses them.
 
-### Relatórios
+### Reports
 
 ```sh
 $PY -m benchmark.baseline_report DIR_v5 DIR_v6 \
-  --markdown relatorio.md --csv relatorio.csv \
+  --markdown report.md --csv report.csv \
   --control-dir DIR_v5 --control B0
 ```
 
-Os agregados já gerados estão em [results/3070-benchmark/](results/3070-benchmark/). Os resultados brutos (workspaces, logs e JSON por tentativa) ficam fora do repositório.
+Generated aggregates are in [results/3070-benchmark/](results/3070-benchmark/). Raw results (workspaces, logs, and JSON per attempt) remain outside the repository.
 
-## Estrutura do repositório
+## Repository structure
 
 ```
 README.md
 docs/
-  METHODOLOGY.md          método: corpus, oráculo, isolamento, contagem, classificação
-  HARDWARE.md             máquina, versões, pesos e armazenamento
-  RESULTS.md              todas as tabelas: por braço, por tarefa, pareadas e configuração
+  METHODOLOGY.md          method: corpus, oracle, isolation, counting, classification
+  HARDWARE.md             machine, versions, weights and storage
+  RESULTS.md              every table: per arm, per task, paired and configuration
+  RENAMES.md              old Portuguese paths mapped to their English names
   restricted-python-v2.md, methodology/pristine-grading-protocol.md
-                          documentação de código mantido (candidatos a remoção)
+                          documentation of retained code (removal candidates)
 benchmark/
-  opencode_baseline.py    runner da linha de base: protocolo, manifesto, isolamento e oráculo
-  baseline_report.py      relatório offline: Wilson, McNemar, tempos, TTFT e VRAM
+  opencode_baseline.py    baseline runner: protocol, manifest, isolation and oracle
+  baseline_report.py      offline report: Wilson, McNemar, timings, TTFT and VRAM
+  baseline_stage5.py      stage 5, replication and combined runner (--config)
   worker_contract.py, worker_runner.py, guarded_edit.py
-                          contrato e runner do trabalhador delimitado; não avaliado nesta linha de base
+                          bounded worker contract and runner; not evaluated in this baseline
   harness_runner.py, harness_eval.py, pristine_grading.py, restricted_python.py,
   run_observer.py, provenance.py, resource_sampler.py, safe_execution_guard.py
-                          dependências importadas pelo runner
-  configs/                protocolo atual e perfis do harness (OpenCode, Pi, Vibe)
-  fixtures/               seis fixtures de tarefa usadas pelo harness e pelo grader
-  eval_suites/            sondas de comportamento das fixtures
-corpus/                   12 tarefas: hosts (Bottle 0.13.2 e ms 2.1.3), tarefas, oráculos,
-                          stubs, suporte, prefixos e manifesto de hashes
-tests/                    19 arquivos de teste dos módulos mantidos
-results/3070-benchmark/   agregados das etapas 1 a 5, replicação, campanha combinada, T2 e T3b
-reports/                  relatórios das etapas F0, F1, F3 e T1, copiados sem logs nem snapshots
+                          dependencies imported by the runner
+  configs/                current protocols and harness profiles (OpenCode, Pi, Vibe)
+  fixtures/               six task fixtures used by the harness and the grader
+  eval_suites/            behavior probes for the fixtures
+corpus/                   36 tasks: hosts (Bottle 0.13.2 and ms 2.1.3), tasks, oracles,
+                          stubs, support, prefixes and hash manifest
+tests/                    20 test files for the retained modules
+results/3070-benchmark/   aggregates for stages 1 to 5, replication, combined campaign, T2 and T3b
+reports/                  F0, F1, F3 and T1 reports, copied without logs or snapshots
 ```
 
-## Limitações
+## Limitations
 
-- **Corpus pequeno e saturado.** São 12 tarefas de piloto. Oito quase sempre passam; py_range nunca passou. Muitos braços têm só 12 episódios; as comparações com 36 episódios ainda têm pouca potência para diferenças pequenas.
-- **Quantizadores diferentes.** O controle usa Q4_K_M do bartowski. Q6_K e Q8_0 são do unsloth, e o Q4_K_M do unsloth só aparece na etapa 4.
-- **Armazenamento.** Os GGUF de Q6_K e Q8_0 são lidos a partir de `/mnt/d` (disco D:). A regra do laboratório pede o ext4 do WSL. O efeito sobre as métricas não foi medido.
-- **Sandbox.** A execução do OpenCode permite rede; o confinamento do bash não foi comprovado para todos os comandos. As avaliações atuais usam sandbox separado sem rede; os resultados históricos foram produzidos com as versões anteriores.
-- **VRAM do dispositivo.** A VRAM é amostrada no dispositivo inteiro, a cerca de 1 Hz, e o desktop do Windows compartilha a GPU. Não é a memória exclusiva do processo.
-- **TTFT por proxy.** O TTFT mede o tempo até o primeiro conteúdo, reasoning ou chamada de ferramenta, visto pelo proxy local. Pode estar indisponível para algumas requisições.
-- **Fatores combinados.** MTP, checkpoints e o limite de cache RAM de 2 GiB foram ativados juntos. A comparação usou como referência um braço com cache RAM padrão de 8 GiB; o efeito isolado do limite não é conhecido.
-- **Campos ausentes nos resultados v5 e v6.** A taxonomia automática de término e as métricas de qualidade do diff (linhas, escopo, testes enfraquecidos) foram adicionadas depois. Os resultados das etapas 1 a 3 trazem esses campos vazios ou nulos. As causas de falha vêm dos rótulos `failure` gravados pelo runner.
-- **Retentativas por infraestrutura.** Duas unidades de v6 tiveram a primeira tentativa anulada por falha do avaliador. A segunda tentativa, que passou, entrou no acerto. Isso segue o protocolo. Em v5, uma falha do modelo foi classificada como infraestrutura e repetida. Essa classificação foi corrigida em v6.
-- **Timeouts nas etapas 4 e 5.** Nove resultados finais e duas tentativas intermediárias também registraram reset de conexão. As regras atuais dariam prioridade ao erro de servidor, mas os logs não provam se o reset ocorreu antes do timeout; os números históricos foram mantidos. Veja a [revalidação](reports/analise-estrategia-4b-2026-10-28/execucao/F1/revisao-pr45-correcoes.md).
-- **Repetições desiguais.** Muitos braços exploratórios das etapas 4 e 5 têm 12 episódios. A cascata replicada e a campanha combinada têm 36 episódios por braço. O T2 ainda tem uma repetição por braço, e a conclusão sobre compactação não confirma que ela terminou.
-- **T3b.** O 4B escreve o bloco SEARCH de memória e reenvia edições rejeitadas. Erros de OpenSSL afetaram verificações v2 e v3; os acertos históricos não isolam o efeito do contexto. Veja a [revalidação](reports/analise-estrategia-4b-2026-10-28/execucao/F1/revisao-pr45-correcoes.md).
-- **Landlock em drvfs.** A execução histórica do T3b usou uma cópia do repositório no ext4 do WSL. O verificador revisado foi testado também em `/mnt/d`.
-- **Corpus piloto.** As 12 tarefas não foram calibradas com o modelo nem são um conjunto de confirmação. O `bottle.py` tem cerca de 51 mil tokens, estimados por caracteres.
-- **Reprodução em outra máquina.** O config tem caminhos e SHA-256 do laboratório. Para outra máquina, é preciso um novo `protocol_id`, pois o manifesto recusa misturar protocolos.
+- **Small, saturated corpus.** There are 12 pilot tasks. Eight almost always pass; py_range never passed. Many arms have only 12 episodes; comparisons with 36 episodes still have little power for small differences.
+- **Different quantizers.** The control uses bartowski Q4_K_M. Q6_K and Q8_0 are from unsloth, and unsloth Q4_K_M only appears in stage 4.
+- **Storage.** Q6_K and Q8_0 GGUF files are read from `/mnt/d` (D: drive). The laboratory rule requires WSL ext4. The effect on metrics was not measured.
+- **Sandbox.** OpenCode execution permits networking; bash confinement has not been proven for all commands. Current evaluations use a separate sandbox without networking; historical results were produced with earlier versions.
+- **Device VRAM.** VRAM is sampled for the whole device at about 1 Hz, and the Windows desktop shares the GPU. It is not exclusive process memory.
+- **Proxy TTFT.** TTFT measures time until the first content, reasoning, or tool call, as seen by the local proxy. It may be unavailable for some requests.
+- **Combined factors.** MTP, checkpoints, and the 2 GiB RAM cache limit were enabled together. The comparison used an arm with the default 8 GiB RAM cache as reference; the isolated effect of the limit is unknown.
+- **Missing fields in v5 and v6 results.** Automatic termination taxonomy and diff quality metrics (lines, scope, weakened tests) were added later. Results for stages 1 through 3 have these fields empty or null. Failure causes come from `failure` labels recorded by the runner.
+- **Infrastructure retries.** Two v6 units had their first attempt invalidated by grader failure. The second attempt, which passed, counted as a pass. This follows the protocol. In v5, a model failure was classified as infrastructure and retried. This classification was corrected in v6.
+- **Timeouts in stages 4 and 5.** Nine final results and two intermediate attempts also recorded a connection reset. Current rules would prioritize the server error, but logs do not prove whether the reset preceded the timeout; historical numbers were retained. See the [revalidation](reports/strategy-analysis-4b-2026-10-28/execution/F1/pr45-review-fixes.md).
+- **Unequal repetitions.** Many exploratory arms in stages 4 and 5 have 12 episodes. The replicated cascade and combined campaign have 36 episodes per arm. T2 still has one repetition per arm, and the conclusion about compaction does not confirm that it finished.
+- **T3b.** The 4B writes the SEARCH block from memory and resubmits rejected edits. OpenSSL errors affected v2 and v3 verification; historical passes do not isolate the context effect. See the [revalidation](reports/strategy-analysis-4b-2026-10-28/execution/F1/pr45-review-fixes.md).
+- **Landlock on drvfs.** The historical T3b run used a repository copy on WSL ext4. The revised verifier was also tested on `/mnt/d`.
+- **Pilot corpus.** The results above use the original 12 tasks, which were not calibrated with the model and are not a confirmation set. Corpus v2 adds 24 tasks (36 in total) that still await calibration. `bottle.py` has about 51 thousand tokens, estimated from character count.
+- **Reproduction on another machine.** The config has laboratory paths and SHA-256 hashes. A different machine requires a new `protocol_id` because the manifest refuses to mix protocols.
 
 ## Roadmap
 
-Concluídos: etapa 4, etapa 5 e sua replicação em três repetições, campanha combinada de MTP e checkpoints, tarefas longas (T2) e prefixo em cache (T3b).
+Completed: stage 4, stage 5 and its three-repetition replication, the combined MTP and checkpoints campaign, long tasks (T2), and cached prefix (T3b).
 
-Próximos passos:
+Next steps:
 
-1. **Ampliar o corpus:** de 12 para 24–36 tarefas inéditas.
-2. **Repetir T2:** três repetições por braço e confirmação de que a compactação terminou.
-3. **Backlog P1:** comparar ExLlamaV3 com TabbyAPI contra llama.cpp após verificar as chamadas de ferramenta do Qwen3.5 híbrido; comparar o custo com um modelo grande no mesmo corpus.
-4. **MCP e quantizações novas**, conforme forem lançadas.
+1. **Expand the corpus:** from 12 to 24–36 new tasks.
+2. **Repeat T2:** three repetitions per arm and confirmation that compaction finished.
+3. **P1 backlog:** compare ExLlamaV3 with TabbyAPI against llama.cpp after checking hybrid Qwen3.5 tool calls; compare cost with a large model on the same corpus.
+4. **MCP and new quantizations**, as they are released.
 
 Backlog:
 
-- **P2:** mistral.rs com o mesmo GGUF; trabalhador delimitado em escala; llama.cpp nativo no Windows contra WSL2; recompilar com GGML_CUDA_FA_QUANTS para KV misto.
-- **P3, fora do escopo do 4B:** vLLM ou LMDeploy com AWQ e GPTQ-Marlin; offload de MoE maior que a VRAM; modelos de 7 a 14B; LoRA de agente.
+- **P2:** mistral.rs with the same GGUF; bounded worker at scale; native Windows llama.cpp versus WSL2; rebuild with GGML_CUDA_FA_QUANTS for mixed KV.
+- **P3, outside the 4B scope:** vLLM or LMDeploy with AWQ and GPTQ-Marlin; offload of MoE larger than VRAM; models from 7 to 14B; agent LoRA.
 
-## Histórico
+## History
 
-As campanhas anteriores a 28/10/2026 foram removidas desta árvore. Estão no histórico do git, até o commit `c2cf750` de `refactor/3070-benchmark` e seus antecessores. A lista do que saiu e por quê está no Pull Request de refatoração.
+Campaigns before 28/10/2026 were removed from this tree. They remain in git history through commit `c2cf750` of `refactor/3070-benchmark` and its predecessors. The refactoring pull request lists what was removed and why.
