@@ -1,0 +1,22 @@
+T5-rtk: n=36 first=17 (32-63%) final=17 (32-63%) escalated=0 rescued=0
+   rep1: n=12 first=5 final=5
+   rep2: n=12 first=7 final=7
+   rep3: n=12 first=5 final=5
+X-think: n=36 first=22 (45-75%) final=30 (68-92%) escalated=10 rescued=8
+   rep1: n=12 first=8 final=10
+   rep2: n=12 first=7 final=10
+   rep3: n=12 first=7 final=10
+
+per task (first/final per rep):
+  cont_path       T5-rtk=010  X-think=111
+  cont_quote      T5-rtk=110  X-think=FFF
+  js_plural       T5-rtk=111  X-think=111
+  js_sign         T5-rtk=001  X-think=111
+  mcp_header      T5-rtk=111  X-think=111
+  mcp_params      T5-rtk=111  X-think=111
+  py_query        T5-rtk=000  X-think=1FF
+  py_range        T5-rtk=000  X-think=000
+  recover_date    T5-rtk=000  X-think=110
+  recover_decode  T5-rtk=111  X-think=111
+  tests_query     T5-rtk=000  X-think=0F1
+  tests_range     T5-rtk=010  X-think=F0F
