@@ -1,0 +1,12 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -3095,7 +3095,8 @@
+     """ Return True if the argument looks like a encoded cookie."""
+     depr(0, 13, "cookie_is_encoded() will be removed soon.",
+                 "Do not use this API directly.")
+-    return bool(data.startswith(tob('!')) and tob('?') in data)
++    data = data.strip()
++    return bool(data.startswith(tob('!')) and data.endswith(tob('?')))
+ 
+ 
+ def html_escape(string):
