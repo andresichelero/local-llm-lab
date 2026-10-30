@@ -41,7 +41,7 @@ cmake -S llama.cpp-v0.8.0-8642541b2 -B llama.cpp-v0.8.0-8642541b2/build \
   -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=/home/foxtrot/local-llm-benchmark/tools/llama-bin-v0.8.0-8642541b2 \
   -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=/home/foxtrot/local-llm-benchmark/tools/llama-bin-v0.8.0-8642541b2
 cmake --build llama.cpp-v0.8.0-8642541b2/build --parallel 3
-# Interrompido por nós para aumentar o paralelismo; retomada incremental:
+# Interrupted by us to raise parallelism; incremental resume:
 cmake --build llama.cpp-v0.8.0-8642541b2/build --parallel 6
 ```
 

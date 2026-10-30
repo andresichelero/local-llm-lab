@@ -10,7 +10,7 @@ The design is a one-factor-at-a-time matrix based on a control (B0). Each arm ch
 
 ## 2. Corpus
 
-The corpus has 12 tasks, 2 in each of 6 classes:
+Stages 1 through 5, T2, T3b, the replication and the combined campaign used the original 12-task corpus, 2 in each of 6 classes:
 
 | Class | Tasks | Editable file | Host |
 |---|---|---|---|
@@ -22,7 +22,8 @@ The corpus has 12 tasks, 2 in each of 6 classes:
 | tool_recovery | `recover_date`, `recover_decode` | `bottle.py`, with local stub | Bottle 0.13.2 |
 
 - **Hosts.** Bottle 0.13.2 and ms 2.1.3 are snapshots of MIT projects, with the commit and `git archive` SHA-256 recorded in `corpus/README.md`. Each task starts from the host with `bug.patch` applied. `bottle.py` has approximately 51 thousand tokens, estimated from character count, plus approximately 7 thousand from the OpenCode prompt. Therefore the control uses 64K.
-- **Validation.** `corpus/validate_corpus.py` checks the hash manifest, applies patches to disposable copies, and requires the bug to fail by assertion while the reference, visible test, and original tests pass. For `authored_tests` tasks, the oracle is also validated against correct code and two distinct mutants. The correct code passes and the mutants fail. In the last run, all 12 tasks returned `PASS`.
+- **Validation.** `corpus/validate_corpus.py` checks the hash manifest, applies patches to disposable copies, and requires the bug to fail by assertion while the reference, visible test, and original tests pass. For `authored_tests` tasks, the oracle is also validated against correct code and two distinct mutants. The correct code passes and the mutants fail. On the original corpus, all 12 tasks returned `PASS`.
+- **Corpus v2.** 24 more tasks on the same hosts bring the corpus to 36 (10 python_fix, 5 javascript_fix, 6 continuation, 5 mcp, 5 tool_recovery, 5 authored_tests). They are not calibrated yet; see [corpus-v2-design.md](../reports/strategy-analysis-4b-2026-10-28/execution/F1/corpus-v2-design.md). The validator requires this frozen distribution and passes on all 36.
 - **Stubs.** The `mcp` and `tool_recovery` tasks read output from a deterministic `tool.py`. It simulates external evidence but is not a real MCP server.
 - **Continuation.** Phase 1 provides `TASK.md`, `verify_phase1.py`, and `visible_phase1.py`. Phase 2 (`followup.json`, `verify.py`, and `visible.py`) is released only after phase 1 passes the visible test, in the same OpenCode session.
 

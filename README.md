@@ -137,11 +137,11 @@ From the repository root:
 
 ```sh
 export PYTHONDONTWRITEBYTECODE=1
-PY=python3   # use o Python 3.12 do ambiente de validação
-$PY -m pytest -p no:cacheprovider -q                  # 19 arquivos de teste, ver Limitações
-$PY -m benchmark.opencode_baseline --dry-run          # lista as 300 unidades do protocolo atual
-$PY -m benchmark.opencode_baseline --dry-run --arm B0 # 24 unidades
-PYTHONDONTWRITEBYTECODE=1 $PY corpus/validate_corpus.py --node /caminho/para/node   # 12/12 PASS, cerca de 2 min
+PY=python3   # use the Python 3.12 validation environment
+$PY -m pytest -p no:cacheprovider -q                  # 20 test files, see Limitations
+$PY -m benchmark.opencode_baseline --dry-run          # lists the 300 units of the current protocol
+$PY -m benchmark.opencode_baseline --dry-run --arm B0 # 24 units
+PYTHONDONTWRITEBYTECODE=1 $PY corpus/validate_corpus.py --node /path/to/node   # 36/36 PASS, a few minutes
 ```
 
 ### Commands with GPU
@@ -149,10 +149,10 @@ PYTHONDONTWRITEBYTECODE=1 $PY corpus/validate_corpus.py --node /caminho/para/nod
 These commands start `llama-server`. Run only when the GPU is free. The runner refuses to start if a `llama-server` is already active.
 
 ```sh
-$PY -m benchmark.opencode_baseline --smoke                  # 1 episódio: B0, tarefa py_query
-$PY -m benchmark.opencode_baseline --smoke --task cont_path # outra tarefa
-$PY -m benchmark.opencode_baseline --arm B-kv8              # um braço
-$PY -m benchmark.opencode_baseline --stage N                # todas as unidades da etapa N (N de 1 a 4)
+$PY -m benchmark.opencode_baseline --smoke                  # 1 episode: B0, task py_query
+$PY -m benchmark.opencode_baseline --smoke --task cont_path # another task
+$PY -m benchmark.opencode_baseline --arm B-kv8              # one arm
+$PY -m benchmark.opencode_baseline --stage N                # every unit of stage N (N from 1 to 4)
 ```
 
 The current protocol writes to `results/qwen-4b-opencode-baseline-bwrap-v7` because `benchmark/configs/qwen-4b-opencode-baseline.json` is already the stage 4 v7 revision. To reproduce stages 1 through 3, use the v5 and v6 configs from earlier commits in the git history (the last commit before this refactoring is `c2cf750`). Results with different manifests are not mixed: the runner refuses them.
@@ -161,7 +161,7 @@ The current protocol writes to `results/qwen-4b-opencode-baseline-bwrap-v7` beca
 
 ```sh
 $PY -m benchmark.baseline_report DIR_v5 DIR_v6 \
-  --markdown relatorio.md --csv relatorio.csv \
+  --markdown report.md --csv report.csv \
   --control-dir DIR_v5 --control B0
 ```
 
@@ -172,27 +172,29 @@ Generated aggregates are in [results/3070-benchmark/](results/3070-benchmark/). 
 ```
 README.md
 docs/
-  METHODOLOGY.md          método: corpus, oráculo, isolamento, contagem, classificação
-  HARDWARE.md             máquina, versões, pesos e armazenamento
-  RESULTS.md              todas as tabelas: por braço, por tarefa, pareadas e configuração
+  METHODOLOGY.md          method: corpus, oracle, isolation, counting, classification
+  HARDWARE.md             machine, versions, weights and storage
+  RESULTS.md              every table: per arm, per task, paired and configuration
+  RENAMES.md              old Portuguese paths mapped to their English names
   restricted-python-v2.md, methodology/pristine-grading-protocol.md
-                          documentação de código mantido (candidatos a remoção)
+                          documentation of retained code (removal candidates)
 benchmark/
-  opencode_baseline.py    runner da linha de base: protocolo, manifesto, isolamento e oráculo
-  baseline_report.py      relatório offline: Wilson, McNemar, tempos, TTFT e VRAM
+  opencode_baseline.py    baseline runner: protocol, manifest, isolation and oracle
+  baseline_report.py      offline report: Wilson, McNemar, timings, TTFT and VRAM
+  baseline_stage5.py      stage 5, replication and combined runner (--config)
   worker_contract.py, worker_runner.py, guarded_edit.py
-                          contrato e runner do trabalhador delimitado; não avaliado nesta linha de base
+                          bounded worker contract and runner; not evaluated in this baseline
   harness_runner.py, harness_eval.py, pristine_grading.py, restricted_python.py,
   run_observer.py, provenance.py, resource_sampler.py, safe_execution_guard.py
-                          dependências importadas pelo runner
-  configs/                protocolo atual e perfis do harness (OpenCode, Pi, Vibe)
-  fixtures/               seis fixtures de tarefa usadas pelo harness e pelo grader
-  eval_suites/            sondas de comportamento das fixtures
-corpus/                   12 tarefas: hosts (Bottle 0.13.2 e ms 2.1.3), tarefas, oráculos,
-                          stubs, suporte, prefixos e manifesto de hashes
-tests/                    19 arquivos de teste dos módulos mantidos
-results/3070-benchmark/   agregados das etapas 1 a 5, replicação, campanha combinada, T2 e T3b
-reports/                  relatórios das etapas F0, F1, F3 e T1, copiados sem logs nem snapshots
+                          dependencies imported by the runner
+  configs/                current protocols and harness profiles (OpenCode, Pi, Vibe)
+  fixtures/               six task fixtures used by the harness and the grader
+  eval_suites/            behavior probes for the fixtures
+corpus/                   36 tasks: hosts (Bottle 0.13.2 and ms 2.1.3), tasks, oracles,
+                          stubs, support, prefixes and hash manifest
+tests/                    20 test files for the retained modules
+results/3070-benchmark/   aggregates for stages 1 to 5, replication, combined campaign, T2 and T3b
+reports/                  F0, F1, F3 and T1 reports, copied without logs or snapshots
 ```
 
 ## Limitations
@@ -210,7 +212,7 @@ reports/                  relatórios das etapas F0, F1, F3 e T1, copiados sem l
 - **Unequal repetitions.** Many exploratory arms in stages 4 and 5 have 12 episodes. The replicated cascade and combined campaign have 36 episodes per arm. T2 still has one repetition per arm, and the conclusion about compaction does not confirm that it finished.
 - **T3b.** The 4B writes the SEARCH block from memory and resubmits rejected edits. OpenSSL errors affected v2 and v3 verification; historical passes do not isolate the context effect. See the [revalidation](reports/strategy-analysis-4b-2026-10-28/execution/F1/pr45-review-fixes.md).
 - **Landlock on drvfs.** The historical T3b run used a repository copy on WSL ext4. The revised verifier was also tested on `/mnt/d`.
-- **Pilot corpus.** The 12 tasks were not calibrated with the model and are not a confirmation set. `bottle.py` has about 51 thousand tokens, estimated from character count.
+- **Pilot corpus.** The results above use the original 12 tasks, which were not calibrated with the model and are not a confirmation set. Corpus v2 adds 24 tasks (36 in total) that still await calibration. `bottle.py` has about 51 thousand tokens, estimated from character count.
 - **Reproduction on another machine.** The config has laboratory paths and SHA-256 hashes. A different machine requires a new `protocol_id` because the manifest refuses to mix protocols.
 
 ## Roadmap

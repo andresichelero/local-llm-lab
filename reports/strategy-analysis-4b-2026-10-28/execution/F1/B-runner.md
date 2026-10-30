@@ -102,7 +102,7 @@ PY=/home/foxtrot/local-llm-benchmark/envs/lab-validation-20261028/bin/python
 "$PY" -m benchmark.opencode_baseline --stage 1
 "$PY" -m benchmark.opencode_baseline --stage 2
 "$PY" -m benchmark.opencode_baseline --stage 3
-# Alternativa para um braço:
+# Alternative for a single arm:
 "$PY" -m benchmark.opencode_baseline --arm B-kv8
 ```
 
