@@ -1,0 +1,15 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -3857,10 +3857,10 @@
+     module, target = target.split(":", 1) if ':' in target else (target, None)
+     if module not in sys.modules: __import__(module)
+     if not target: return sys.modules[module]
+-    if target.isalnum(): return getattr(sys.modules[module], target)
++    if target.isalnum(): return getattr(sys.modules[module], target.lower(), None)
+     package_name = module.split('.')[0]
+     namespace[package_name] = sys.modules[package_name]
+-    return eval('%s.%s' % (module, target), namespace)
++    return eval('%s.%s' % (module, target.lower()), namespace)
+ 
+ 
+ def load_app(target):

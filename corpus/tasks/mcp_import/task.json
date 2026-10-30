@@ -1,0 +1,19 @@
+{
+  "id": "mcp_import",
+  "class": "mcp",
+  "host": "bottle-0.13.2",
+  "objective": "Read the tool evidence and restore module object loading: names retain their case and expressions retain their original literals when resolving imports.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium",
+  "stub": "corpus/stubs/mcp_import/tool.py",
+  "adaptation": "A deterministic tool response supplies external evidence; no live service is required."
+}
