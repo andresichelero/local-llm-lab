@@ -80,20 +80,20 @@ def build_command(
 ) -> list[str]:
     prompt = prompt_file.read_text(encoding="utf-8").strip()
     if harness == "pi":
-        executable = install_root / "envs/node-harnesses/pi/node_modules/.bin/pi"
+        executable = install_root / "envs/node-harnesses-update-20261028/pi/node_modules/.bin/pi"
         return [
             str(executable), "--provider", "local-llama", "--model", model,
             "--thinking", "off", "--tools", "read,bash,edit,write", "--no-mcp",
             "--mode", "json", "--print", prompt,
         ]
     if harness == "opencode":
-        executable = install_root / "envs/node-harnesses/opencode/node_modules/.bin/opencode"
+        executable = install_root / "envs/node-harnesses-update-20261028/opencode/node_modules/.bin/opencode"
         return [
             str(executable), "run", "--auto", "--format", "json", "--model",
             f"local/{model}", prompt,
         ]
     if harness == "vibe":
-        executable = install_root / "envs/mistral-vibe/bin/vibe"
+        executable = install_root / "envs/mistral-vibe-20261028/bin/vibe"
         return [
             str(executable), "--prompt-file", str(prompt_file), "--workdir", str(workspace),
             "--trust", "--auto-approve", "--max-turns", str(max_turns),
