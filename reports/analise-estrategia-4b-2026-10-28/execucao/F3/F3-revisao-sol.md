@@ -1,43 +1,43 @@
-# F3 — revisão adversarial de f2970ca
+# F3 — adversarial review of f2970ca
 
-Data: 2026-10-28. **Veredito: REPROVAR o commit como gate da F3 para a F4 até corrigir os quatro achados e repetir as verificações.** Há dois achados de severidade alta e dois média; nenhum crítico confirmado. A suíte verde não cobre os casos reproduzidos abaixo.
+Date: 2026-10-28. **Verdict: REJECT the commit as the F3 gate for F4 until the four findings are fixed and checks repeated.** There are two high-severity and two medium-severity findings; none critical confirmed. The green suite does not cover the cases reproduced below.
 
-## Escopo e execução
+## Scope and execution
 
-- Worktree: `D:/Usuario/Downloads/LLM/.worktrees/4b-worker-f3`, branch `feat/4b-worker-f3`, HEAD `f2970caab86e541210541ffb896c9977828b17f8`; comparação `git diff a459b11 f2970ca`.
-- Lidos: seção F3/F4 de `PLANO-ESTRATEGICO-v2.md`, `execucao/F3/F3-implementacao.md`, os quatro módulos alterados e testes associados. Leitura complementar do llama.cpp local para conferir o contrato de tokenização.
-- Revisão somente leitura do código. Sem instalação, rede, GPU, inferência, commit, push ou merge. Provas executadas por stdin com arquivos descartáveis exclusivamente em `/tmp` do WSL e bytecode desligado. Este relatório é a única escrita de entrega; o worktree continuou limpo.
-- Resultados abaixo são reproduções offline. Não se afirma que já contaminaram uma execução científica ou que algum servidor real foi validado.
+- Worktree: `<workspace>`, branch `feat/4b-worker-f3`, HEAD `f2970caab86e541210541ffb896c9977828b17f8`; comparison `git diff a459b11 f2970ca`.
+- Read: F3/F4 section of `PLANO-ESTRATEGICO-v2.md`, `execucao/F3/F3-implementacao.md`, the four changed modules and associated tests. Additional reading of local llama.cpp to check the tokenization contract.
+- Read-only code review. No installation, network, GPU, inference, commit, push or merge. Proofs executed via stdin with disposable files exclusively in WSL `/tmp` and bytecode disabled. This report is the only deliverable written; the worktree remained clean.
+- Results below are offline reproductions. There is no claim that they have contaminated a scientific run or that any real server was validated.
 
-## Achados, em ordem de severidade
+## Findings, in severity order
 
-### 1. ALTO — Interrupção na finalização grava dois terminais contraditórios
+### 1. HIGH — Finalization interruption writes two contradictory terminal records
 
-**Local:** `benchmark/worker_runner.py:81`, `:82` e `:176`.
+**Location:** `benchmark/worker_runner.py:81`, `:82` e `:176`.
 
-`finalize()` persiste o terminal por `_record()` antes de atribuir `self.result`. O SIGALRM permanece armado durante essa operação. Se o prazo expira depois de persistir `accepted`, mas antes de atribuir o resultado, o `except Exception` de `_run()` chama outra finalização, agora `infrastructure_error`: `self.result` ainda é `None`.
+`finalize()` persists the terminal record through `_record()` before assigning `self.result`. SIGALRM remains armed during this operation. If the deadline expires after persisting `accepted` but before assigning the result, `_run()`'s `except Exception` calls another finalization, now `infrastructure_error`: `self.result` is still `None`.
 
-**Entrada → saída errada reproduzida:** pacote `py_range`, limite de 1 segundo, patch válido de `x = 1\n` para `x = 2\n`, verificação visível aprovada e oráculo `True`. Injetado atraso de persistência: `_record` chama sua implementação real e dorme 2 segundos somente depois de registrar `accepted`. O timer interrompe a finalização. O journal real contém:
+**Input → reproduced incorrect output:** `py_range` package, 1-second limit, valid patch from `x = 1\n` to `x = 2\n`, passing visible check and `True` oracle. Persistence delay injected: `_record` calls its real implementation and sleeps 2 seconds only after recording `accepted`. The timer interrupts finalization. The actual journal contains:
 
 ```text
 prepared → generating → candidate → verifying → accepted → infrastructure_error
 ```
 
-O `RunResult` retornado é `infrastructure_error`, com motivo `TimeoutError`, para o mesmo `attempt_id` que já possui `accepted` persistido. O atraso é uma simulação de finalização/I/O lenta, não uma modificação dos callbacks de avaliação. Existe uma janela real equivalente entre persistência e atribuição do resultado, mesmo sem essa injeção.
+The returned `RunResult` is `infrastructure_error`, with reason `TimeoutError`, for the same `attempt_id` that already has `accepted` persisted. The delay simulates slow finalization/I/O, not a modification of evaluation callbacks. An equivalent real window exists between persistence and result assignment even without this injection.
 
-**Impacto:** o histórico deixa de representar uma máquina com um único terminal. Consumidores que usam o evento de aceite e consumidores que usam o último terminal produzem contagens diferentes. A repetição simples de `finalize()` após uma execução concluída é idempotente, mas essa transição interrompida não é.
+**Impact:** the history no longer represents a machine with a single terminal record. Consumers using the acceptance event and consumers using the last terminal record produce different counts. Simply repeating `finalize()` after a completed run is idempotent, but this interrupted transition is not.
 
-**Correção sugerida:** verificar o prazo antes do commit terminal e proteger sua conclusão da entrega do SIGALRM do runner; encerrar o timer como parte dessa transição. Definir uma política explícita para erro de persistência e impedir que o tratamento externo grave outro terminal depois de um terminal já persistido. Apenas inverter `self.result` e `_record()` troca a falha por outra em caso de I/O e não resolve o protocolo sozinho.
+**Suggested fix:** check the deadline before the terminal commit and protect its completion from the runner's SIGALRM delivery; stop the timer as part of that transition. Define an explicit persistence error policy and prevent outer handling from writing another terminal record after one has already been persisted. Merely reversing `self.result` and `_record()` exchanges the failure for another in case of I/O and does not solve the protocol alone.
 
-**Lacuna de teste:** `tests/test_worker_runner.py:35` chama a finalização novamente somente depois do sucesso completo. Acrescentar a interrupção entre registro terminal e atribuição, exigindo um terminal e concordância entre journal e resultado.
+**Test gap:** `tests/test_worker_runner.py:35` calls finalization again only after complete success. Add interruption between terminal recording and assignment, requiring one terminal record and agreement between journal and result.
 
-### 2. ALTO — Prazo expirado no oráculo privado pode terminar como aceite incorreto
+### 2. HIGH — Expired private-oracle deadline can end as incorrect acceptance
 
-**Local:** `benchmark/worker_runner.py:163` até `:169`.
+**Location:** `benchmark/worker_runner.py:163` to `:169`.
 
-Há checagem de relógio após geração e após verificação visível, mas não após `private_oracle()`. O SIGALRM entrega um `TimeoutError` apenas uma vez. Um wrapper de avaliação que captura `Exception` pode absorver esse sinal e devolver um booleano; o runner aceita esse retorno mesmo com o prazo já expirado.
+There is a clock check after generation and after visible verification, but not after `private_oracle()`. SIGALRM delivers `TimeoutError` only once. An evaluation wrapper that catches `Exception` can swallow this signal and return a boolean; the runner accepts that return even after the deadline has expired.
 
-**Entrada → saída errada reproduzida:** mesmo pacote/patch válido, `wall_seconds=1`, verificação visível aprovada e este callback privado:
+**Input → reproduced incorrect output:** same valid package/patch, `wall_seconds=1`, passing visible verification and this private callback:
 
 ```python
 def private_oracle():
@@ -48,27 +48,27 @@ def private_oracle():
         return False
 ```
 
-Resultado observado após aproximadamente 1,01 s:
+Result observed after approximately 1,01 s:
 
 ```json
 {"state":"accepted","oracle_passed":false,"reason":""}
 ```
 
-A exceção capturada pelo callback foi `TimeoutError`. O desfecho deveria registrar expiração, sem atribuir uma nota privada de incorreção ao patch. O callback não precisa ser hostil nem conhecer o mecanismo de timer: captura genérica de exceções num wrapper de teste basta. A ausência de sandbox, já documentada, não explica a ausência da checagem de prazo que o próprio runner faz nas etapas anteriores.
+The exception caught by the callback was `TimeoutError`. The outcome should record expiration without assigning a private incorrectness score to the patch. The callback need not be hostile or know the timer mechanism: a generic exception catch in a test wrapper suffices. The already documented absence of a sandbox does not explain the missing deadline check that the runner itself performs at earlier stages.
 
-**Impacto:** uma expiração da avaliação vira a métrica científica de “aceito incorreto”. Na F4, que exige zero aceitos incorretos, isso pode mudar diretamente o gate da hipótese.
+**Impact:** an evaluation expiration becomes the scientific metric of “incorrectly accepted”. In F4, which requires zero incorrect acceptances, this can directly change the hypothesis gate.
 
-**Correção sugerida:** checar o relógio imediatamente após o callback privado e antes de interpretar/persistir seu retorno; propagar a expiração pelo caminho de timeout/infraestrutura, sem `oracle_passed=False`. Considerar também uma marca persistente de expiração no handler para não depender de a exceção atravessar todos os callbacks.
+**Suggested fix:** check the clock immediately after the private callback and before interpreting/persisting its return; propagate expiration through the timeout/infrastructure path without `oracle_passed=False`. Also consider a persistent expiration flag in the handler so it does not depend on the exception passing through all callbacks.
 
-**Lacuna de teste:** `tests/test_worker_runner.py:131` exercita o bloqueio no verificador visível; `:144` testa tipo não booleano. Nenhum exercita prazo privado capturado internamente. Acrescentar o cenário acima e exigir ausência de terminal `accepted`.
+**Test gap:** `tests/test_worker_runner.py:131` exercises blocking in the visible verifier; `:144` tests a non-boolean type. Neither exercises a private deadline caught internally. Add the scenario above and require no `accepted` terminal record.
 
-### 3. MÉDIO — Busca com ocorrências sobrepostas é aceita como única
+### 3. MEDIUM — Search with overlapping occurrences is accepted as unique
 
-**Local:** `benchmark/guarded_edit.py:468` até `:472`.
+**Location:** `benchmark/guarded_edit.py:468` to `:472`.
 
-`str.count(search)` conta ocorrências não sobrepostas. Isso não demonstra que existe exatamente uma posição válida para aplicar SEARCH.
+`str.count(search)` counts non-overlapping occurrences. That does not demonstrate that exactly one valid position exists for applying SEARCH.
 
-**Entrada concreta:** arquivo permitido `a.py`, SHA-256 correto e conteúdo:
+**Concrete input:** allowed file `a.py`, correct SHA-256 and content:
 
 ```python
 a = 1
@@ -76,7 +76,7 @@ a = 1
 a = 1
 ```
 
-Resposta do modelo:
+Model response:
 
 ```text
 FILE: a.py
@@ -88,48 +88,48 @@ a = 2
 >>>>>>> REPLACE
 ```
 
-**Saída errada observada:** `status=applied`, com conteúdo `a = 2\na = 1\n`. A busca tem duas posições possíveis, offsets 0 e 6; a segunda foi ignorada por `count()`. O contrato exige rejeição `multiple_occurrences` e nenhuma escrita.
+**Incorrect output observed:** `status=applied`, with content `a = 2\na = 1\n`. The search has two possible positions, offsets 0 and 6; the second was ignored by `count()`. The contract requires `multiple_occurrences` rejection and no write.
 
-**Impacto:** o aplicador escolhe silenciosamente a primeira entre duas edições possíveis. Uma resposta ambígua entra na verificação como candidata válida, contrariando o guard determinístico exigido pela F3.
+**Impact:** the applicator silently chooses the first of two possible edits. An ambiguous response enters verification as a valid candidate, contrary to the deterministic guard required by F3.
 
-**Correção sugerida:** localizar a primeira ocorrência e procurar uma segunda a partir de `primeira + 1`, incluindo sobreposição. Só aplicar quando não houver segunda posição.
+**Suggested fix:** locate the first occurrence and search for a second starting at `primeira + 1`, including overlap. Apply only when there is no second position.
 
-**Lacuna de teste:** `tests/test_guarded_edit.py:537` cobre repetições disjuntas. Acrescentar a repetição de duas linhas em três linhas idênticas e verificar status e bytes originais.
+**Test gap:** `tests/test_guarded_edit.py:537` covers disjoint repetitions. Add the two-line repetition in three identical lines and verify status and original bytes.
 
-### 4. MÉDIO — AST válida não garante Python compilável; lote grava erro de sintaxe
+### 4. MEDIUM — Valid AST does not guarantee compilable Python; batch writes syntax error
 
-**Local:** `benchmark/guarded_edit.py:479`.
+**Location:** `benchmark/guarded_edit.py:479`.
 
-O lote usa somente `ast.parse()`. O parser constrói AST para certas instruções cujo contexto é rejeitado na compilação; portanto esse gate não assegura a sintaxe executável exigida.
+The batch uses only `ast.parse()`. The parser builds AST for certain statements whose context is rejected during compilation; therefore this gate does not ensure the required executable syntax.
 
-**Entrada → saída errada reproduzida:** arquivo permitido `a.py` com `value = 1\n`, hash correto, SEARCH exato desse conteúdo e substituição `value = 2\nreturn\n`. O lote retorna `applied` e grava a substituição. Em seguida:
+**Input → reproduced incorrect output:** allowed file `a.py` with `value = 1\n`, correct hash, exact SEARCH for that content and replacement `value = 2\nreturn\n`. The batch returns `applied` and writes the replacement. Then:
 
 ```python
 compile(target.read_text(), str(target), 'exec')
 # SyntaxError: 'return' outside function (a.py, line 2)
 ```
 
-**Impacto:** código não compilável ultrapassa uma rejeição que deveria acontecer antes de qualquer escrita e chega à verificação, podendo consumir o único reparo. Se a verificação visível importa o módulo, ela provavelmente detectará a falha; não se está afirmando que o runner necessariamente aceitará esse código. O defeito demonstrado é o aceite e a gravação pelo aplicador como sintaticamente válido.
+**Impact:** non-compilable code passes a rejection that should happen before any write and reaches verification, potentially consuming the only repair. If visible verification imports the module, it will probably detect the failure; there is no claim that the runner will necessarily accept this code. The demonstrated defect is acceptance and writing by the applicator as syntactically valid.
 
-**Correção sugerida:** compilar o candidato em memória, por exemplo com `compile(content, str(target), 'exec', dont_inherit=True)`, sem executá-lo, antes de escrever. Manter as demais validações e retornar `invalid_syntax` para a exceção.
+**Suggested fix:** compile the candidate in memory, for example with `compile(content, str(target), 'exec', dont_inherit=True)`, without executing it, before writing. Retain the other validations and return `invalid_syntax` for the exception.
 
-**Lacuna de teste:** `tests/test_guarded_edit.py:540` usa um parêntese aberto, já rejeitado por `ast.parse()`. Incluir `return` e `break` fora do contexto permitido, exigindo arquivo original intacto.
+**Test gap:** `tests/test_guarded_edit.py:540` uses an open parenthesis, already rejected by `ast.parse()`. Include `return` and `break` outside the allowed context, requiring the original file to remain intact.
 
-## Verificado sem achados adicionais
+## Checked without additional findings
 
-- **Fronteira privada:** no fluxo padrão inspecionado, o builder utiliza metadados da tarefa, teste visível, stub público e snippets exatos de arquivos permitidos. Não foi confirmado carregamento de `corpus/oracles` nem de `reference.patch` para pacote/prefixo. O runner só chama o callback privado depois do sucesso visível e não o chama na primeira fase de continuação. O valor booleano vai para a nota; o texto da exceção privada não é registrado, apenas seu tipo. Não foi observado stderr privado entrando no pacote, no reparo ou no journal implementado pelo runner.
-- **Limite dessa evidência:** os adaptadores reais de execução dos verificadores e o isolamento de processos ainda estão pendentes conforme o relatório da implementação. O teste `tests/test_worker_runner.py:35` não executa um oráculo real nem injeta stderr privado; sua sentinela é armazenada numa lista externa. Os testes de ausência de conteúdo privado em `tests/test_worker_contract.py:8` e `:65` comparam textos integrais: sozinhos não detectariam vazamento de um fragmento. A conclusão acima também depende da leitura do fluxo, não desses asserts isoladamente. Não se certifica isolamento de stdout/stderr do futuro executor F4.
-- **Parser e escopo:** não encontrado fallback aproximado no modo lote. Cercas/prosa, marcadores embutidos e saída incompleta são rejeitados; a saída original permanece no resultado. Allowlist, hash antigo, proteção dos testes upstream existentes e de caminhos `oracles`, travessia externa e componentes symlink têm verificações úteis. A exceção dos testes novos permite repará-los na mesma tentativa. A ambiguidade sobreposta é a exceção confirmada no achado 3.
-- **Lote e rollback:** validação precede escrita. Os testes exercitam falha na segunda substituição, exceção inesperada e interrupção imediatamente após rename, com restauração. Não encontrado novo caso de lote parcialmente persistido nessas falhas ordinárias. Atomicidade contra queda do processo/energia, falha do próprio rollback e troca hostil concorrente de caminhos não está demonstrada e já é uma limitação explícita; não foi convertida em achado novo.
-- **Reparo e continuação no caminho normal:** builder limita `repairs` a 0 ou 1; fluxo permite no máximo duas gerações. Reparo exige diagnóstico visível não vazio e ausente do pacote inicial. A liberação pública de follow-up exige aceite do mesmo runner e tarefa de primeira fase; não foi demonstrada liberação precoce nesse caminho. A finalidade dupla simples é idempotente; o achado 1 cobre sua interrupção assíncrona.
-- **Infraestrutura no caminho normal:** exceção do cliente e indisponibilidade do verificador sintático não viram rejeição sintática do modelo. Não foi observado timeout de geração diretamente convertido em aceite. O achado 2 é o caso diferente em que o timer é absorvido dentro da avaliação privada. Não foi alegada validação causal dos futuros adaptadores de testes.
-- **Prefixo/tokenização:** prefixo comparado byte a byte com o arquivo congelado do host, identificado por SHA-256, conferido novamente pelo runner e enviado primeiro em mensagem de sistema. Os testes entre tarefas verificam bytes iguais. `/apply-template` e geração recebem as mesmas mensagens e `enable_thinking=false`; a geração deste cliente não envia tools, e a evidência de stub integra o corpo contado. Sem divergência estática confirmada para esse fluxo textual.
-- **Conferência primária local:** raiz `/home/foxtrot/local-llm-benchmark/tools/llama.cpp-v0.8.0-8642541b2`. Em `tools/server/server-context.cpp:5997` e `:6345`, chat completions e apply-template usam `oaicompat_chat_params_parse`; `:5347` tokeniza geração com `true,true`, coerente com `add_special=true, parse_special=true` de `:6372`/`:6376`. Em `tools/server/server-common.cpp:1448`, `add_generation_prompt` tem padrão `true`, e `:1481`/`:1491` aplicam kwargs e desativação de thinking. Isso é evidência de código da versão local, sem servidor real, GPU, medição de cache ou confirmação de outra configuração implantada.
-- **Node:** revisão do resolvedor e seus testes sem defeito confirmado; precedência do override, PATH e versões numéricas NVM exercitada.
+- **Private boundary:** in the default flow inspected, the builder uses task metadata, visible test, public stub and exact snippets from allowed files. Loading `corpus/oracles` or `reference.patch` into package/prefix was not confirmed. The runner calls the private callback only after visible success and does not call it in the first continuation phase. The boolean value goes to the score; private exception text is not recorded, only its type. Private stderr was not observed entering the package, repair or runner-implemented journal.
+- **Limit of this evidence:** real verifier execution adapters and process isolation remain pending according to the implementation report. Test `tests/test_worker_runner.py:35` does not run a real oracle or inject private stderr; its sentinel is stored in an external list. Private-content absence tests in `tests/test_worker_contract.py:8` and `:65` compare whole texts: alone they would not detect leakage of a fragment. The conclusion above also depends on reading the flow, not those assertions alone. It does not certify stdout/stderr isolation of the future F4 executor.
+- **Parser and scope:** no approximate fallback found in batch mode. Fences/prose, embedded markers and incomplete output are rejected; original output remains in the result. Allowlist, old hash, protection of existing upstream tests and `oracles` paths, external traversal and symlink components have useful checks. The exception for new tests permits repairing them in the same attempt. Overlapping ambiguity is the confirmed exception in finding 3.
+- **Batch and rollback:** validation precedes writing. Tests exercise failure on the second replacement, unexpected exception and interruption immediately after rename, with restoration. No new case of partially persisted batch was found for these ordinary failures. Atomicity against process/power failure, rollback failure itself and hostile concurrent path replacement is not demonstrated and is already an explicit limitation; it was not converted into a new finding.
+- **Repair and continuation in the normal path:** builder limits `repairs` to 0 or 1; flow permits at most two generations. Repair requires a nonempty visible diagnostic absent from the initial package. Public follow-up release requires acceptance by the same runner and first-phase task; premature release was not demonstrated in this path. Simple double finalization is idempotent; finding 1 covers its asynchronous interruption.
+- **Infrastructure in the normal path:** client exception and unavailable syntax checker do not become model syntax rejection. No generation timeout was observed directly converted into acceptance. Finding 2 is the different case in which the timer is swallowed inside private evaluation. No causal validation of future test adapters was claimed.
+- **Prefix/tokenization:** prefix compared byte by byte with the frozen host file, identified by SHA-256, checked again by the runner and sent first in a system message. Tests across tasks check identical bytes. `/apply-template` and generation receive the same messages and `enable_thinking=false`; this client's generation does not send tools, and stub evidence is part of the counted body. No static discrepancy confirmed for this textual flow.
+- **Local primary check:** root `/home/foxtrot/local-llm-benchmark/tools/llama.cpp-v0.8.0-8642541b2`. In `tools/server/server-context.cpp:5997` and `:6345`, chat completions and apply-template use `oaicompat_chat_params_parse`; `:5347` tokenizes generation with `true,true`, consistent with `add_special=true, parse_special=true` at `:6372`/`:6376`. In `tools/server/server-common.cpp:1448`, `add_generation_prompt` defaults to `true`, and `:1481`/`:1491` apply kwargs and thinking disablement. This is code evidence from the local version, without a real server, GPU, cache measurement or confirmation of another deployed configuration.
+- **Node:** review of the resolver and its tests found no confirmed defect; precedence of override, PATH and numeric NVM versions exercised.
 
-## Verificações executadas
+## Checks performed
 
-Comandos principais, com cwd no worktree, no WSL:
+Main commands, with cwd in the worktree, in WSL:
 
 ```text
 PYTHONDONTWRITEBYTECODE=1 /home/foxtrot/local-llm-benchmark/envs/lab-validation-20261028/bin/python -m pytest -p no:cacheprovider -q tests/test_corpus_validate.py tests/test_guarded_edit.py tests/test_qwen_engines.py tests/test_qwen_workloads.py tests/test_prefix_cache_paired.py tests/test_worker_contract.py tests/test_worker_runner.py
@@ -142,9 +142,9 @@ PYTHONDONTWRITEBYTECODE=1 /home/foxtrot/local-llm-benchmark/envs/lab-validation-
 RESULT: PASS (12 tasks)
 ```
 
-O validador retornou `PASS bug/oracle/visible/original=(1, 0, 0, 0)` para cada tarefa. `git diff --check a459b11 f2970ca` também passou. Não há gate de typecheck definido para esta F3, conforme o plano; nenhum foi inventado. Execuções auxiliares dos revisores repetiram subconjuntos sobrepostos, portanto não foram somadas ao total de 96 testes.
+The validator returned `PASS bug/oracle/visible/original=(1, 0, 0, 0)` for each task. `git diff --check a459b11 f2970ca` also passed. No typecheck gate is defined for this F3, according to the plan; none was invented. Reviewers' auxiliary runs repeated overlapping subsets, so they were not added to the total of 96 tests.
 
-As quatro provas adicionais produziram:
+The four additional proofs produced:
 
 ```text
 overlap: offsets=[0, 6], status=applied, actual='a = 2\na = 1\n'
@@ -153,68 +153,68 @@ oracle_deadline: state=accepted, oracle_passed=false, elapsed≈1.01s, captured=
 finalize_deadline: result=infrastructure_error/TimeoutError, journal=[prepared,generating,candidate,verifying,accepted,infrastructure_error]
 ```
 
-## Veredito e gate de reavaliação
+## Verdict and reassessment gate
 
-**REPROVAR para a entrada na F4 neste estado.** Corrigir os quatro cenários demonstrados e incluir regressões que comprovem: um terminal por tentativa; expiração privada sem aceite/nota de incorreção; rejeição de busca sobreposta; rejeição de Python não compilável antes de escrever. Reexecutar os mesmos testes, ruff e validador do corpus. As limitações já declaradas de isolamento e integração F4 continuam separadas desses defeitos e precisam de validação própria antes de inferência.
-## Re-revisão de b296ad6
+**REJECT entry to F4 in this state.** Fix the four demonstrated scenarios and include regressions proving: one terminal per attempt; private expiration without acceptance/incorrectness score; overlapping search rejection; non-compilable Python rejection before writing. Rerun the same tests, ruff and corpus validator. The already stated isolation and F4 integration limitations remain separate from these defects and need their own validation before inference.
+## Re-review of b296ad6
 
-Data: 2026-10-28. **Novo veredito: APROVAR COM CORREÇÕES**, com a correção do teste de privacidade descrita abaixo exigida antes de usar essa cobertura como gate da F4. Os quatro cenários originais foram corrigidos. Não foi confirmado novo defeito no fluxo de produção alterado; foi confirmado um novo falso negativo no teste de fragmentos privados. Este veredito refere-se a `b296ad6`; a reprovação acima fica preservada como histórico de `f2970ca`.
+Date: 2026-10-28. **New verdict: APPROVE WITH FIXES**, with the privacy test fix described below required before using this coverage as the F4 gate. The four original scenarios were fixed. No new defect in the changed production flow was confirmed; a new false negative in the private-fragment test was confirmed. This verdict refers to `b296ad6`; the rejection above remains as history for `f2970ca`.
 
-### Escopo e preservação
+### Scope and preservation
 
-Revisado `git diff f2970ca b296ad6` no mesmo worktree e branch, com HEAD confirmado como `b296ad6e25cd2a52f77f84958a134e90d568d7dd`. Lida também a política de persistência acrescentada ao relatório de implementação. Código e testes permaneceram intactos; nenhuma instalação, rede, GPU, inferência, alteração Git ou commit. As provas rodaram por stdin no WSL, com arquivos descartáveis somente em `/tmp` e `PYTHONDONTWRITEBYTECODE=1`. Esta seção foi acrescentada ao final do relatório, sem substituir seu conteúdo anterior.
+Reviewed `git diff f2970ca b296ad6` in the same worktree and branch, with HEAD confirmed as `b296ad6e25cd2a52f77f84958a134e90d568d7dd`. Also read the persistence policy added to the implementation report. Code and tests remained intact; no installation, network, GPU, inference, Git change or commit. Proofs ran via stdin in WSL, with disposable files only in `/tmp` and `PYTHONDONTWRITEBYTECODE=1`. This section was appended to the report without replacing its earlier content.
 
-### 1. Reexecução das quatro provas originais
+### 1. Rerun of the four original proofs
 
-Mesmas entradas, orçamentos e injeções da revisão anterior. O observador da prova de compilação foi apenas adaptado para aceitar a possibilidade de o arquivo original continuar intacto; ele não pressupõe mais que necessariamente haverá `SyntaxError` ao recompilar o arquivo persistido.
+Same inputs, budgets and injections as the earlier review. The compilation proof observer was only adapted to accept the possibility that the original file remains intact; it no longer assumes that recompiling the persisted file must produce `SyntaxError`.
 
-**Prova original 1 — interrupção na finalização:** pacote `py_range`, patch `x = 1\n` → `x = 2\n`, orçamento de 1 s, verificação visível e privada aprovadas; `_record` real seguido de `sleep(2)` somente para `accepted`. Saída real:
+**Original proof 1 — finalization interruption:** `py_range` package, patch `x = 1\n` → `x = 2\n`, budget of 1 s, visible and private checks passed; real `_record` followed by `sleep(2)` only for `accepted`. Actual output:
 
 ```json
 {"proof":"finalize_deadline","result":{"attempt_id":"5da0354e67624c31ae94fa097b889112","state":"accepted","input_tokens":10,"oracle_passed":true,"reason":""},"elapsed":2.001397736996296,"states":["prepared","generating","candidate","verifying","accepted"]}
 ```
 
-**Resultado:** corrigido o defeito de dois terminais. Há exatamente um `accepted`, coerente com o resultado retornado. O retorno em 2,00 s para orçamento de 1 s é real: a implementação desarma o timer antes da persistência terminal. A política agora documentada permite concluir persistência iniciada dentro do prazo sem interrupção. Isso não comprova um limite rígido de tempo ponta a ponta; o tempo de persistência deve integrar a medição de custo/latência da F4. Não foi tratado como nova ocorrência do defeito antigo, pois a decisão e seu único registro terminal foram iniciados dentro do prazo, e a extensão ocorre na persistência protegida.
+**Result:** the two-terminal defect is fixed. There is exactly one `accepted`, consistent with the returned result. The return in 2,00 s for a 1 s budget is real: the implementation disarms the timer before terminal persistence. The now-documented policy allows persistence started within the deadline to finish without interruption. This does not prove a hard end-to-end time limit; persistence time must be included in F4 cost/latency measurement. It was not treated as a new occurrence of the old defect because the decision and its single terminal record started within the deadline, and the extension occurs during protected persistence.
 
-**Prova original 2 — oráculo privado absorve timeout:** mesmo patch/orçamento, callback com `try: sleep(2); return True` e `except Exception: return False`. Saída real:
+**Original proof 2 — private oracle swallows timeout:** same patch/budget, callback with `try: sleep(2); return True` and `except Exception: return False`. Actual output:
 
 ```json
 {"proof":"oracle_deadline","result":{"attempt_id":"aa35fbb3b6614d15b4800de3db0868ae","state":"infrastructure_error","input_tokens":10,"oracle_passed":null,"reason":"TimeoutError"},"elapsed":1.0073366690048715,"oracle_errors":["TimeoutError"],"states":["prepared","generating","candidate","verifying","infrastructure_error"]}
 ```
 
-**Resultado:** corrigido. A marca de expiração e a checagem após `private_oracle()` impedem aceite e nota privada falsa, mesmo com a exceção absorvida pelo callback.
+**Result:** fixed. The expiration flag and check after `private_oracle()` prevent acceptance and a false private score even when the callback swallows the exception.
 
-**Prova original 3 — busca sobreposta:** conteúdo `a = 1\na = 1\na = 1\n`, busca de duas linhas `a = 1\na = 1\n`, substituição `a = 2\n`, hash correto e arquivo permitido. Saída real:
+**Original proof 3 — overlapping search:** content `a = 1\na = 1\na = 1\n`, two-line search `a = 1\na = 1\n`, replacement `a = 2\n`, correct hash and allowed file. Actual output:
 
 ```json
 {"proof":"overlap","offsets":[0,6],"status":"multiple_occurrences","actual":"a = 1\na = 1\na = 1\n","original_unchanged":true}
 ```
 
-**Resultado:** corrigido. As duas posições são detectadas e nenhum byte do alvo muda.
+**Result:** fixed. Both positions are detected and no target byte changes.
 
-**Prova original 4 — Python não compilável:** conteúdo `value = 1\n`, substituição `value = 2\nreturn\n`, hash correto e arquivo permitido. Saída real:
+**Original proof 4 — non-compilable Python:** content `value = 1\n`, replacement `value = 2\nreturn\n`, correct hash and allowed file. Actual output:
 
 ```json
 {"proof":"compile","status":"invalid_syntax","actual":"value = 1\n","persisted_compiler_error":null,"rejection_error":"'return' outside function (a.py, line 2)"}
 ```
 
-**Resultado:** corrigido. A rejeição vem de `compile()` antes da escrita. `persisted_compiler_error=null` significa que o arquivo original preservado continua compilável; não significa que a substituição tenha passado.
+**Result:** fixed. Rejection comes from `compile()` before writing. `persisted_compiler_error=null` means the preserved original file remains compilable; it does not mean the replacement passed.
 
-### 2. Novo achado — MÉDIO: lista circular de linhas públicas mascara contaminação do teste visível
+### 2. New finding — MEDIUM: circular public-line list masks visible-test contamination
 
-**Arquivo:linha:** `tests/test_worker_contract.py:101`, com exclusão aplicada em `:106`.
+**File:line:** `tests/test_worker_contract.py:101`, with exclusion applied at `:106`.
 
-O teste define `public_lines` a partir de `package.readonly_context['visible_test']`, isto é, da própria saída do builder que deveria fiscalizar. Se um bug de montagem acrescentar uma linha privada a esse campo e ao Markdown, a linha ganha automaticamente status de pública e sai da comparação. O `checked > 0` global continua satisfeito pelas outras linhas/tarefas.
+The test defines `public_lines` from `package.readonly_context['visible_test']`, that is, the builder output it should audit. If an assembly bug adds a private line to this field and to Markdown, the line automatically gains public status and is excluded from comparison. The global `checked > 0` remains satisfied by other lines/tasks.
 
-**Cenário concreto reproduzido, somente com mutação em memória:** substituir temporariamente o símbolo `build_package` usado pelo módulo de testes por um wrapper que chama o builder original e, somente para `py_range`, usa `dataclasses.replace` para acrescentar a linha abaixo tanto ao `readonly_context['visible_test']` quanto ao `markdown`:
+**Concrete scenario reproduced, with in-memory mutation only:** temporarily replace the `build_package` symbol used by the test module with a wrapper that calls the original builder and, only for `py_range`, uses `dataclasses.replace` to add the line below to both `readonly_context['visible_test']` and `markdown`:
 
 ```python
 assert list(bottle.parse_range_header('bytes=0-0,5-99,-2', 8)) == [(0, 1), (5, 8), (6, 8)]
 ```
 
-A linha foi lida do oráculo privado e **não existe** em `corpus/tasks/py_range/visible.py`. Com essa saída contaminada, executei as funções reais `test_packages_exclude_nontrivial_private_oracle_lines()` e `test_all_corpus_packages_exclude_private_files()`. Ambas passaram. Como controle, a mesma injeção só no Markdown, sem contaminar o campo usado como lista pública, fez o novo teste falhar corretamente.
+The line was read from the private oracle and **does not exist** in `corpus/tasks/py_range/visible.py`. With this contaminated output, I ran the actual functions `test_packages_exclude_nontrivial_private_oracle_lines()` and `test_all_corpus_packages_exclude_private_files()`. Both passed. As a control, the same injection only into Markdown, without contaminating the field used as the public list, made the new test fail correctly.
 
-Saída real da prova principal:
+Actual output of the main proof:
 
 ```text
 fragment: assert list(bottle.parse_range_header('bytes=0-0,5-99,-2', 8)) == [(0, 1), (5, 8), (6, 8)]
@@ -224,32 +224,32 @@ old_full_content_test_with_same_leak: PASS (leak undetected)
 control_fragment_test_with_leak_in_markdown_only: FAIL as expected
 ```
 
-**Impacto:** esse teste pode ficar verde justamente quando o builder publica um fragmento privado dentro do contexto que chama de visível. As verificações antigas de arquivo inteiro não compensam essa lacuna. Trata-se de falso negativo de teste demonstrado por mutação, não de afirmação de que o builder atual esteja vazando essa linha. O diff não altera o builder de produção, e não foi encontrado esse vazamento no fluxo atual.
+**Impact:** this test can be green precisely when the builder publishes a private fragment inside the context it calls visible. The older whole-file checks do not compensate for this gap. This is a test false negative demonstrated by mutation, not a claim that the current builder leaks that line. The diff does not alter the production builder, and that leak was not found in the current flow.
 
-**Correção sugerida:** construir a lista de linhas públicas diretamente do arquivo público congelado da tarefa (`visible.py` ou `visible_phase1.py`, conforme a fase), independentemente do pacote produzido. Acrescentar um teste negativo em que o resultado do builder contamine o `visible_test` com uma linha exclusiva do oráculo: a auditoria deve rejeitar essa saída. Excluir uma linha verdadeiramente já pública é legítimo; a circularidade está em usar a saída fiscalizada como fonte dessa decisão.
+**Suggested fix:** build the public-line list directly from the task's frozen public file (`visible.py` or `visible_phase1.py`, depending on phase), independently of the produced package. Add a negative test where the builder result contaminates `visible_test` with an oracle-exclusive line: the audit must reject that output. Excluding a genuinely public line is legitimate; the circularity lies in using the audited output as the source of that decision.
 
-### 3. SIGALRM, persistência e regressões procuradas
+### 3. SIGALRM, persistence and regressions investigated
 
-Além das quatro provas, injetei falhas no stream retornado por `Path.open` exclusivamente no append do journal. O método `_record` original continuou executando, inclusive seu `except OSError`; isso evita o falso conforto de testar somente um mock que pula o wrapper real.
+In addition to the four proofs, I injected failures in the stream returned by `Path.open` exclusively during journal append. The original `_record` method continued executing, including its `except OSError`; this avoids the false comfort of testing only a mock that skips the real wrapper.
 
-| Entrada da prova de I/O | Saída real | Terminais completos persistidos |
+| I/O proof input | Actual output | Complete terminal records persisted |
 |---|---|---|
-| `OSError` antes de escrever bytes do terminal | `JournalPersistenceError: terminal append failed; no retry is safe` | nenhum |
-| Metade da linha terminal escrita, seguida de `OSError` | `JournalPersistenceError: journal cannot be read unambiguously` | nenhum |
-| Linha terminal completa, seguida de `OSError` no fechamento | `accepted`, `oracle_passed=true` | um `accepted` |
-| Escrita terminal dorme 1,2 s com orçamento de 1 s | `accepted`, `oracle_passed=true`, tempo real 1,202796875993954 s | um `accepted` |
+| `OSError` before writing terminal bytes | `JournalPersistenceError: terminal append failed; no retry is safe` | none |
+| Half the terminal line written, followed by `OSError` | `JournalPersistenceError: journal cannot be read unambiguously` | none |
+| Complete terminal line, followed by `OSError` on close | `accepted`, `oracle_passed=true` | one `accepted` |
+| Terminal write sleeps 1,2 s with a 1 s budget | `accepted`, `oracle_passed=true`, actual time 1,202796875993954 s | one `accepted` |
 
-Em todas as quatro provas, ao retornar ou propagar a exceção, a máscara de sinais ficou vazia e o timer retornou `(0.0, 0.0)`. Nos três casos com `OSError`, `_journal_failed=true`; no caso de linha completa, a recuperação retornou o terminal já persistido sem novo append. Os testes existentes também verificam que a tentativa inconclusiva não pode ser finalizada novamente com um append inseguro.
+In all four proofs, upon return or exception propagation, the signal mask was empty and the timer returned `(0.0, 0.0)`. In the three `OSError` cases, `_journal_failed=true`; in the complete-line case, recovery returned the already persisted terminal record without another append. Existing tests also verify that the inconclusive attempt cannot be finalized again with an unsafe append.
 
-A política distingue conclusão recuperável de persistência inconclusiva: falha parcial/sem terminal pode levantar exceção e deixar zero terminais, em vez de fabricar `infrastructure_error` no mesmo journal. O executor F4 precisará preservar esse caso como inconclusivo; não deve convertê-lo em erro do modelo nem repetir a tentativa sobre o workspace já alterado. Essa exigência está explicitada no relatório de implementação e não foi descoberta uma contradição com a execução observada.
+The policy distinguishes recoverable completion from inconclusive persistence: partial failure/no terminal record can raise an exception and leave zero terminals, instead of fabricating `infrastructure_error` in the same journal. The F4 executor must preserve this case as inconclusive; it must not convert it into a model error or repeat the attempt on the already modified workspace. This requirement is explicit in the implementation report and no contradiction with observed execution was found.
 
-Não foi confirmado outro defeito no tratamento alterado de SIGALRM, prazo, compilação ou sobreposição. A espera de sinal pendente é não bloqueante, a marca de expiração sobrevive à captura da exceção pelo callback e o timer fica desarmado na persistência terminal. Permanecem as limitações previamente declaradas de POSIX/thread principal, I/O fora do limite rígido de relógio na finalização, callbacks confiáveis e ausência de sandbox do SO.
+No other defect was confirmed in changed SIGALRM, deadline, compilation or overlap handling. The pending-signal wait is nonblocking, the expiration flag survives the callback catching the exception and the timer is disarmed during terminal persistence. The previously stated limitations remain: POSIX/main thread, I/O outside the hard wall-clock limit during finalization, trusted callbacks and absence of an OS sandbox.
 
-**Vazamento no reparo:** o novo teste que emite fragmento em stderr comprova que esse fragmento não entra no prompt de reparo nesse fluxo; ele também constata sua presença em stderr capturado pelo pytest. Isso não certifica isolamento do stderr do futuro executor nem ausência de vazamento num journal externo que misture stdout/stderr. Não foi confirmado vazamento para o JSONL implementado pelo runner nesta re-revisão.
+**Repair leakage:** the new test emitting a fragment on stderr proves that fragment does not enter the repair prompt in this flow; it also confirms its presence in pytest-captured stderr. This does not certify stderr isolation of the future executor or absence of leakage in an external journal mixing stdout/stderr. No leak into the runner-implemented JSONL was confirmed in this re-review.
 
-### 4. Verificações executadas contra b296ad6
+### 4. Checks performed against b296ad6
 
-No WSL, cwd do worktree, sem bytecode nem cache pytest:
+In WSL, cwd in the worktree, without bytecode or pytest cache:
 
 ```text
 PYTHONDONTWRITEBYTECODE=1 /home/foxtrot/local-llm-benchmark/envs/lab-validation-20261028/bin/python -m pytest -p no:cacheprovider -q tests/test_corpus_validate.py tests/test_guarded_edit.py tests/test_qwen_engines.py tests/test_qwen_workloads.py tests/test_prefix_cache_paired.py tests/test_worker_contract.py tests/test_worker_runner.py
@@ -262,8 +262,8 @@ PYTHONDONTWRITEBYTECODE=1 /home/foxtrot/local-llm-benchmark/envs/lab-validation-
 RESULT: PASS (12 tasks)
 ```
 
-As 12 tarefas retornaram individualmente `PASS bug/oracle/visible/original=(1, 0, 0, 0)`. A seleção de 108 é a suíte F3 pedida, não todos os arquivos de testes do repositório. `git diff --check f2970ca b296ad6` passou; worktree limpo e HEAD inalterado após as verificações. Não há gate de typecheck definido pelo plano. Execuções auxiliares de subconjuntos não foram somadas aos 108.
+All 12 tasks individually returned `PASS bug/oracle/visible/original=(1, 0, 0, 0)`. The selection of 108 is the requested F3 suite, not all repository test files. `git diff --check f2970ca b296ad6` passed; worktree clean and HEAD unchanged after checks. No typecheck gate is defined by the plan. Auxiliary subset runs were not added to the 108.
 
-### 5. Novo veredito
+### 5. New verdict
 
-**APROVAR COM CORREÇÕES.** Os quatro achados de `f2970ca` estão encerrados para os cenários concretos reexecutados. Corrigir a fonte da lista de linhas públicas e adicionar a prova negativa de contaminação antes de considerar o teste de fragmentos um gate satisfeito para a F4. Não há novo vazamento de produção confirmado nem aprovação de isolamento, servidor real, GPU ou inferência nesta revisão.
+**APPROVE WITH FIXES.** The four findings from `f2970ca` are closed for the concrete scenarios rerun. Fix the public-line list source and add the negative contamination proof before considering the fragment test a satisfied gate for F4. No new production leak is confirmed and no isolation, real server, GPU or inference is approved in this review.

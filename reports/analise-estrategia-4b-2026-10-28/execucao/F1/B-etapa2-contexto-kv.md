@@ -1,32 +1,32 @@
-# Linha de base OpenCode: etapa 2, contexto e KV
+# OpenCode baseline: stage 2, context and KV
 
-Data: 29/10/2026. Autor: Claude (orquestrador).
+Date: 29/10/2026. Author: Claude (orchestrator).
 
-- Protocolo: `bwrap-v6`, commit `417e96d`.
-- Controle: Q4_K_M, KV q4_0, contexto de 64K, cache ligado, thinking desligado, 40 passos. São os 24 episódios do `bwrap-v5`.
-- Cada braço muda **um único fator** e roda 1 vez nas 12 tarefas.
+- Protocol: `bwrap-v6`, commit `417e96d`.
+- Control: Q4_K_M, KV q4_0, 64K context, cache enabled, thinking disabled, 40 steps. These are the 24 `bwrap-v5` episodes.
+- Each arm changes **one factor** and runs 1 time on the 12 tasks.
 
-| Braço | Acertos | Taxa | Mediana s (sucessos) | TTFT mediano ms | Pico de VRAM do dispositivo, MiB | Fração de prompt vinda do cache | Falhas |
+| Arm | Passes | Rate | Median s (successes) | Median TTFT ms | Device peak VRAM, MiB | Fraction of prompt from cache | Failures |
 |---|---:|---:|---:|---:|---:|---:|---|
-| **Controle** (64K, q4_0) | 16/24 | 67% | 36 | 273 | 4.567 | 0,94 | 5 oráculo, 1 fase 1, 1 tempo, 1 CLI |
-| ctx 16K | **3/12** | **25%** | 28 | 437 | 3.858 | 0,87 | **9 contexto excedido** |
-| ctx 32K | 9/12 | 75% | 38 | 234 | 4.105 | 0,92 | 3 oráculo |
-| ctx 128K | 9/12 | 75% | 38 | 258 | 5.422 | 0,95 | 2 oráculo, 1 tempo |
-| KV q8_0 | 9/12 | 75% | 31 | 272 | 5.038 | 0,92 | 2 oráculo, 1 CLI |
-| KV f16 | 7/12 | 58% | 32 | 273 | 5.754 | 0,91 | 4 oráculo, 1 tempo |
+| **Control** (64K, q4_0) | 16/24 | 67% | 36 | 273 | 4.567 | 0,94 | 5 oracle, 1 phase 1, 1 timeout, 1 CLI |
+| ctx 16K | **3/12** | **25%** | 28 | 437 | 3.858 | 0,87 | **9 context exceeded** |
+| ctx 32K | 9/12 | 75% | 38 | 234 | 4.105 | 0,92 | 3 oracle |
+| ctx 128K | 9/12 | 75% | 38 | 258 | 5.422 | 0,95 | 2 oracle, 1 timeout |
+| KV q8_0 | 9/12 | 75% | 31 | 272 | 5.038 | 0,92 | 2 oracle, 1 CLI |
+| KV f16 | 7/12 | 58% | 32 | 273 | 5.754 | 0,91 | 4 oracle, 1 timeout |
 
-## Leitura
+## Interpretation
 
-1. **16K é insuficiente para o OpenCode neste corpus.** Nove episódios morreram com `exceeds the available context size (16384 tokens)`; um pedido chegou a 23.723 tokens. É um limite de capacidade do harness com esse repositório, não erro do modelo.
-2. **De 32K a 128K não há diferença detectável de acerto** (75%, 67% e 75%). No controle, 4 tarefas trocaram de resultado entre repetições, então diferenças de 1 a 2 episódios são ruído.
-3. **O tipo de KV não muda o acerto de forma detectável** (q4_0 67%, q8_0 75%, f16 58%). O f16 ficou abaixo, mas dentro do ruído. **O KV q4_0 não custa qualidade mensurável** e é o mais barato.
-4. **O custo de contexto e KV maiores é pequeno nesta escala de uso real.**
-   - Pico de VRAM: 4,1 GiB com 32K, 4,6 GiB com 64K e 5,4 GiB com 128K, todos com q4_0; 5,8 GiB com f16 a 64K.
-   - O TTFT ficou entre 230 e 280 ms em todos os braços a partir de 32K. O cache cobre mais de 91% do prompt.
-   - Como o agente não enche a janela, o custo de 85 s de prefill a frio medido no needle a 128K não aparece aqui.
+1. **16K is insufficient for OpenCode on this corpus.** Nine episodes died with `exceeds the available context size (16384 tokens)`; one request reached 23.723 tokens. This is a harness capacity limit with this repository, not a model error.
+2. **There is no detectable difference in pass rate from 32K to 128K** (75%, 67% and 75%). In the control, 4 tasks changed outcomes between repetitions, so differences of 1 to 2 episodes are noise.
+3. **KV type does not detectably change the pass rate** (q4_0 67%, q8_0 75%, f16 58%). f16 scored lower, but within the noise. **KV q4_0 has no measurable quality cost** and is the cheapest.
+4. **The cost of larger context and KV is small at this scale of real use.**
+   - Peak VRAM: 4,1 GiB at 32K, 4,6 GiB at 64K and 5,4 GiB at 128K, all with q4_0; 5,8 GiB with f16 at 64K.
+   - TTFT was between 230 and 280 ms in all arms from 32K upwards. The cache covers more than 91% of the prompt.
+   - Since the agent does not fill the window, the 85 s cold prefill cost measured in the needle at 128K does not appear here.
 
-## Recomendação para a configuração de uso
+## Recommended usage configuration
 
-- **Contexto: 32K é o mínimo, 64K é a margem confortável.** O 128K funciona e cabe na GPU (5,4 GiB), mas não trouxe ganho neste corpus.
+- **Context: 32K is the minimum, 64K is a comfortable margin.** 128K works and fits in the GPU (5,4 GiB), but did not improve results on this corpus.
 - **KV: q4_0.**
-- O controle das etapas seguintes continua **64K com q4_0**.
+- The control for subsequent stages remains **64K with q4_0**.

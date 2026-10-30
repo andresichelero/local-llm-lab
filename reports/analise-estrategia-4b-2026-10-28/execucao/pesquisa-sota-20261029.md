@@ -1,67 +1,67 @@
-# Pesquisa de estado da arte (agente Sonnet, esforço high, 29/10/2026), condensada pelo orquestrador
+# State-of-the-art research (Sonnet agent, high effort, 29/10/2026), condensed by the orchestrator
 
-Fontes primárias consultadas pelo agente:
-- llama.cpp: [README do server](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md), [PR #21038](https://github.com/ggml-org/llama.cpp/pull/21038), [PR #22673](https://github.com/ggml-org/llama.cpp/pull/22673), [issue #24055](https://github.com/ggml-org/llama.cpp/issues/24055), [discussão #23470](https://github.com/ggml-org/llama.cpp/discussions/23470);
-- model card do [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B);
-- repositórios de quantizações: [unsloth GGUF](https://huggingface.co/unsloth/Qwen3.5-4B-GGUF), [unsloth MTP GGUF](https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF), [bartowski](https://huggingface.co/bartowski/Qwen_Qwen3.5-4B-GGUF);
+Primary sources consulted by the agent:
+- llama.cpp: [server README](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md), [PR #21038](https://github.com/ggml-org/llama.cpp/pull/21038), [PR #22673](https://github.com/ggml-org/llama.cpp/pull/22673), [issue #24055](https://github.com/ggml-org/llama.cpp/issues/24055), [discussion #23470](https://github.com/ggml-org/llama.cpp/discussions/23470);
+- [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B) model card;
+- quantization repositories: [unsloth GGUF](https://huggingface.co/unsloth/Qwen3.5-4B-GGUF), [unsloth MTP GGUF](https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF), [bartowski](https://huggingface.co/bartowski/Qwen_Qwen3.5-4B-GGUF);
 - OpenCode: [config](https://opencode.ai/docs/config/), [LSP](https://opencode.ai/docs/lsp/), [tools](https://opencode.ai/docs/tools/);
-- ferramentas: [Headroom](https://github.com/headroomlabs-ai/headroom), [RTK](https://github.com/rtk-ai/rtk).
+- tools: [Headroom](https://github.com/headroomlabs-ai/headroom), [RTK](https://github.com/rtk-ai/rtk).
 
-Marcações usadas abaixo: **F** é fato em fonte primária, **R** é relato de terceiros, **I** é inferência.
+Labels used below: **F** is a fact from a primary source, **R** is a third-party report, **I** is an inference.
 
 ## KV cache
-- **F** Tipos de KV aceitos: f32, f16, bf16, q8_0, q4_0, q4_1, iq4_nl, q5_0, q5_1.
-- **F** O build CUDA padrão só compila kernels de flash attention para os pares q4_0-q4_0, q8_0-q8_0, f16-f16 e bf16-bf16. Pares mistos, como K q8_0 com V q5_0, exigem recompilar com `GGML_CUDA_FA_QUANTS`. Sem isso, o servidor cai para f16 com um warning.
-- **F** A rotação de Hadamard no KV quantizado foi incorporada em 01/04/2026 (PR #21038). Ela está ativa no nosso build e reduz a perda do q4_0. Para fazer A/B: `LLAMA_ATTN_ROT_DISABLE=1`.
-- **R** Na discussão #23470, a chave (K) é bem mais sensível à quantização que o valor (V). O q8_0 com q8_0 fica perto do baseline. O efeito do q4_0 com q4_0 varia muito de modelo para modelo.
-- O TurboQuant só existe em forks, não no upstream.
-- **I** Os nossos dados (q4_0 67%, q8_0 75%, f16 58%) não mostram diferença. O q8_0 é a escolha "segura", com pouca VRAM a mais.
+- **F** Accepted KV types: f32, f16, bf16, q8_0, q4_0, q4_1, iq4_nl, q5_0, q5_1.
+- **F** The default CUDA build only compiles flash attention kernels for q4_0-q4_0, q8_0-q8_0, f16-f16 and bf16-bf16 pairs. Mixed pairs, such as K q8_0 with V q5_0, require recompilation with `GGML_CUDA_FA_QUANTS`. Without this, the server falls back to f16 with a warning.
+- **F** Hadamard rotation for quantized KV was incorporated on 01/04/2026 (PR #21038). It is active in our build and reduces the loss from q4_0. For A/B testing: `LLAMA_ATTN_ROT_DISABLE=1`.
+- **R** In discussion #23470, the key (K) is much more sensitive to quantization than the value (V). q8_0 with q8_0 is close to baseline. The effect of q4_0 with q4_0 varies greatly by model.
+- TurboQuant exists only in forks, not upstream.
+- **I** Our data (q4_0 67%, q8_0 75%, f16 58%) do not show a difference. q8_0 is the "safe" choice, with slightly more VRAM.
 
-## Pesos
-- Quantizações disponíveis:
-  - unsloth: UD-Q4_K_XL (2,91 GB), UD-Q6_K_XL (4,15 GB) e um repositório com MTP;
-  - bartowski: Q6_K_L e Q4_K_L, que guardam embeddings e saída em Q8_0.
-- **F** Segundo a unsloth, em modelos híbridos os tensores `attn_*` e `ssm_out` são sensíveis à quantização. Isso favorece as variantes XL e _L.
-- **R** No benchmark llm-quant-bench (HumanEval de um turno), de Q4 para cima a nota fica entre 57% e 61%, e o UD-Q4_K_XL foi o melhor.
-- **I** Os nossos 83% do Q6_K vêm de uma única rodada e de outro quantizador, então ainda é preciso repetir.
+## Weights
+- Available quantizations:
+  - unsloth: UD-Q4_K_XL (2,91 GB), UD-Q6_K_XL (4,15 GB) and an MTP repository;
+  - bartowski: Q6_K_L and Q4_K_L, which store embeddings and output in Q8_0.
+- **F** According to unsloth, `attn_*` and `ssm_out` tensors are sensitive to quantization in hybrid models. This favors the XL and _L variants.
+- **R** In the llm-quant-bench benchmark (single-turn HumanEval), scores from Q4 upward are between 57% and 61%, and UD-Q4_K_XL was best.
+- **I** Our 83% for Q6_K comes from a single round and another quantizer, so it still needs repeating.
 
-## MTP (decodificação especulativa)
-- **F** Suportado desde o PR #22673 (16/05/2026), com `--spec-type draft-mtp --spec-draft-n-max 2`. O valor 2 é o ponto de partida; testar de 1 a 6.
-- **F** Exige `-np 1`.
-- **F** O MTP pode alterar a saída mesmo com temperatura 0, por causa dos kernels dependentes do tamanho do batch (issue #23335).
-- **R** Ganhos relatados: de 1,5× a 2,9× em modelos maiores, sem número para o 4B.
+## MTP (speculative decoding)
+- **F** Supported since PR #22673 (16/05/2026), with `--spec-type draft-mtp --spec-draft-n-max 2`. The value 2 is the starting point; test 1 to 6.
+- **F** Requires `-np 1`.
+- **F** MTP can change output even at temperature 0 because of batch-size-dependent kernels (issue #23335).
+- **R** Reported gains: 1,5× to 2,9× in larger models, with no figure for 4B.
 
-## Amostragem oficial (model card do Qwen3.5-4B)
-- **Sem thinking:** temperatura 0,7, top_p 0,8, top_k 20, min_p 0, presence_penalty 1,5.
-- **Thinking para código:** temperatura 0,6, top_p 0,95, top_k 20, presence_penalty 0.
-- O card não proíbe temperatura 0, mas todos os presets usam temperatura acima de 0. O card do Qwen3 desaconselhava decodificação gulosa por risco de loops.
-- **I** Verificar se o OpenCode manda `temperature` no corpo da requisição, porque esse valor sobrescreve o do servidor.
+## Official sampling (Qwen3.5-4B model card)
+- **Without thinking:** temperature 0,7, top_p 0,8, top_k 20, min_p 0, presence_penalty 1,5.
+- **Thinking for code:** temperature 0,6, top_p 0,95, top_k 20, presence_penalty 0.
+- The card does not prohibit temperature 0, but all presets use temperature above 0. The Qwen3 card discouraged greedy decoding because of the risk of loops.
+- **I** Check whether OpenCode sends `temperature` in the request body, because that value overrides the server value.
 
-## Cache em modelos híbridos
-- **F** O `--cache-reuse` fica desabilitado quando a memória não suporta deslocamento ("shift"). O log avisa com "cache_reuse is not supported". **I** Provavelmente não tem efeito no Qwen3.5.
-- **F** Parâmetros relevantes: `--ctx-checkpoints` (padrão 32), `--checkpoint-min-step` (padrão 8192) e `--cache-ram`. Recomendação para multi-turno: `-ctxcp 64 -cms 512..1024`.
-- **R** Bug aberto (#24055): modelos híbridos às vezes reprocessam o prompt inteiro. **I** No nosso caso, de 91% a 95% dos tokens de prompt vêm do cache, então o problema parece pequeno.
+## Cache in hybrid models
+- **F** `--cache-reuse` is disabled when memory does not support shifting. The log warns with "cache_reuse is not supported". **I** It probably has no effect on Qwen3.5.
+- **F** Relevant parameters: `--ctx-checkpoints` (default 32), `--checkpoint-min-step` (default 8192) and `--cache-ram`. Recommendation for multi-turn: `-ctxcp 64 -cms 512..1024`.
+- **R** Open bug (#24055): hybrid models sometimes reprocess the entire prompt. **I** In our case, 91% to 95% of prompt tokens come from cache, so the problem seems small.
 
-## Tarefas longas
-- **F** Compactação no OpenCode: `"compaction": {"auto": true, "prune": true, "reserved": 8192}`, mais `limit.context/input/output` por modelo. A reserva padrão é grande e estoura contextos locais pequenos (#8140).
-- **F** Plugins podem trocar o prompt de compactação pelo hook `experimental.session.compacting`.
-- **F** O Headroom comprime saídas de ferramentas por proxy (`headroom-opencode` com `proxyUrl`). A telemetria vem ligada por padrão; desligar com `HEADROOM_OFFLINE=1`. Os números divulgados são do próprio fabricante.
-- **I** Comprimir a saída de ferramentas pode mudar o prefixo da conversa e quebrar os checkpoints de cache.
+## Long tasks
+- **F** OpenCode compaction: `"compaction": {"auto": true, "prune": true, "reserved": 8192}`, plus `limit.context/input/output` per model. The default reservation is large and overflows small local contexts (#8140).
+- **F** Plugins can replace the compaction prompt through the `experimental.session.compacting` hook.
+- **F** Headroom compresses tool outputs through a proxy (`headroom-opencode` with `proxyUrl`). Telemetry is enabled by default; disable with `HEADROOM_OFFLINE=1`. The reported figures are from the vendor itself.
+- **I** Compressing tool output can change the conversation prefix and break cache checkpoints.
 
-## Ferramentas
-- **F** O LSP do OpenCode vem desligado por padrão. `"lsp": true` liga, e o pyright precisa estar instalado.
-- **F** A ferramenta `lsp` (definição, referências, símbolos) é experimental e se liga com `OPENCODE_EXPERIMENTAL_LSP_TOOL=true`.
-- **F** O RTK filtra a saída do bash, por exemplo deixando só as falhas do pytest. Instala com `rtk init -g --opencode`.
-- **I** Não há evidência independente de ganho para modelos pequenos. Cada MCP adiciona schemas ao prompt, e filtrar ferramentas tem efeito mais comprovado.
+## Tools
+- **F** OpenCode LSP is disabled by default. `"lsp": true` enables it, and pyright must be installed.
+- **F** The `lsp` tool (definition, references, symbols) is experimental and is enabled with `OPENCODE_EXPERIMENTAL_LSP_TOOL=true`.
+- **F** RTK filters bash output, for example leaving only pytest failures. Install with `rtk init -g --opencode`.
+- **I** There is no independent evidence of gains for small models. Each MCP adds schemas to the prompt, and filtering tools has more established effects.
 
-## Prioridades sugeridas (usadas no plano da noite)
-1. Repetições: com 12 tarefas, só diferenças de 3 ou mais merecem atenção.
+## Suggested priorities (used in the overnight plan)
+1. Repetitions: with 12 tasks, only differences of 3 or more merit attention.
 2. KV q8_0.
-3. Pesos UD-Q4_K_XL, Q6_K_L e UD-Q6_K_XL.
-4. Amostragem oficial contra temperatura 0.
-5. MTP com n-max 2.
-6. Checkpoints de cache verificados com `-lv 4`.
-7. Compactação configurada.
-8. LSP e filtro de saída.
-9. Notas em disco ou reinício da sessão.
-10. Headroom, com prioridade baixa.
+3. Weights UD-Q4_K_XL, Q6_K_L and UD-Q6_K_XL.
+4. Official sampling versus temperature 0.
+5. MTP with n-max 2.
+6. Cache checkpoints verified with `-lv 4`.
+7. Configured compaction.
+8. LSP and output filtering.
+9. Notes on disk or session restart.
+10. Headroom, low priority.

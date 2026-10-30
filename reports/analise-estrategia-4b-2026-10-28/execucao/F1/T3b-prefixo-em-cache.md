@@ -1,147 +1,147 @@
-# T3b — prefixo em cache para o worker F3
+# T3b — cached prefix for the F3 worker
 
-Data: 29/10/2026. Implementação e validação offline no worktree `feat/4b-worker-v2`. Nenhuma inferência, servidor ou acesso à GPU foi iniciado para esta tarefa. A campanha não foi executada; não há resultados de qualidade ou desempenho.
+Date: 29/10/2026. Implementation and offline validation in the `feat/4b-worker-v2` worktree. No inference, server or GPU access was started for this task. The campaign was not run; there are no quality or performance results.
 
-## Desenho
+## Design
 
-São 12 tarefas dos hosts `bottle-0.13.2` e `ms-2.1.3`, três repetições por tarefa e por braço, totalizando 108 unidades. O controle é Qwen3.5-4B Q4_K_M bartowski, KV q4_0, cache de prompt ligado, temperatura zero, seed 42 e thinking desligado. P-W16 usa ctx 16384; P-WL-cold e P-WL-warm usam ctx 65536. O modelo é chamado pelo worker F3, que aceita SEARCH/REPLACE e até um reparo. Continuação tem duas entregas condicionais e compartilha o limite de um reparo entre as duas.
+There are 12 tasks from hosts `bottle-0.13.2` and `ms-2.1.3`, three repetitions per task and arm, totaling 108 units. The control is Qwen3.5-4B Q4_K_M bartowski, KV q4_0, prompt cache enabled, zero temperature, seed 42 and thinking disabled. P-W16 uses ctx 16384; P-WL-cold and P-WL-warm use ctx 65536. The model is called by the F3 worker, which accepts SEARCH/REPLACE and up to one repair. Continuation has two conditional submissions sharing the one-repair limit.
 
-- P-W16 mantém um servidor por host e envia o pacote curto.
-- P-WL-cold reinicia o servidor para cada episódio. A contagem de tokens usa endpoints de template/tokenização, sem geração nem preenchimento do cache. O TTFT mede o primeiro preenchimento; a inicialização do processo fica fora do tempo do episódio.
-- P-WL-warm mantém o servidor por host e faz uma geração de um token com o prefixo antes da primeira tarefa. O custo de aquecimento fica em `warmup.json`, separado dos episódios.
+- P-W16 maintains one server per host and sends the short package.
+- P-WL-cold restarts the server for each episode. Token counting uses template/tokenization endpoints without generation or cache filling. TTFT measures the first prefill; process startup is excluded from episode time.
+- P-WL-warm maintains one server per host and generates one token with the prefix before the first task. Warmup cost is in `warmup.json`, separate from episodes.
 
-Todos os braços recebem o mesmo método de seleção de trechos: para cada arquivo regular listado em `relevant_files`, em ordem lexicográfica, selecionar um único trecho contíguo de até 12000 caracteres divididos pelo número de entradas relevantes. Para arquivo longo, a linha que mais compartilha palavras com o objetivo público determina o centro; empates escolhem a primeira linha. Diretórios e arquivos ausentes são ignorados. Não se lê patch de referência ou oráculo para selecionar contexto. O prefixo WL é o prefixo congelado e redigido do corpus, não o snapshot original; o trecho também fornece o código com o bug específico.
+All arms use the same excerpt selection method: for each regular file listed in `relevant_files`, in lexicographic order, select a single contiguous excerpt of up to 12000 characters divided by the number of relevant entries. For a long file, the line sharing the most words with the public objective determines the center; ties select the first line. Directories and missing files are ignored. Neither reference patch nor oracle is read to select context. The WL prefix is the frozen, redacted corpus prefix, not the original snapshot; the excerpt also provides code with the specific bug.
 
-O coordenador verifica o manifesto do corpus e os hashes configurados de servidor e modelo antes de iniciar. Obtém a contagem real do template/tokenizer para todos os pacotes iniciais de cada host e, se necessário, reduz o prefixo por busca binária em limites de linha, usando o mesmo prefixo escolhido em ambos os braços WL e todas as tarefas do host. A decisão, tamanhos e hashes são gravados em `prefix-<host>.json`. A busca pressupõe contagens aproximadamente monotônicas e garante que a opção escolhida foi testada, sem prometer prefixo matematicamente máximo. Reservam-se 2048 tokens de saída e 4096 de margem para reparo e follow-up; o runner volta a contar a entrada em cada geração e rejeita entrada acima do orçamento. Um reparo ou follow-up extraordinariamente grande pode ainda ultrapassar essa margem; a janela de contexto não é garantia de que esse segundo pedido caiba.
+The coordinator checks the corpus manifest and configured server and model hashes before starting. It obtains the actual template/tokenizer count for every initial package on each host and, if necessary, reduces the prefix by binary search at line boundaries, using the same chosen prefix for both WL arms and all tasks on the host. The decision, sizes and hashes are recorded in `prefix-<host>.json`. The search assumes approximately monotonic counts and ensures the selected option was tested, without promising a mathematically maximal prefix. It reserves 2048 output tokens and 4096 of headroom for repair and follow-up; the runner recounts input on every generation and rejects input over budget. An extraordinarily large repair or follow-up can still exceed that margin; the context window does not guarantee the second request will fit.
 
-O builder F3 só aceita o arquivo congelado integral como `prefix`; o adaptador valida o corpus pelo manifesto, seleciona o trecho inicial desse arquivo e atribui ao pacote o hash do trecho efetivamente usado. O runner confere esse hash antes de gerar. O `--dry-run` prepara workspaces temporários com os patches de bug e estima texto por caracteres/3,5, incluindo uma estimativa de prefixo reduzido; essa estimativa não substitui o tokenizer real e não contabiliza exatamente o template nem reparos.
+The F3 builder accepts only the complete frozen file as `prefix`; the adapter validates the corpus against the manifest, selects the initial excerpt of that file and assigns the package the hash of the excerpt actually used. The runner checks that hash before generation. `--dry-run` prepares temporary workspaces with bug patches and estimates text as characters/3,5, including a reduced-prefix estimate; this estimate does not replace the real tokenizer and does not account exactly for the template or repairs.
 
-## Verificação e resultados
+## Verification and results
 
-A verificação visível decide se há reparo. O verificador privado é chamado apenas para nota final, depois de encerradas as gerações; se a entrega final foi rejeitada, a nota privada ainda é medida sem retorno ao modelo. Em continuação, o follow-up só é liberado após o aceite visível da primeira fase. O supervisor compõe `WorkerRunner`, `worker_contract`, `practical_worker_guard` e os helpers do baseline de preparação, servidor, recursos, classificação e grader. Testes e grader rodam em subprocesso com Landlock/seccomp do guard; falha de isolamento é infraestrutura. O grader do baseline precisa ler o oráculo dentro do mesmo processo em que importa o candidato: essa restrição não prova proteção do arquivo do oráculo contra código candidato malicioso durante a correção. A nota deve ser interpretada sob essa limitação, como no baseline; a saída privada não é inserida no prompt.
+Visible verification determines whether a repair occurs. The private verifier is called only for the final score, after generation ends; if the final submission was rejected, the private score is still measured without feedback to the model. In continuation, follow-up is released only after visible acceptance of phase 1. The supervisor composes `WorkerRunner`, `worker_contract`, `practical_worker_guard` and baseline helpers for preparation, server, resources, classification and grader. Tests and grader run in a subprocess with the guard's Landlock/seccomp; isolation failure is infrastructure. The baseline grader must read the oracle in the same process that imports the candidate: this restriction does not prove oracle file protection against malicious candidate code during grading. Scores must be interpreted with that limitation, as in the baseline; private output is not inserted into the prompt.
 
-Cada `result.json` registra estados e fases, nota visível e privada, categoria de `opencode_baseline.classify`, motivo, TTFT da primeira geração, `prompt_n`, `cache_n`, fração `cache_n/(prompt_n+cache_n)`, tokens gerados, mediana de decode, tempo total, pico de VRAM amostrado, reparos e eventos de requisição. Métricas ausentes no servidor ficam `null`; o TTFT é até o primeiro conteúdo recebido, e não uma medição direta no GPU. O tempo total inclui verificações, mas exclui preparo do workspace e inicialização do servidor. Pico é amostrado, não uma medição contínua.
+Each `result.json` records states and phases, visible and private scores, `opencode_baseline.classify` category, reason, first-generation TTFT, `prompt_n`, `cache_n`, fraction `cache_n/(prompt_n+cache_n)`, generated tokens, median decode, total time, sampled VRAM peak, repairs and request events. Metrics missing from the server are `null`; TTFT is until the first content received, not a direct GPU measurement. Total time includes verification but excludes workspace preparation and server startup. Peak is sampled, not continuously measured.
 
-`summary.json` agrega episódios válidos por braço com sucesso e IC95 Wilson, medianas das métricas e contagem de infraestrutura. O pareamento por tarefa/repetição registra acertos concordantes e discordantes e tempos dos dois braços. Episódios de infraestrutura não entram no denominador nem no pareamento. Wilson é descritivo; repetições da mesma tarefa não são observações independentes. Ao detectar infraestrutura, o driver preserva os resultados e para; não há retomada automática. O diretório de saída precisa ainda não existir. Não há comparação inferencial nem correção para múltiplas comparações.
+`summary.json` aggregates valid episodes per arm with success and Wilson 95% CI, metric medians and infrastructure count. Pairing by task/repetition records concordant and discordant passes and times for both arms. Infrastructure episodes are excluded from denominator and pairing. Wilson is descriptive; repetitions of the same task are not independent observations. Upon detecting infrastructure failure, the driver preserves results and stops; there is no automatic resumption. The output directory must not already exist. There is no inferential comparison or multiple-comparison correction.
 
-## Execução futura
+## Future execution
 
-A execução real usa GPU e precisa ocorrer apenas depois de encerrada a campanha atual e mediante autorização específica para inferência. O driver recusa executar se `pgrep -x llama-server` detectar outro processo ou se a inspeção falhar. A verificação não é um bloqueio global contra outra aplicação que inicie servidor depois da checagem.
+The real run uses GPU and must occur only after the current campaign ends and with specific authorization for inference. The driver refuses to run if `pgrep -x llama-server` detects another process or inspection fails. The check is not a global lock against another application starting a server afterward.
 
 ```sh
-cd /mnt/d/Usuario/Downloads/LLM/.worktrees/4b-worker-v2
+cd /path/to/4b-worker-v2
 PYTHONDONTWRITEBYTECODE=1 /home/foxtrot/local-llm-benchmark/envs/lab-validation-20261028/bin/python -m benchmark.prefix_cache_campaign --dry-run
 PYTHONDONTWRITEBYTECODE=1 /home/foxtrot/local-llm-benchmark/envs/lab-validation-20261028/bin/python -m benchmark.prefix_cache_campaign
 ```
 
-Saída futura: `/home/foxtrot/local-llm-benchmark/results/qwen-4b-prefix-cache-v1`. O segundo comando não foi executado. A implementação do cliente de streaming e os endpoints de tokenização foram avaliados com fakes e leitura do código local do servidor, sem validação com servidor real; isso permanece uma aceitação pendente antes de interpretar dados.
+Future output: `/home/foxtrot/local-llm-benchmark/results/qwen-4b-prefix-cache-v1`. The second command was not run. The streaming client implementation and tokenization endpoints were evaluated using fakes and local server code reading, without validation against a real server; this remains an acceptance item before interpreting data.
 
-## Verificação offline desta implementação
+## Offline verification of this implementation
 
-O dry-run listou 108 unidades com estimativas numéricas de pacote e prefixo. Testes com servidor/modelo falsos verificam seleção de trechos, redução, ciclo frio/quente, recusa, classificação, métricas de streaming, resumo, reparo e continuação; um teste adicional executou o verificador visível sob guard no WSL. O detector real recusou porque havia `llama-server` ativo. A comparação do manifesto congelado encontrou 320 arquivos correspondentes. Os testes selecionados do worker e os novos passaram; Ruff passou nos arquivos novos. Nenhum typecheck está configurado ou instalado no ambiente observado. Não foi executada a suíte inteira.
+The dry run listed 108 units with numeric package and prefix estimates. Tests with fake server/model verify excerpt selection, reduction, cold/warm cycle, refusal, classification, streaming metrics, summary, repair and continuation; an additional test ran the visible verifier under guard in WSL. The real detector refused because `llama-server` was active. Frozen manifest comparison found 320 matching files. Selected worker and new tests passed; Ruff passed on the new files. No typecheck is configured or installed in the observed environment. The full suite was not run.
 
-Commit do driver/config/testes: `a9a6dc0`. Verificação final: 94 testes selecionados passaram; após o último ajuste de tratamento de erro, os 13 testes T3b passaram novamente e o Ruff ficou limpo.
+Driver/config/tests commit: `a9a6dc0`. Final verification: 94 selected tests passed; after the last error-handling adjustment, the 13 T3b tests passed again and Ruff was clean.
 
-## Correções do orquestrador (29/10, 10h30)
+## Orchestrator fixes (29/10, 10h30)
 
-- **O Landlock não protege nem libera caminhos em `/mnt/d` (drvfs/9p).** Com o guard ativo, até `corpus/support` e `pytest.ini` deram permissão negada. Por isso a 1ª execução abortou: o avaliador falhou e o reparo recebeu o erro de permissão, gerando prosa (`malformed_output`). A campanha passa a rodar de um snapshot no ext4 (`/home/foxtrot/local-llm-benchmark/src/4b-worker-v2-31a1d4b`, commit `31a1d4b`), onde o probe confirma que as regras funcionam.
-- **`pytest.ini` do repositório liberado** só para leitura no sandbox do verificador: o pytest o procura subindo a partir do caminho do oráculo.
-- **Quebra de linha final restaurada** depois do último marcador `>>>>>>> REPLACE`: o servidor a remove no fim da geração, e a gramática exige cada marcador numa linha terminada por LF.
-- **Saída em `qwen-4b-prefix-cache-v2`.** A tentativa abortada a partir de `/mnt/d` foi arquivada como `-v2-drvfs-aborted`.
-- **No ext4, mais dois bloqueios (commit `c05d697`, 13h25).**
-  - O pytest abre `/dev/null` para escrita, porque é o arquivo de log padrão. Agora `/dev/null` tem permissão de escrita.
-  - O pytest também lista cada diretório desde a raiz do repositório, definida pelo `pytest.ini`, até o oráculo. O sandbox ganhou `listable_paths`, que libera só a listagem de diretórios (nomes), sem leitura de conteúdo.
-  - A tentativa abortada foi arquivada como `-v2-ext4-aborted-devnull`.
+- **Landlock neither protects nor allows paths on `/mnt/d` (drvfs/9p).** With the guard active, even `corpus/support` and `pytest.ini` returned permission denied. The 1st run therefore aborted: the evaluator failed and repair received the permission error, generating prose (`malformed_output`). The campaign now runs from an ext4 snapshot (`/home/foxtrot/local-llm-benchmark/src/4b-worker-v2-31a1d4b`, commit `31a1d4b`), where the probe confirms the rules work.
+- **Repository `pytest.ini` allowed** read-only in the verifier sandbox: pytest searches for it upward from the oracle path.
+- **Final newline restored** after the last `>>>>>>> REPLACE` marker: the server removes it at the end of generation, and the grammar requires each marker on an LF-terminated line.
+- **Output in `qwen-4b-prefix-cache-v2`.** The aborted attempt from `/mnt/d` was archived as `-v2-drvfs-aborted`.
+- **On ext4, two more blockers (commit `c05d697`, 13h25).**
+  - pytest opens `/dev/null` for writing because it is the default log file. `/dev/null` now has write permission.
+  - pytest also lists each directory from the repository root, defined by `pytest.ini`, to the oracle. The sandbox gained `listable_paths`, allowing only directory listings (names), without reading contents.
+  - The aborted attempt was archived as `-v2-ext4-aborted-devnull`.
 
-## Resultados da campanha (29/10, 13h28–13h58)
+## Campaign results (29/10, 13h28–13h58)
 
-A campanha rodou a partir do snapshot ext4, commit `c05d697`, e gravou os resultados em `/home/foxtrot/local-llm-benchmark/results/qwen-4b-prefix-cache-v2`.
+The campaign ran from the ext4 snapshot, commit `c05d697`, and saved results in `/home/foxtrot/local-llm-benchmark/results/qwen-4b-prefix-cache-v2`.
 
-- 108 unidades, **0 falhas de infraestrutura**.
-- O prefixo usado foi o `bottle-0.13.2` inteiro (179.962 bytes, cerca de 46 mil tokens), sem corte.
+- 108 units, **0 infrastructure failures**.
+- The prefix used was the entire `bottle-0.13.2` (179.962 bytes, about 46 thousand tokens), without truncation.
 
-**Ressalva:** com temperatura 0, as três repetições de cada tarefa saíram idênticas. A amostra efetiva é de **12 tarefas por braço**, não 36.
+**Caveat:** at temperature 0, all three repetitions of each task were identical. The effective sample is **12 tasks per arm**, not 36.
 
-### Latência: o cache funciona
+### Latency: the cache works
 
-| Braço | TTFT (mediana) | Prompt processado | Tokens do cache | Tempo/episódio | Decode | Mediana do pico de VRAM por episódio |
+| Arm | TTFT (median) | Processed prompt | Cache tokens | Time/episode | Decode | Median peak VRAM per episode |
 |---|---:|---:|---:|---:|---:|---:|
-| P-W16 (trechos de até 16K, sem prefixo) | 82 ms | 557 | 2.844 | 8,3 s | 85 tok/s | 3.871 MiB |
-| P-WL-cold (prefixo de cerca de 46K, cache frio) | **16,1 s** | 46.075 | 0 | 22,1 s | 66 tok/s | 4.510 MiB |
-| P-WL-warm (o mesmo prefixo, já no cache) | **158 ms** | 393 | 45.455 (99,5%) | 9,2 s | 67 tok/s | 4.508 MiB |
+| P-W16 (excerpts up to 16K, no prefix) | 82 ms | 557 | 2.844 | 8,3 s | 85 tok/s | 3.871 MiB |
+| P-WL-cold (prefix about 46K, cold cache) | **16,1 s** | 46.075 | 0 | 22,1 s | 66 tok/s | 4.510 MiB |
+| P-WL-warm (same prefix, already cached) | **158 ms** | 393 | 45.455 (99,5%) | 9,2 s | 67 tok/s | 4.508 MiB |
 
-- Com o prefixo do repositório já no cache, o tempo até o primeiro token cai **cerca de 100 vezes** (de 16 s para 0,16 s). O episódio fica com custo parecido ao do W16, mesmo com 46 mil tokens de contexto.
-- O custo do contexto longo aparece no decode: cerca de 22% mais lento (85 → 67 tok/s).
-- O contexto longo usa cerca de 640 MiB a mais de VRAM.
+- With the repository prefix already cached, time to first token falls **about 100 times** (from 16 s to 0,16 s). Episode cost becomes similar to W16, even with 46 thousand context tokens.
+- Long-context cost appears in decode: about 22% slower (85 → 67 tok/s).
+- Long context uses about 640 MiB more VRAM.
 
-### Qualidade: inconclusiva, por dois defeitos de desenho
+### Quality: inconclusive because of two design defects
 
-| Braço | Tarefas aprovadas | Falhas de edição: `zero_occurrences` / `malformed_output` |
+| Arm | Tasks passed | Edit failures: `zero_occurrences` / `malformed_output` |
 |---|---|---|
-| P-W16 | 2/12 (`cont_path`, `recover_decode`) | 5 / 1 tarefas |
-| P-WL-cold | 1/12 (`recover_decode`) | 6 / 4 tarefas |
-| P-WL-warm | 2/12 (`mcp_header`, `recover_decode`) | 6 / 4 tarefas |
+| P-W16 | 2/12 (`cont_path`, `recover_decode`) | 5 / 1 tasks |
+| P-WL-cold | 1/12 (`recover_decode`) | 6 / 4 tasks |
+| P-WL-warm | 2/12 (`mcp_header`, `recover_decode`) | 6 / 4 tasks |
 
-O acerto foi muito abaixo dos 68% do OpenCode com o mesmo modelo. Há dois motivos, e nenhum é a capacidade do modelo de resolver a tarefa:
+The pass rate was far below OpenCode's 68% with the same model. There are two reasons, neither being the model's ability to solve the task:
 
-1. **O prefixo mascarado induz o erro.** `corpus/support/prefix.py` troca as linhas tocadas por qualquer tarefa por `# task-specific line withheld`, para não vazar soluções no prefixo comum. O modelo copia esse marcador para o bloco SEARCH, que então não casa com o arquivo real:
-   - em P-WL-cold, isso aconteceu em 9 das 18 unidades com `zero_occurrences`;
-   - em P-WL-warm, em 12 das 18.
-2. **O contrato do worker F3 não dá chance de reparo quando a edição não aplica.** Em `worker_runner.py:234-236`, uma edição rejeitada (`zero_occurrences` ou `malformed_output`) encerra o episódio na hora. O único reparo (`repairs: 1`) só acontece depois de um teste visível falhar.
+1. **The masked prefix induces the error.** `corpus/support/prefix.py` replaces lines touched by any task with `# task-specific line withheld`, to avoid leaking solutions in the common prefix. The model copies that marker into the SEARCH block, which then does not match the real file:
+   - in P-WL-cold, this happened in 9 of the 18 units with `zero_occurrences`;
+   - in P-WL-warm, in 12 of the 18.
+2. **The F3 worker contract gives no repair opportunity when an edit does not apply.** In `worker_runner.py:234-236`, a rejected edit (`zero_occurrences` or `malformed_output`) ends the episode immediately. The sole repair (`repairs: 1`) occurs only after a visible test fails.
 
-   Por isso, o T3b mede a capacidade do 4B de copiar um trecho exato na primeira tentativa. O W16 também falha nisso em 5 das 12 tarefas, sem nenhum marcador envolvido. A ferramenta de edição do OpenCode é mais tolerante e devolve o erro para o modelo tentar de novo.
+   Consequently, T3b measures the 4B's ability to copy an exact excerpt on the first attempt. W16 also fails at this in 5 of 12 tasks, without any marker involved. OpenCode's editing tool is more tolerant and returns the error for the model to try again.
 
-Diferenças curiosas entre cold e warm na mesma tarefa (`mcp_header`, `js_sign`, `cont_path`) indicam que a numérica do prefill muda com o cache: o mesmo prompt, com temperatura 0, gera saídas diferentes.
+Curious differences between cold and warm on the same task (`mcp_header`, `js_sign`, `cont_path`) indicate that prefill numerics change with cache: the same prompt at temperature 0 generates different outputs.
 
-### Conclusão e próximos passos
+### Conclusion and next steps
 
-- **Comprovado:** o prefixo de repositório em cache é viável na 3070. Com 46 mil tokens mais KV q4_0, o pico ficou em 4,5 GB, e o TTFT cai para cerca de 0,16 s.
-- **Não comprovado:** se o contexto longo melhora a qualidade. Para medir isso, seria preciso:
-  1. mostrar no pacote WL o trecho real atual das linhas mascaradas (ou montar o prefixo sem máscara, a partir do arquivo de cada tarefa), para o SEARCH ter uma fonte correta;
-  2. permitir um reparo também quando a edição é rejeitada, devolvendo ao modelo o diagnóstico `zero_occurrences`;
-  3. usar 1 repetição com temperatura 0, ou 3 repetições com amostragem.
+- **Established:** a cached repository prefix is viable on the 3070. With 46 thousand tokens plus KV q4_0, peak was 4,5 GB, and TTFT falls to about 0,16 s.
+- **Not established:** whether long context improves quality. Measuring this would require:
+  1. showing the actual current excerpt of masked lines in the WL package (or building the unmasked prefix from each task's file), so SEARCH has a correct source;
+  2. allowing a repair when an edit is rejected as well, returning the `zero_occurrences` diagnostic to the model;
+  3. using 1 repetition at temperature 0, or 3 repetitions with sampling.
 
-## v3: desenho corrigido (29/10, 15h53 às 16h09)
+## v3: corrected design (29/10, 15h53 to 16h09)
 
-Commits `852803f` (implementação, Codex Terra) e `c37ce40` (correção de alinhamento). Snapshot ext4 em `c37ce40`. Resultados em `/home/foxtrot/local-llm-benchmark/results/qwen-4b-prefix-cache-v3`. A 1ª tentativa abortou no primeiro episódio WL e foi arquivada em `-v3-aborted-align`: depois da edição da fase 1, uma linha omitida passou a alinhar como apagada.
+Commits `852803f` (implementation, Codex Terra) and `c37ce40` (alignment fix). ext4 snapshot at `c37ce40`. Results in `/home/foxtrot/local-llm-benchmark/results/qwen-4b-prefix-cache-v3`. The 1st attempt aborted in the first WL episode and was archived in `-v3-aborted-align`: after the phase 1 edit, an omitted line aligned as deleted.
 
-### O que mudou
+### What changed
 
-- **Linhas omitidas visíveis.** Os pacotes WL ganham uma seção com o texto atual, no workspace, de todas as linhas mascaradas do host. Cada região vem com 2 linhas de contexto e número de linha. São cerca de 670 tokens no bottle e 180 no ms. O W16 não recebe essa seção.
-- **Reparo após edição rejeitada.** O modelo recebe o status e a mensagem do erro e pode tentar de novo. Fica atrás de uma opção (`repair_rejected_edits`), desligada por padrão no worker.
-- **Até 2 reparos**, compartilhados entre edição rejeitada e teste visível.
-- **1 repetição.** São 36 unidades.
+- **Visible omitted lines.** WL packages gain a section with the current workspace text of all masked host lines. Each region comes with 2 lines of context and a line number. This is about 670 tokens in bottle and 180 in ms. W16 does not receive this section.
+- **Repair after rejected edit.** The model receives the status and error message and can retry. This is behind an option (`repair_rejected_edits`), disabled by default in the worker.
+- **Up to 2 repairs**, shared between rejected edits and visible tests.
+- **1 repetition.** There are 36 units.
 
-Ressalva: o WL recebe informação que o W16 não recebe. Por isso, a comparação entre W16 e WL não isola só o tamanho do contexto.
+Caveat: WL receives information W16 does not. The W16 and WL comparison therefore does not isolate context size alone.
 
-### Resultado
+### Result
 
-Houve zero falhas de infraestrutura.
+There were zero infrastructure failures.
 
-| Braço | Aprovadas | Episódios com reparo de edição | Última rejeição | TTFT (mediana) | Tempo/episódio |
+| Arm | Passed | Episodes with edit repair | Last rejection | TTFT (median) | Time/episode |
 |---|---|---:|---|---:|---:|
 | P-W16 | 2/12 (`cont_path`, `recover_decode`) | 6 | 1 `zero_occurrences` | 1,0 s | 11,9 s |
 | P-WL-cold | 2/12 (`cont_path`, `recover_decode`) | 10 | 9 `zero_occurrences`, 1 `malformed_output` | 17,8 s | 32,3 s |
 | P-WL-warm | 2/12 (`cont_path`, `recover_decode`) | 9 | 8 `zero_occurrences`, 1 `malformed_output` | 2,1 s | 13,8 s |
 
-As duas aprovações são as mesmas nos três braços. A falha dominante do W16 mudou: em 7 de 12 tarefas, o modelo respondeu `BLOCKED: insufficient_context`, porque a janela selecionada não continha o código do bug.
+The two passes are the same in all three arms. W16's dominant failure changed: in 7 of 12 tasks, the model responded `BLOCKED: insufficient_context` because the selected window did not contain the buggy code.
 
-### Por que a v3 ainda não mede qualidade
+### Why v3 still does not measure quality
 
-1. **O marcador sumiu, mas o SEARCH continua errado.** `marker_in_search` ficou em 0 de 36 unidades. Nos WL, porém, o modelo escreve o SEARCH a partir do que ele imagina que está no arquivo, e não por cópia. Exemplos:
-   - em `py_query`, `_parse_qsl` foi indentado como método;
-   - em `js_sign`, o SEARCH traz um `Math.abs` que não existe no arquivo;
-   - em `mcp_header` (os dois braços WL) e em `recover_date` (só no cold), o modelo copiou os **números de linha** da nova seção (`1606: ...`).
-2. **O reparo de edição não ajuda com temperatura 0.** A mensagem diz só "Search block was not found". Com a mesma informação e temperatura 0, o modelo reenvia a mesma saída, idêntica byte a byte: 15 de 17 reparos de edição no WL frio, 14 de 16 no WL quente e 3 de 9 no W16. A ferramenta de edição do OpenCode funciona porque o modelo relê o arquivo depois do erro.
+1. **The marker disappeared, but SEARCH is still wrong.** `marker_in_search` was 0 of 36 units. In WL, however, the model writes SEARCH from what it imagines is in the file rather than copying. Examples:
+   - in `py_query`, `_parse_qsl` was indented as a method;
+   - in `js_sign`, SEARCH includes a `Math.abs` absent from the file;
+   - in `mcp_header` (both WL arms) and `recover_date` (cold only), the model copied the **line numbers** from the new section (`1606: ...`).
+2. **Edit repair does not help at temperature 0.** The message says only "Search block was not found". With the same information and temperature 0, the model resends the same output, byte-for-byte identical: 15 of 17 edit repairs in cold WL, 14 of 16 in warm WL and 3 of 9 in W16. OpenCode's editing tool works because the model rereads the file after the error.
 
-### Conclusão
+### Conclusion
 
-- **Comprovado de novo:** o custo de latência. O WL quente fica perto do W16 (13,8 s contra 11,9 s), e o WL frio custa quase 3 vezes mais (32,3 s).
-- **Qualidade:** neste worker de chamada única com SEARCH/REPLACE, o contexto longo **não melhorou** o acerto (2/12 nos três braços). O gargalo é a cópia exata do SEARCH pelo 4B, e não a falta de contexto. Isso vale tanto para o prefixo comum quanto para a seção de linhas omitidas.
-- Para seguir com o T3b, seria preciso mudar o protocolo de edição, e não o contexto. Duas opções:
-  - devolver no erro as linhas mais próximas do arquivo real (busca aproximada);
-  - aceitar SEARCH com espaços normalizados ou âncoras por número de linha.
+- **Established again:** latency cost. Warm WL is close to W16 (13,8 s versus 11,9 s), and cold WL costs almost 3 times more (32,3 s).
+- **Quality:** in this single-call worker with SEARCH/REPLACE, long context **did not improve** the pass rate (2/12 in all three arms). The bottleneck is the 4B's exact SEARCH copying, not lack of context. This applies to both the common prefix and the omitted-lines section.
+- Continuing T3b would require changing the editing protocol, not the context. Two options:
+  - return the closest lines from the real file in the error (approximate search);
+  - accept SEARCH with normalized spaces or line-number anchors.
 
-  As duas mudam o que está sendo medido. Por isso, recomendo encerrar o T3b com esta conclusão e voltar às direções fortes da etapa 5.
+  Both change what is measured. Therefore, I recommend ending T3b with this conclusion and returning to the strong directions from stage 5.
 
-Diagnóstico: `scratchpad/t3bv3_diag.py`, `scratchpad/count_lineno.py` e `scratchpad/show_cands.py` e `scratchpad/count_repeats.py`. A saída está em `scratchpad/t3bv3-diag.txt`.
+Diagnostics: `scratchpad/t3bv3_diag.py`, `scratchpad/count_lineno.py` and `scratchpad/show_cands.py` and `scratchpad/count_repeats.py`. Output is in `scratchpad/t3bv3-diag.txt`.

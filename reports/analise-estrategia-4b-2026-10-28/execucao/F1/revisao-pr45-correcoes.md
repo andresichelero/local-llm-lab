@@ -1,35 +1,35 @@
-# Correções da revisão do PR 45
+# PR 45 review fixes
 
-## Mudanças
+## Changes
 
-- O proxy emite apenas `text/event-stream` ou `application/json`.
-- O baseline executa o teste visível e o oráculo em bubblewrap separado, sem rede. O workspace é gravável; scripts e oráculo são somente leitura. HOME e temporários são isolados. Sem bubblewrap, o resultado é infraestrutura. O T2 usa o mesmo avaliador.
-- No T3b, Landlock concede ao teste visível apenas cópias dos scripts necessários. O oráculo tem sua própria cópia privada. O workspace e um diretório temporário dedicado são graváveis; o journal fica protegido.
-- Erros de importação e sintaxe provenientes do workspace durante a coleta são falhas do modelo. Indisponibilidade do avaliador continua infraestrutura. Uma rejeição visível comprovada não é apagada por falha posterior do oráculo.
-- O orçamento de parede do worker tem motivo próprio. Um timeout não sobrescreve falha de servidor já identificada. O follow-up recebe o saldo de reparos da primeira fase.
-- O agregado v3 contém resumo, manifesto e 36 unidades. Os rótulos de VRAM e as contagens documentais foram corrigidos.
+- The proxy emits only `text/event-stream` or `application/json`.
+- The baseline runs the visible test and oracle in separate bubblewrap sandboxes without network access. The workspace is writable; scripts and oracle are read-only. HOME and temporary files are isolated. Without bubblewrap, the result is infrastructure failure. T2 uses the same evaluator.
+- In T3b, Landlock grants the visible test only copies of the necessary scripts. The oracle has its own private copy. The workspace and a dedicated temporary directory are writable; the journal is protected.
+- Import and syntax errors from the workspace during collection are model failures. Evaluator unavailability remains infrastructure. A confirmed visible rejection is not erased by a subsequent oracle failure.
+- The worker wall-clock budget has its own reason. A timeout does not overwrite an already identified server failure. The follow-up receives the remaining first-phase repair budget.
+- The v3 aggregate contains a summary, manifest and 36 units. VRAM labels and documentation counts were corrected.
 
-## Revalidação sem GPU
+## Revalidation without GPU
 
-Os dados brutos foram apenas lidos. Os workspaces foram copiados para diretórios temporários antes da avaliação. Não houve inferência. A evidência por avaliação está em [pr45-regrade.jsonl](../../../../results/3070-benchmark/pr45-regrade.jsonl).
+Raw data were only read. Workspaces were copied to temporary directories before evaluation. There was no inference. Per-evaluation evidence is in [pr45-regrade.jsonl](../../../../results/3070-benchmark/pr45-regrade.jsonl).
 
-Foram reavaliados **425 workspaces**, em **453 avaliações privadas**: 170 tentativas da etapa 4, 103 da etapa 5, 36 objetivos privados aplicáveis dos 8 workspaces do T2, 108 unidades T3b v2 e 36 unidades T3b v3. Nenhuma avaliação nova retornou infraestrutura. As notas privadas disponíveis da etapa 4 (170), etapa 5 (103) e T2 (36) coincidiram com as publicadas. No T2, fases sem oráculo privado e objetivos não iniciados não foram comparados.
+**425 workspaces** were reevaluated in **453 private evaluations**: 170 stage 4 attempts, 103 stage 5 attempts, 36 applicable private objectives from the 8 T2 workspaces, 108 T3b v2 units and 36 T3b v3 units. No new evaluation returned infrastructure failure. Available private scores for stage 4 (170), stage 5 (103) and T2 (36) matched those published. In T2, phases without a private oracle and objectives not started were not compared.
 
-No T3b, 9 de 102 notas comparáveis na v2 e 5 de 35 na v3 mudaram de falha para aprovação. As outras 7 unidades não tinham nota privada comparável. As 14 divergências têm erro histórico do Node/OpenSSL no oráculo. Todas as entregas terminaram rejeitadas; o regrade não reconstrói a interação que teria ocorrido com o verificador saudável.
+In T3b, 9 of 102 comparable scores in v2 and 5 of 35 in v3 changed from fail to pass. The other 7 units had no comparable private score. The 14 discrepancies have a historical Node/OpenSSL error in the oracle. All submissions ended rejected; the regrade does not reconstruct the interaction that would have occurred with a healthy verifier.
 
-O oráculo histórico registrou erro de infraestrutura JavaScript em 18 unidades v2 e 6 v3. Destas, quatro eram `P-W16/js_sign`: três repetições v2 e uma v3. Foram rejeitadas por ausência de novo diagnóstico visível após erro ambiental, sem falha de modelo comprovada. Excluindo essa tarefa, a taxa por tarefas do P-W16 muda de **2/12 para 2/11**, tanto na v2 quanto na v3. README e RESULTS apresentam essa correção ao lado das contagens históricas. As demais 20 unidades com esse erro também registram rejeição de edição ou saída. Ainda assim, o erro ambiental pode ter influenciado reparos; não se pode reconstruir o resultado contrafactual.
+The historical oracle recorded a JavaScript infrastructure error in 18 v2 units and 6 v3 units. Four were `P-W16/js_sign`: three v2 repetitions and one v3 repetition. They were rejected because no new visible diagnostic followed the environmental error, with no proven model failure. Excluding that task, P-W16's task rate changes from **2/12 to 2/11**, in both v2 and v3. README and RESULTS present this correction alongside historical counts. The other 20 units with this error also recorded edit or output rejection. Even so, the environmental error may have influenced repairs; the counterfactual result cannot be reconstructed.
 
-Os últimos diagnósticos visíveis preservados continham erro OpenSSL em 12 unidades v2 e 6 v3. Em 14 delas, o único evento de verificação foi seguido por nova geração: o diagnóstico foi devolvido ao modelo. Nas outras quatro, houve mais de uma verificação e o journal não preserva o texto intermediário. Não é possível provar qual texto foi devolvido. A comparação de qualidade do T3b permanece inconclusiva.
+The last preserved visible diagnostics contained an OpenSSL error in 12 v2 and 6 v3 units. In 14 of them, the only verification event was followed by new generation: the diagnostic was returned to the model. In the other four, there was more than one verification and the journal does not retain the intermediate text. It is impossible to prove which text was returned. The T3b quality comparison remains inconclusive.
 
-### Outros pontos da revisão
+### Other review points
 
-- **Importação e coleta:** zero unidades classificadas como infraestrutura com erro de importação ou sintaxe do candidato nos artefatos pesquisados. A busca cobriu os logs e journals preservados; não prova eventos que não foram registrados.
-- **Vazamento de oráculo ou patch:** zero coincidências de caminhos privados ou trechos exatos com pelo menos 30 caracteres nos diagnósticos visíveis preservados: 199 registros da etapa 4, 119 da etapa 5, 44 do T2, 48 da v2 e 18 da v3. Fragmentos menores ou parafraseados não foram descartados. Diagnósticos intermediários do T3b não foram todos preservados.
-- **Orçamento de parede:** zero registros de `wall_budget` classificados como infraestrutura nos journals e saídas T3b v2/v3 pesquisados.
-- **Código 124 e servidor:** 11 tentativas das etapas 4 e 5 terminaram em timeout e registraram `ConnectionResetError` no último pedido. A aplicação literal da prioridade nova daria infraestrutura a quatro resultados finais da etapa 4, cinco finais da etapa 5 e duas tentativas intermediárias de cascata. Não há horário por pedido que permita determinar se o reset precedeu o timeout ou foi consequência do cancelamento. Não foram encontrados HTTP 500, `server_exited` ou conexão recusada nesses logs. As tabelas preservam as classificações históricas, com essa ressalva.
+- **Import and collection:** zero units classified as infrastructure with candidate import or syntax errors in the artifacts searched. The search covered preserved logs and journals; it cannot prove events that were not recorded.
+- **Oracle or patch leakage:** zero matches for private paths or exact fragments of at least 30 characters in preserved visible diagnostics: 199 records from stage 4, 119 from stage 5, 44 from T2, 48 from v2 and 18 from v3. Smaller or paraphrased fragments were not ruled out. Not all intermediate T3b diagnostics were preserved.
+- **Wall-clock budget:** zero `wall_budget` records classified as infrastructure in the T3b v2/v3 journals and outputs searched.
+- **Code 124 and server:** 11 attempts from stages 4 and 5 ended in timeout and recorded `ConnectionResetError` on the last request. Literal application of the new priority would classify four final stage 4 results, five final stage 5 results and two intermediate cascade attempts as infrastructure. There is no per-request timestamp to determine whether the reset preceded timeout or resulted from cancellation. No HTTP 500, `server_exited` or connection refused was found in these logs. Tables retain historical classifications, with this caveat.
 
-## Verificação do código
+## Code verification
 
-Os testes cobrem mounts, ausência de bubblewrap, isolamento real, erros de importação e sintaxe, falha do avaliador, proteção do journal, orçamento de reparos e prioridade de falhas. O Ruff passou nos arquivos Python alterados. O projeto não define comando de typecheck; nenhum typechecker estava disponível no PATH. A suíte completa passou: **326 testes e 47 subtestes**, com o Python solicitado, `PYTHONDONTWRITEBYTECODE=1` e `pytest -p no:cacheprovider`.
+Tests cover mounts, missing bubblewrap, real isolation, import and syntax errors, evaluator failure, journal protection, repair budget and failure priority. Ruff passed on the changed Python files. The project defines no typecheck command; no typechecker was available on PATH. The full suite passed: **326 tests and 47 subtests**, with the requested Python, `PYTHONDONTWRITEBYTECODE=1` and `pytest -p no:cacheprovider`.
 
-**Desvio da restrição:** a suíte inclui dois casos parametrizados que iniciam o OpenCode real com `debug config`. Eles foram executados por engano durante a suíte, apesar da proibição de iniciar o OpenCode real. Não houve execução de servidor real, inferência ou uso de GPU nesses casos. Uma nova execução, excluindo esses dois casos, passou com **324 testes e 47 subtestes**, com 2 casos desmarcados.
+**Restriction deviation:** the suite includes two parametrized cases that start real OpenCode with `debug config`. They were run by mistake during the suite, despite the prohibition on starting real OpenCode. There was no real server execution, inference or GPU use in these cases. A new run excluding those two cases passed with **324 tests and 47 subtests**, with 2 cases deselected.

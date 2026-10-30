@@ -1,44 +1,44 @@
-# Linha de base OpenCode: etapa 1, controle B0
+# OpenCode baseline: stage 1, B0 control
 
-Data: 29/10/2026. Autor: Claude (orquestrador).
+Date: 29/10/2026. Author: Claude (orchestrator).
 
 - Runner: `benchmark/opencode_baseline.py`, branch `feat/4b-worker-v2`.
-- Controle: Qwen3.5-4B Q4_K_M, KV q4_0/q4_0, contexto de 64K, cache de prompt ligado, thinking desligado, temperatura 0.
-- Ambiente: OpenCode 1.19.5 isolado em bubblewrap, llama.cpp v0.8.0, 12 tarefas do corpus com 2 repetições cada.
+- Control: Qwen3.5-4B Q4_K_M, KV q4_0/q4_0, 64K context, prompt cache enabled, thinking disabled, temperature 0.
+- Environment: OpenCode 1.19.5 isolated in bubblewrap, llama.cpp v0.8.0, 12 corpus tasks with 2 repetitions each.
 
-## Duas rodadas, com uma variável de harness diferente
+## Two rounds, with one different harness variable
 
-| Protocolo | Limite de passos do OpenCode | Episódios | Sucessos | Taxa |
+| Protocol | OpenCode step limit | Episodes | Successes | Rate |
 |---|---:|---:|---:|---:|
-| bwrap-v4 | 20 | 23 (o 24º não rodou por erro do avaliador) | 15 | 65% |
-| bwrap-v5 | 40 | 24 | **16** (o runner registrou 17; ver correção abaixo) | **67%** |
+| bwrap-v4 | 20 | 23 (the 24th did not run because of an evaluator error) | 15 | 65% |
+| bwrap-v5 | 40 | 24 | **16** (the runner recorded 17; see correction below) | **67%** |
 
-**Correções aplicadas aos dados:**
+**Corrections applied to the data:**
 
-1. **v4, `tests_query` r2:** o avaliador abortou por falta de `CORPUS_SUPPORT` no ambiente do oráculo. Esse episódio não entra na conta. Corrigido em `f3a895d`.
-2. **v5, `cont_path` r2:** a fase 1 esgotou os 40 passos e o runner classificou isso como "infraestrutura". Com essa classificação o episódio ganhou uma 2ª tentativa, que passou. **Conta-se a 1ª tentativa, que é falha do modelo.** O bug de classificação foi corrigido em `417e96d`, que é o protocolo v6, usado a partir da etapa 2.
+1. **v4, `tests_query` r2:** the evaluator aborted because `CORPUS_SUPPORT` was missing from the oracle environment. This episode is excluded from the count. Fixed in `f3a895d`.
+2. **v5, `cont_path` r2:** phase 1 exhausted 40 steps and the runner classified this as "infrastructure". With that classification the episode received a 2nd attempt, which passed. **The 1st attempt counts, and it is a model failure.** The classification bug was fixed in `417e96d`, which is the v6 protocol, used from stage 2 onwards.
 
-## Por tarefa (v5, após a correção)
+## By task (v5, after correction)
 
-| Tarefa | r1 | r2 | Observação |
+| Task | r1 | r2 | Note |
 |---|---|---|---|
-| js_plural, mcp_header, mcp_params, recover_decode, cont_quote | ✅ | ✅ | estáveis |
-| py_query | ✅ | ✅ | r2 levou 36 passos e 106 s |
-| js_sign | ✅ | ❌ | r2 esgotou 40 passos |
-| recover_date | ❌ | ✅ | r1 esgotou 40 passos |
-| cont_path | ✅ | ❌ | r2 parou na fase 1, no limite de passos |
-| tests_range | ❌ (falha do CLI) | ✅ | |
-| py_range | ❌ | ❌ | 0/4 somando v4 e v5: a tarefa mais difícil do corpus |
-| tests_query | ❌ | ❌ (tempo esgotado, 505 s) | 0/3 avaliáveis somando v4 e v5 |
+| js_plural, mcp_header, mcp_params, recover_decode, cont_quote | ✅ | ✅ | stable |
+| py_query | ✅ | ✅ | r2 took 36 steps and 106 s |
+| js_sign | ✅ | ❌ | r2 exhausted 40 steps |
+| recover_date | ❌ | ✅ | r1 exhausted 40 steps |
+| cont_path | ✅ | ❌ | r2 stopped in phase 1 at the step limit |
+| tests_range | ❌ (CLI failure) | ✅ | |
+| py_range | ❌ | ❌ | 0/4 across v4 and v5: the hardest task in the corpus |
+| tests_query | ❌ | ❌ (timeout, 505 s) | 0/3 evaluable across v4 and v5 |
 
-## Custo operacional (v5)
+## Operational cost (v5)
 
-- Mediana dos episódios com sucesso: **33 s**. TTFT mediano de 200–450 ms por requisição.
-- **93,5%** dos tokens de prompt vieram do cache.
-- Pico de VRAM do dispositivo nos smokes: ~5,3 GiB.
+- Median successful episode: **33 s**. Median TTFT of 200–450 ms per request.
+- **93,5%** of prompt tokens came from the cache.
+- Device VRAM peak in smoke tests: ~5,3 GiB.
 
-## Leitura
+## Interpretation
 
-- **O 4B resolve a maioria das tarefas do corpus** com um harness maduro e configuração de runtime sensata. Isso contrasta com 0/17 no harness próprio na F1, mas nos dois casos as tarefas e os harnesses são diferentes.
-- **O limite de 20 ou 40 passos não mudou a taxa de forma detectável** (65% contra 67%, dentro do ruído). A variação entre repetições é alta: 4 tarefas trocaram de resultado entre r1 e r2. Para afirmar diferenças nas etapas 2 e 3, é preciso olhar a magnitude e não tratar 1 ou 2 episódios como efeito.
-- O v5 (40 passos) é o controle das etapas seguintes.
+- **The 4B solves most corpus tasks** with a mature harness and a sensible runtime configuration. This contrasts with 0/17 in the custom harness in F1, but the tasks and harnesses differ in the two cases.
+- **The 20 or 40 step limit did not change the rate detectably** (65% versus 67%, within the noise). Variation between repetitions is high: 4 tasks changed outcomes between r1 and r2. To claim differences in stages 2 and 3, consider the magnitude and do not treat 1 or 2 episodes as an effect.
+- v5 (40 steps) is the control for subsequent stages.

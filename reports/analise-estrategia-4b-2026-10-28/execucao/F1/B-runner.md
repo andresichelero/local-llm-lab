@@ -1,48 +1,48 @@
-# F1 B — runner da linha de base OpenCode
+# F1 B — OpenCode baseline runner
 
-## Etapa 2: isolamento e smokes reais (29/10/2026)
+## Stage 2: isolation and real smoke tests (29/10/2026)
 
-Concluída a qualificação dos dois smokes abaixo; a campanha de 132 episódios não foi iniciada. Protocolo final `qwen-4b-opencode-baseline-b-20261029-bwrap-v4`, resultado bruto em `/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v4/`. A tabela da etapa 1 abaixo é um registro histórico e suas limitações sobre ausência de sandbox e de smoke não descrevem a etapa 2.
+Qualification of the two smoke tests below is complete; the 132-episode campaign was not started. Final protocol `qwen-4b-opencode-baseline-b-20261029-bwrap-v4`, raw result at `/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-bwrap-v4/`. The stage 1 record below is historical, and its limitations concerning the lack of a sandbox and smoke tests do not describe stage 2.
 
-### Isolamento
+### Isolation
 
-Cada chamada `opencode run` é lançada por bubblewrap 0.9.0 com `/usr` read-only, symlinks `/bin`, `/lib`, `/lib64`, `/proc`, `/dev`, `/tmp` em tmpfs, namespace PID e `--die-with-parent`. O binário real fica montado read-only em `/opt/opencode`, o Node em `/opt/node`, o workspace em `/workspace` (rw) e a home persistente do episódio em `/episode-home` (rw), fora do workspace avaliado. `HOME` e `XDG_*` apontam para essa home e o comando usa `--dir /workspace`. A mesma home persiste entre as duas invocações da continuação. O repositório, `/mnt/d`, `/home/foxtrot`, oráculos e patches de referência não são montados.
+Each `opencode run` call is launched by bubblewrap 0.9.0 with `/usr` read-only, symlinks `/bin`, `/lib`, `/lib64`, `/proc`, `/dev`, `/tmp` in tmpfs, a PID namespace and `--die-with-parent`. The real binary is mounted read-only at `/opt/opencode`, Node at `/opt/node`, the workspace at `/workspace` (rw) and the episode's persistent home at `/episode-home` (rw), outside the evaluated workspace. `HOME` and `XDG_*` point to that home and the command uses `--dir /workspace`. The same home persists across the two continuation invocations. The repository, `/mnt/d`, `/home/foxtrot`, oracles and reference patches are not mounted.
 
-A rede é compartilhada: **o bubblewrap não bloqueia acesso à rede externa nem a outros serviços acessíveis na rede do host**. O perfil nega webfetch/websearch, mas não impede que um comando bash use a rede. O manifesto registra essa limitação e o hash do executável bubblewrap. A avaliação visível e o oráculo ainda são executados pelo supervisor fora do sandbox; não são dados ao OpenCode como feedback.
+The network is shared: **bubblewrap does not block access to the external network or other services accessible on the host network**. The profile denies webfetch/websearch, but does not prevent a bash command from using the network. The manifest records this limitation and the bubblewrap executable hash. The visible evaluation and oracle still run under the supervisor outside the sandbox; they are not given to OpenCode as feedback.
 
-A prova negativa roda automaticamente usando a mesma função e as mesmas opções de montagem da invocação OpenCode. Ela testa leitura de `/workspace/TASK.md`, tenta `cat` no caminho absoluto real do oráculo, `ls /mnt/d` e `ls /home`, sem exibir o conteúdo privado. Nos dois episódios finais a saída foi:
+The negative probe runs automatically using the same function and mount options as the OpenCode invocation. It tests reading `/workspace/TASK.md`, attempts `cat` on the actual absolute oracle path, `ls /mnt/d` and `ls /home`, without displaying private content. In both final episodes the output was:
 
 ```text
 workspace_readable oracle_denied mnt_d_denied home_denied
 returncode=0; --unshare-pid presente; --unshare-net ausente
 ```
 
-A prova completa, com comando e resultado, está em `isolation-probe.json` de cada tentativa. O teste automatizado executa a mesma verificação, e o `debug config` do OpenCode 1.19.5 foi validado dentro do bubblewrap sem inferência.
+The complete probe, including command and result, is in each attempt's `isolation-probe.json`. The automated test performs the same check, and OpenCode 1.19.5 `debug config` was validated inside bubblewrap without inference.
 
-### Smokes GPU: resultados finais
+### GPU smoke tests: final results
 
-Os valores de tokens de prompt são a soma de uso registrada pelos turnos OpenCode, incluindo tokens de cache; não representam tokens únicos. Os intervalos `prompt_n` e `cache_n` vêm dos timings de todas as requisições capturados pelo proxy, inclusive requisições auxiliares. TTFT é mediana das requisições com primeiro conteúdo detectado. Pico de VRAM é amostragem do dispositivo inteiro, não memória exclusiva do processo.
+Prompt token values are the sum of usage recorded by OpenCode turns, including cached tokens; they do not represent unique tokens. The `prompt_n` and `cache_n` ranges come from the timings of all requests captured by the proxy, including auxiliary requests. TTFT is the median of requests with first content detected. Peak VRAM samples the entire device, not memory exclusive to the process.
 
-| Medida | B0 `py_query` | B0 `cont_path` |
+| Measure | B0 `py_query` | B0 `cont_path` |
 |---|---:|---:|
-| Causa / categoria | `model_oracle_failed` / modelo | `null` / sucesso |
-| Teste visível | falhou | passou nas duas fases |
-| Oráculo privado | falhou | passou |
-| Tempo total | 47,40 s | 106,05 s |
-| Turnos do modelo | 20 | 27 |
-| Chamadas de ferramenta | 20 | 26 |
-| Tokens de prompt (soma, com cache) | 582.381 | 724.104 |
-| Tokens gerados | 1.403 | 4.205 |
-| Requisições com timings | 21 | 28 |
-| `prompt_n` mínimo–máximo | 21–12.558 | 21–21.997 |
-| `cache_n` mínimo–máximo | 0–34.720 | 0–31.259 |
-| TTFT mediana | 314,8 ms | 251,8 ms |
-| Pico VRAM do dispositivo | 5.329 MiB | 5.325 MiB |
-| Evidência de OOM no log | não | não |
+| Cause / category | `model_oracle_failed` / model | `null` / success |
+| Visible test | failed | passed both phases |
+| Private oracle | failed | passed |
+| Total time | 47,40 s | 106,05 s |
+| Model turns | 20 | 27 |
+| Tool calls | 20 | 26 |
+| Prompt tokens (sum, including cache) | 582.381 | 724.104 |
+| Generated tokens | 1.403 | 4.205 |
+| Requests with timings | 21 | 28 |
+| `prompt_n` minimum–maximum | 21–12.558 | 21–21.997 |
+| `cache_n` minimum–maximum | 0–34.720 | 0–31.259 |
+| Median TTFT | 314,8 ms | 251,8 ms |
+| Device peak VRAM | 5.329 MiB | 5.325 MiB |
+| OOM evidence in log | no | no |
 
-Na continuação a fase 1 terminou em 57,91 s e a fase 2 em 41,22 s; ambas retornaram código 0 e sessão `ses_e7a21b829ffeMCGvh2KtLxpQOx`. O teste visível da primeira fase passou antes de liberar os arquivos e o objetivo seguintes. `result.json`, `events.jsonl`, `server-segment.log`, `workspace.diff`, `oracle-probe.json` e `isolation-probe.json` estão nos diretórios `smoke/B0/py_query-r1/attempt-01/` e `smoke/B0/cont_path-r1/attempt-01/` do protocolo acima.
+In the continuation, phase 1 finished in 57,91 s and phase 2 in 41,22 s; both returned code 0 and session `ses_e7a21b829ffeMCGvh2KtLxpQOx`. The phase-one visible test passed before the next files and objective were released. `result.json`, `events.jsonl`, `server-segment.log`, `workspace.diff`, `oracle-probe.json` and `isolation-probe.json` are in the `smoke/B0/py_query-r1/attempt-01/` and `smoke/B0/cont_path-r1/attempt-01/` directories of the protocol above.
 
-Trechos dos eventos OpenCode, sem conteúdo do oráculo, mostram o trabalho no caminho montado:
+OpenCode event excerpts, without oracle content, show work in the mounted path:
 
 ```text
 py_query:  {"command": "cat /workspace/visible.py"}
@@ -52,7 +52,7 @@ cont_path: {"filePath": "/workspace/verify_phase1.py"}
 cont_path: {"command": "grep -n \"^def \" /workspace/bottle.py | head -30"}
 ```
 
-Comandos executados no WSL, a partir da raiz do worktree:
+Commands executed in WSL from the worktree root:
 
 ```sh
 PY=/home/foxtrot/local-llm-benchmark/envs/lab-validation-20261028/bin/python
@@ -64,32 +64,32 @@ PY=/home/foxtrot/local-llm-benchmark/envs/lab-validation-20261028/bin/python
 # All checks passed!
 ```
 
-As duas primeiras tentativas de desenvolvimento foram preservadas, sem reclassificação retroativa. Em `bwrap-v2`, OpenCode recusou a sintaxe das permissões web antes de inferir; o perfil foi corrigido e testado com o CLI real. Em `bwrap-v3`, ambos os episódios passaram no oráculo e a continuação manteve a sessão, mas o runner atribuiu indevidamente `model_protocol_error` ao examinar saída normal de ferramentas. Testes reproduziram e corrigiram a classificação; os smokes foram repetidos no `bwrap-v4`. Os resultados variaram entre repetições e não demonstram eficácia estatística.
+The first two development attempts were preserved without retroactive reclassification. In `bwrap-v2`, OpenCode rejected the web permission syntax before inference; the profile was corrected and tested with the real CLI. In `bwrap-v3`, both episodes passed the oracle and the continuation retained its session, but the runner incorrectly assigned `model_protocol_error` while examining normal tool output. Tests reproduced and corrected the classification; the smoke tests were repeated in `bwrap-v4`. Results varied across repetitions and do not demonstrate statistical effectiveness.
 
-## Registro histórico da etapa 1 (28/10)
+## Historical stage 1 record (28/10)
 
-Status histórico da etapa 1 em 28/10/2026: implementação e verificações offline. Nenhum smoke com GPU e nenhuma etapa da campanha foram executados nesta etapa. O runner ainda precisa ser qualificado com o OpenCode e o llama-server reais antes da campanha.
+Historical stage 1 status on 28/10/2026: implementation and offline checks. No GPU smoke test or campaign stage was run at this stage. The runner still needs qualification with real OpenCode and llama-server before the campaign.
 
-## Arquitetura e contrato
+## Architecture and contract
 
-`benchmark/opencode_baseline.py` prepara uma cópia do host de cada tarefa, aplica `bug.patch` e fornece `TASK.md`, teste visível e, quando previsto, `tool.py`. Para continuação, só libera objetivo e teste da fase 2 quando a primeira execução termina, fornece um ID de sessão e passa o teste visível da fase 1; a segunda chamada usa `--session` com o mesmo ID. O oráculo é executado uma vez por tentativa, ao final, sem inserir seu conteúdo ou resultado no prompt. A avaliação usa o contrato de classificação de `corpus/validate_corpus.py`. O snapshot inicial e a alteração final produzem `workspace.diff`.
+`benchmark/opencode_baseline.py` prepares a host copy for each task, applies `bug.patch` and provides `TASK.md`, the visible test and, where specified, `tool.py`. For continuation, it releases the phase 2 objective and test only when the first run finishes, provides a session ID and passes the phase 1 visible test; the second call uses `--session` with the same ID. The oracle runs once per attempt, at the end, without inserting its content or result into the prompt. Evaluation uses the classification contract in `corpus/validate_corpus.py`. The initial snapshot and final change produce `workspace.diff`.
 
-O runner usa perfil OpenCode e ambiente HOME/XDG isolados, `opencode run --format json --pure`, provider local e cache de dependências do caminho anterior. Um llama-server permanece ativo por braço, sem reinício entre episódios; uma nova invocação ou recuperação de servidor morto cria uma nova época e perde o cache anterior. Um proxy local registra respostas e TTFT por requisição; logs do servidor e timings do proxy preservam `prompt_n` e `cache_n` quando disponíveis. Eventos registram turnos, chamadas de ferramentas e tokens. `nvidia-smi` é amostrado a cada segundo; o pico é do dispositivo inteiro. OOM é marcado apenas quando o log contém evidência correspondente. Cada tentativa tem resultado próprio; infraestrutura é repetida uma vez, e falhas do modelo não interrompem as próximas tarefas. O manifesto fixa protocolo, cronograma, config, hashes do corpus e código, servidor, OpenCode, modelos, Python, Node e cache de provider; divergências impedem misturar resultados.
+The runner uses an isolated OpenCode profile and HOME/XDG environment, `opencode run --format json --pure`, a local provider and the dependency cache from the previous path. One llama-server remains active per arm without restarting between episodes; a new invocation or recovery of a dead server creates a new epoch and loses the previous cache. A local proxy records responses and TTFT per request; server logs and proxy timings preserve `prompt_n` and `cache_n` when available. Events record turns, tool calls and tokens. `nvidia-smi` is sampled every second; the peak covers the entire device. OOM is marked only when the log contains corresponding evidence. Each attempt has its own result; infrastructure failures are repeated once, and model failures do not stop subsequent tasks. The manifest fixes the protocol, schedule, config, corpus and code hashes, server, OpenCode, models, Python, Node and provider cache; mismatches prevent mixing results.
 
-## Configuração
+## Configuration
 
-- Protocolo: `qwen-4b-opencode-baseline-b-20261028-v1`; resultados em `/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-b-v1`.
-- Controle B0: Q4_K_M, KV K/V q4_0, 65536, cache on, thinking off, temperatura 0. Stage 1: 24 episódios, duas repetições das 12 tarefas.
-- Stage 2: B-ctx16/32/128 e B-kv8/16, 12 episódios por braço, 60 no total. Stage 3: B-q6, B-q8, B-nocache e B-think, 12 por braço, 48 no total. Total: 132.
-- Thinking on: temperatura 0,6, top_p 0,95, top_k 20. Servidor: `--parallel 1`, `-ngl 99`, `--fit off`, flash attention on, `--reasoning` e `enable_thinking` conforme o braço. `--cache-prompt` ou `--no-cache-prompt` conforme o braço.
-- Wall 600 s por tentativa, com reserva de até 90 s para a verificação final, e 20 passos OpenCode, mesmo valor do `MAX_PRIMARY_STEPS` de `prefix_cache_paired.py`; 600 s limita o custo por episódio, sem demonstrar que seja suficiente para as 12 tarefas. Saída máxima configurada: 8192 tokens.
-- OpenCode `.bin/opencode`: versão 1.19.5, SHA-256 `7df4e4136301f16589b0f30bf91a61380fca5f8ef22dd36570f5ebe1d4ec802c`.
+- Protocol: `qwen-4b-opencode-baseline-b-20261028-v1`; results at `/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-baseline-b-v1`.
+- Control B0: Q4_K_M, KV K/V q4_0, 65536, cache on, thinking off, temperature 0. Stage 1: 24 episodes, two repetitions of the 12 tasks.
+- Stage 2: B-ctx16/32/128 and B-kv8/16, 12 episodes per arm, 60 total. Stage 3: B-q6, B-q8, B-nocache and B-think, 12 per arm, 48 total. Total: 132.
+- Thinking on: temperature 0,6, top_p 0,95, top_k 20. Server: `--parallel 1`, `-ngl 99`, `--fit off`, flash attention on, `--reasoning` and `enable_thinking` according to the arm. `--cache-prompt` or `--no-cache-prompt` according to the arm.
+- Wall 600 s per attempt, reserving up to 90 s for final verification, and 20 OpenCode steps, the same value as `MAX_PRIMARY_STEPS` in `prefix_cache_paired.py`; 600 s limits cost per episode without demonstrating that it suffices for the 12 tasks. Configured maximum output: 8192 tokens.
+- OpenCode `.bin/opencode`: version 1.19.5, SHA-256 `7df4e4136301f16589b0f30bf91a61380fca5f8ef22dd36570f5ebe1d4ec802c`.
 - llama-server: `0.8.0-dev`, build 1, commit `8642541`; SHA-256 `da1068f30d898c10c02c754ebef3b5b877073213989ff5ef9dfb2d4332e265f0`.
-- Q4_K_M bartowski: `13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983`; Q6_K unsloth: `fdedd781c9ce676ab66b018ca247ff78e8a33c98098a822c1e2d5075e7718f66`; Q8_0 unsloth: `10cc391b403021dd11c614679d2fd92f611c3681d29e29651b717316965d61e1`. Os três hashes foram calculados nesta etapa.
+- Q4_K_M bartowski: `13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983`; Q6_K unsloth: `fdedd781c9ce676ab66b018ca247ff78e8a33c98098a822c1e2d5075e7718f66`; Q8_0 unsloth: `10cc391b403021dd11c614679d2fd92f611c3681d29e29651b717316965d61e1`. All three hashes were calculated in this stage.
 
-## Comandos
+## Commands
 
-No WSL, a partir de `/mnt/d/Usuario/Downloads/LLM/.worktrees/4b-worker-v2`:
+In WSL, from the worktree root:
 
 ```sh
 PY=/home/foxtrot/local-llm-benchmark/envs/lab-validation-20261028/bin/python
@@ -106,9 +106,9 @@ PY=/home/foxtrot/local-llm-benchmark/envs/lab-validation-20261028/bin/python
 "$PY" -m benchmark.opencode_baseline --arm B-kv8
 ```
 
-A etapa 2 depende do gate do plano: pelo menos 3/12 no controle e nenhuma falha de infraestrutura. O runner não automatiza essa decisão; cabe ao orquestrador conferir os resultados antes de iniciar a etapa seguinte.
+Stage 2 depends on the plan's gate: at least 3/12 on the control and no infrastructure failures. The runner does not automate this decision; the orchestrator must check the results before starting the next stage.
 
-## Verificações offline executadas
+## Offline checks performed
 
 ```text
 $ python -m pytest -q tests/test_opencode_baseline.py tests/test_qwen_f1_diagnostic.py tests/test_opencode_controlled_probe.py
@@ -125,16 +125,16 @@ $ python -m benchmark.opencode_baseline --dry-run --arm B0 | tail -n 2
 Total: 24
 ```
 
-`compileall` dos dois arquivos Python terminou com código 0. A comparação do corpus retornou `320 320 True`; a construção offline do manifesto retornou 132 unidades, 326 hashes de arquivos do repositório e 3657 entradas do cache. Os testes usam CLI e servidor falsos; a continuação simulada preservou a sessão nas duas fases e executou o oráculo real ao fim, com falha esperada por não haver edição. Não há timings reais de inferência ou valores reais de cache_n nesta etapa.
+`compileall` of the two Python files exited with code 0. The corpus comparison returned `320 320 True`; offline manifest construction returned 132 units, 326 repository file hashes and 3657 cache entries. The tests use a fake CLI and server; simulated continuation retained the session across both phases and ran the real oracle at the end, with the expected failure because no edit was made. There are no real inference timings or cache_n values at this stage.
 
-## Limitações e diferenças em relação a outubro
+## Limitations and differences from October
 
-- O perfil limita permissões declaradas do OpenCode, mas bash e rede não têm confinamento de sistema comprovado. O agente pode, em princípio, alcançar arquivos do host, inclusive material privado fora do workspace. Os diretórios do episódio e os ambientes são isolados, mas isso não é uma barreira de segurança; não há credenciais intencionalmente fornecidas ao agente. A decisão do orquestrador aceitou essa limitação para a linha de base.
-- Os testes visíveis e o oráculo executam código do workspace sem sandbox de SO comprovado. As saídas privadas ficam fora do workspace e não são enviadas ao modelo, mas a falta de confinamento de bash impede garantir que ele não possa encontrá-las por conta própria.
-- O prazo de 600 s limita subprocessos e reserva tempo para verificação, mas cópias e leitura de arquivos não são preemptivas e podem ultrapassar o prazo em I/O lento.
-- O TTFT do proxy é o tempo até o primeiro conteúdo, reasoning ou tool call detectado; é uma medição de transporte e pode ficar indisponível. `prompt_n`/`cache_n` dependem do formato efetivamente retornado pelo servidor; listas vazias ou ausência nos timings significam não medido, não zero. O uso por dispositivo não identifica o processo causador do pico.
-- O perfil, o provider cache, o CLI atualizado, o proxy, a liberação faseada, o corpus e o oráculo são diferentes dos experimentos de outubro. O processamento real de sampling, streaming, continuação, cache e erro 500 ainda precisa do smoke real; uma passagem offline não prova esses comportamentos em inferência.
-- Mudanças do runner ou dos artefatos após a criação do manifesto exigem novo diretório/protocolo; retomadas em outra invocação reiniciam o servidor e não preservam o estado de cache anterior. Erro de classificação entre parser do modelo e erro HTTP de infraestrutura depende das evidências textuais presentes nos logs e eventos.
+- The profile limits declared OpenCode permissions, but bash and network lack proven system confinement. In principle, the agent can reach host files, including private material outside the workspace. Episode directories and environments are isolated, but this is not a security boundary; no credentials are intentionally provided to the agent. The orchestrator accepted this limitation for the baseline.
+- Visible tests and the oracle execute workspace code without a proven OS sandbox. Private outputs remain outside the workspace and are not sent to the model, but the lack of bash confinement prevents a guarantee that it cannot find them itself.
+- The 600 s deadline limits subprocesses and reserves time for verification, but file copies and reads are not preemptive and can exceed the deadline on slow I/O.
+- Proxy TTFT is the time to the first detected content, reasoning or tool call; it is a transport measurement and may be unavailable. `prompt_n`/`cache_n` depend on the format actually returned by the server; empty lists or missing timings mean not measured, not zero. Device usage does not identify the process responsible for the peak.
+- The profile, provider cache, updated CLI, proxy, phased release, corpus and oracle differ from the October experiments. Actual handling of sampling, streaming, continuation, cache and error 500 still requires a real smoke test; an offline pass does not prove these behaviors in inference.
+- Changes to the runner or artifacts after manifest creation require a new directory/protocol; resuming in another invocation restarts the server and does not retain the previous cache state. Classification between model parser error and infrastructure HTTP error depends on the textual evidence in logs and events.
 
 
 
