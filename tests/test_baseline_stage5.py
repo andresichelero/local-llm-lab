@@ -117,8 +117,8 @@ def test_combined_config_schedules_72_units_and_dry_run(capsys):
     selected = stage5.CONFIG.with_name('qwen-4b-opencode-combined.json')
     config = stage5.load_config(selected)
 
-    assert config['protocol_id'] == 'qwen-4b-opencode-combined-v1'
-    assert config['output'] == '/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-combined-v1'
+    assert config['protocol_id'] == 'qwen-4b-opencode-combined-v2'
+    assert config['output'] == '/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-combined-v2'
     assert list(config['arms']) == ['R-q4', 'R-q6']
     assert [arm['repetitions'] for arm in config['arms'].values()] == [3, 3]
     assert [config['arms'][name]['model'] for name in ('R-q4', 'R-q6')] == ['q4', 'q6kl']
@@ -165,7 +165,7 @@ def test_combined_server_extra_args_survive_think_escalation(tmp_path, monkeypat
     stage5.execute(config, stage5.baseline.schedule(config))
 
     expected = ['--spec-type', 'draft-mtp', '--spec-draft-n-max', '2',
-                '--ctx-checkpoints', '64', '--checkpoint-min-step', '1024']
+                '--ctx-checkpoints', '64', '--checkpoint-min-step', '1024', '--cache-ram', '2048']
     assert len(commands) == 2
     assert all(command[-len(expected):] == expected for command in commands)
     assert commands[0][commands[0].index('--reasoning') + 1] == 'off'
