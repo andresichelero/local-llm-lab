@@ -1,4 +1,4 @@
-"""Unit tests for Guarded Edit wrapper (Trilha B / Roadmap Tarefa 8).
+"""Unit tests for Guarded Edit wrapper (Track B / Roadmap Task 8).
 
 Verifies deterministic pre-commit safety guards:
 - Stale SHA detection

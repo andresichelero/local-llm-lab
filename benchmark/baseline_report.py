@@ -170,20 +170,20 @@ def summarize(rows, control=None, control_dir=None):
 
 
 def write_report(tables, markdown, csv_path):
-    sections = [('arms', 'Por braço'), ('tasks', 'Por tarefa e braço'),
-                ('task_comparisons', 'Comparação entre braços por tarefa e diretório'),
-                ('comparisons', 'Comparações pareadas: McNemar exato')]
-    lines = ['# Relatório da linha de base OpenCode', '',
-             ('Primeira tentativa por unidade, exceto falhas de infraestrutura explícitas; '
-             'unidades sem tentativa elegível são excluídas. Diretórios são analisados separadamente.'),
-             ('Pares usam tarefa e repetição idênticas; uma repetição sem par é excluída. '
-             'Taxas de tokens e TTFT são medianas das medianas por episódio; '
-             'campos vazios indicam dados indisponíveis.'), '']
+    sections = [('arms', 'By arm'), ('tasks', 'By task and arm'),
+                ('task_comparisons', 'Arm comparisons by task and directory'),
+                ('comparisons', 'Paired comparisons: exact McNemar test')]
+    lines = ['# OpenCode baseline report', '',
+             ('First attempt per unit, excluding explicit infrastructure failures; '
+             'units without an eligible attempt are excluded. Directories are analyzed separately.'),
+             ('Pairs use identical tasks and repetitions; an unpaired repetition is excluded. '
+             'Token rates and TTFT are medians of per-episode medians; '
+             'empty fields indicate unavailable data.'), '']
     for name, title in sections:
         lines.extend([f'## {title}', ''])
         entries = tables[name]
         if not entries:
-            lines.extend(['Sem dados.', ''])
+            lines.extend(['No data.', ''])
             continue
         columns = list(entries[0])
         lines.extend(['| ' + ' | '.join(columns) + ' |',
