@@ -2,7 +2,7 @@
 
 A coding agent is a program that reads a codebase, edits files and runs commands to finish a task on its own. Most of them depend on large cloud models. This repository tests how far one can go with a small model running at home, on a single 8 GB graphics card.
 
-We give the agent real bugs to fix in two open-source projects and check each fix with tests it never sees. Then we change one setting, run everything again and compare pass rate, time and video memory.
+We plant bugs in two real open-source projects, ask the agent to fix them and check each fix with tests it never sees. Then we change one setting, run everything again and compare pass rate, time and video memory.
 
 ## Results so far
 
