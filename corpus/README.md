@@ -98,7 +98,7 @@ The corpus has 36 tasks: 10 python_fix, 5 javascript_fix, 6 continuation, 5 mcp,
 
 The stubs are deterministic. They provide local external evidence. They do not measure real MCP transport. Cases with two or more lines and the two phases increase the need for investigation. Medium difficulty is a hypothesis until calibration. The eight python_fix tasks in batch 1 change one line in the same function as the symptom; they may saturate.
 
-In `py_range`, the objective mentions explicit endpoints but does not describe the suffix case that the oracle also tests. This gap is a hypothesis for the observed difficulty, not a proven cause.
+`py_range` is hard because of clamping, which its objective states. An earlier note here blamed the unstated suffix case, but the bug patch does not touch that branch. In stored campaigns, 41 of 44 oracle failures returned an end past the resource length, as in `min(int(end) + 1, maxlen + 1)`. The task keeps its current wording.
 
 ## Manifest and history
 
