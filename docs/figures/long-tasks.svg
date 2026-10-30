@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 340" width="960" height="340" role="img" aria-label="Long tasks favour a large context, at a token cost. Two marathons of 5 to 6 objectives, one repetition per arm."><title>Long tasks favour a large context, at a token cost. Two marathons of 5 to 6 objectives, one repetition per arm.</title><style>
+text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;fill:#0b0b0b;font-size:14px}
+.bg{fill:#fcfcfb}.edge{fill:none;stroke:#0b0b0b;stroke-opacity:.1}
+.card{fill:#f9f9f7;stroke:#c3c2b7}
+.title{font-size:22px;font-weight:600}.hero{font-size:36px;font-weight:600}.big{font-size:30px;font-weight:600}
+.strong{font-weight:600}.sub,.sub tspan{fill:#52514e}.mute{fill:#898781;font-size:12px}.foot{fill:#52514e;font-size:12px}
+.tick{fill:#898781;font-size:12px;font-variant-numeric:tabular-nums}.num{font-variant-numeric:tabular-nums}
+.inv{fill:#fff;font-size:12px;font-weight:600}
+.blue{fill:#2a78d6}.orange{fill:#eb6834}.gray{fill:#898781}.empty{fill:#f0efec}.band{fill:#2a78d6;fill-opacity:.1}
+.ring{stroke:#fcfcfb;stroke-width:2}
+.grid{stroke:#e1e0d9}.axis{stroke:#c3c2b7}.link{stroke:#898781;stroke-width:2;stroke-linecap:round}
+.arrow{stroke:#52514e;stroke-width:1.5;fill:none}.head{fill:#52514e}.check{stroke:#fff;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+@media (prefers-color-scheme:dark){
+text{fill:#f0efec}
+.bg{fill:#1a1a19}.edge{stroke:#fff}
+.card{fill:#0d0d0d;stroke:#383835}
+.sub,.sub tspan,.foot{fill:#c3c2b7}
+.blue{fill:#3987e5}.orange{fill:#d95926}.empty{fill:#383835}.band{fill:#3987e5}
+.ring{stroke:#1a1a19}
+.grid{stroke:#2c2c2a}.axis{stroke:#383835}
+.arrow{stroke:#c3c2b7}.head{fill:#c3c2b7}
+.inv{fill:#fff}.mute,.tick{fill:#898781}
+}
+</style><rect class="bg" width="960" height="340" rx="14"/><rect class="edge" x=".5" y=".5" width="959" height="339" rx="14"/><text x="32.0" y="44.0" class="title">Long tasks favour a large context, at a token cost</text><text x="32.0" y="70.0" class="sub">Two marathons of 5 to 6 objectives, one repetition per arm.</text><text x="220.0" y="112.0" class="strong">Oracles passed, of 9</text><text x="600.0" y="112.0" class="strong">Prompt tokens, millions</text><text x="32.0" y="151.0">Large context</text><path class="blue" d="M220.0 134.0H476.0Q480.0 134.0 480.0 138.0V154.0Q480.0 158.0 476.0 158.0H220.0Z"/><text x="488.0" y="151.0" class="num">9</text><path class="gray" d="M600.0 134.0H851.8Q855.8 134.0 855.8 138.0V154.0Q855.8 158.0 851.8 158.0H600.0Z"/><text x="863.8" y="151.0" class="num">7.87</text><text x="32.0" y="193.0">Headroom</text><path class="blue" d="M220.0 176.0H418.2Q422.2 176.0 422.2 180.0V196.0Q422.2 200.0 418.2 200.0H220.0Z"/><text x="430.2" y="193.0" class="num">7</text><path class="gray" d="M600.0 176.0H674.3Q678.3 176.0 678.3 180.0V196.0Q678.3 200.0 674.3 200.0H600.0Z"/><text x="686.3" y="193.0" class="num">2.41</text><text x="32.0" y="235.0">OpenCode compaction</text><path class="blue" d="M220.0 218.0H389.3Q393.3 218.0 393.3 222.0V238.0Q393.3 242.0 389.3 242.0H220.0Z"/><text x="401.3" y="235.0" class="num">6</text><path class="gray" d="M600.0 218.0H645.4Q649.4 218.0 649.4 222.0V238.0Q649.4 242.0 645.4 242.0H600.0Z"/><text x="657.4" y="235.0" class="num">1.52</text><text x="32.0" y="277.0">Reset with PROGRESS.md</text><path class="blue" d="M220.0 260.0H360.4Q364.4 260.0 364.4 264.0V280.0Q364.4 284.0 360.4 284.0H220.0Z"/><text x="372.4" y="277.0" class="num">5</text><path class="gray" d="M600.0 260.0H661.3Q665.3 260.0 665.3 264.0V280.0Q665.3 284.0 661.3 284.0H600.0Z"/><text x="673.3" y="277.0" class="num">2.01</text><line x1="220.0" y1="126.0" x2="220.0" y2="290.0" class="axis"/><line x1="600.0" y1="126.0" x2="600.0" y2="290.0" class="axis"/><text x="32.0" y="322.0" class="foot">A first read, not a confirmed ranking. Section 9 of docs/RESULTS.md.</text></svg>

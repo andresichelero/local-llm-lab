@@ -1,71 +1,97 @@
-# Local LLM benchmark: Qwen3.5-4B on RTX 3070 (8 GB)
+<img src="docs/figures/hero.svg" alt="Qwen3.5-4B on one RTX 3070: the recommended profile passed 29 of 36 episodes, 27 on the first try and 2 after a retry." width="100%">
 
-> **English summary.** This repository benchmarks a local coding agent on one RTX 3070 8 GB under WSL2. Qwen3.5-4B runs on llama.cpp v0.8.0 and OpenCode 1.19.5. The 12-task pilot corpus uses private oracles. A three-repeat stage 5 replication confirmed that retrying a visibly failed attempt with thinking enabled raises accuracy from 29/48 to 41/48 across the original stage 5 and its replication (McNemar p=0.008 in the replication). RTK scored 17/36 against 22/36 for the paired control (p=0.23). The combined MTP, context-checkpoint and 2 GiB prompt-cache profile kept final accuracy near the control (29/36 vs 30/36) and used fewer escalations; Q6_K_L gave no accuracy gain and used 0.8 GB more VRAM. The cache limit addresses a WSL out-of-memory event, but its effect was not isolated. Long-task marathons favoured a large context over compaction or resets, and a cached 46K-token repository prefix cut time to first token from 16 s to 0.16 s. Campaigns before 2026-10-28 were removed from this tree and remain in the git history.
+# Local coding agent benchmark
 
-## Summary
+How good can a coding agent get on a small local model and a mid-range GPU? This repository answers that with measurements on one machine: **Qwen3.5-4B**, served by **llama.cpp** to **OpenCode**, on an **RTX 3070 with 8 GB**.
 
-This repository measures, on one machine, how much each runtime choice changes a local coding agent's pass rate and cost.
+Each experiment gives the agent a real bug to fix and scores the result with a hidden test. We change one setting at a time, so we can see what each setting really does to the pass rate, speed, and memory use.
 
-- **Model and runtime:** Qwen3.5-4B in GGUF, served by llama.cpp v0.8.0 `llama-server` (commit `8642541`) with CUDA. One instance per arm, `--parallel 1`, serial execution.
-- **Agent:** OpenCode 1.19.5 (`opencode run --format json --pure`), isolated in bubblewrap 0.9.0. The sandbox does not mount the repository, `/mnt/d`, `/home`, or the oracles.
-- **Corpus:** 12 pilot tasks in 6 classes (2 per class), with a private oracle evaluated once at the end of each attempt. The oracle never enters the prompt.
-- **Matrix:** the initial stages vary one factor at a time from control B0 (Q4_K_M, KV q4_0, 64K, prompt cache on, thinking off, temperature 0). The cascade replication and combined campaign followed.
+**The short answer:** the settings that matter most are few. Use enough context, keep the prompt cache on, and when an attempt fails, retry once with thinking on. That retry is the only gain confirmed by a significant test. Higher-precision weights, a bigger KV cache, and output filters did not show a measurable benefit.
 
-Details: [methodology](docs/METHODOLOGY.md), [machine and versions](docs/HARDWARE.md), [all tables](docs/RESULTS.md).
+| Result | Value |
+| --- | --- |
+| Best confirmed gain | One retry with thinking: 22/36 → 30/36 (exact McNemar p = 0.008) |
+| Recommended profile | 29/36 final, 27/36 on the first attempt, peak VRAM 5,800 MiB |
+| Largest latency gain | Prompt cache: 8 to 100 times faster to the first token |
+| Clear failure mode | 16K context: 3/12 passes |
 
-## Main results
+**Jump to:** [Method](#how-it-works) · [Findings](#findings) · [Recommended setup](#recommended-setup) · [Next steps](#next-steps) · [Reproduce](#reproduce) · [Limitations](#limitations)
 
-The table below preserves results for stages 1 through 3, with 95% Wilson intervals. "Paired" compares each arm with the control by task and repetition 1 (exact, two-sided McNemar).
+## How it works
 
-| Stage | Arm | Change relative to control | Passes | Rate (95% CI) | Median time, all (s) | Median time, successes (s) | Median TTFT (ms) | Peak VRAM, maximum (MiB) | Cached prompt fraction | Paired with control (wins / losses / ties; exact p) |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Stage 1 | `B0` | control: Q4_K_M, KV q4_0, 64K, cache on, thinking off, temp 0 | 16/24 | 67% (47%–82%) | 42.3 | 36.4 | 296 | 4567 | 0.94 | control |
-| Stage 2 | `B-ctx16` | context 16K | 3/12 | 25% (9%–53%) | 16.4 | 27.6 | 448 | 3858 | 0.87 | 0 / 5 / 7; p = 0.0625 |
-| Stage 2 | `B-ctx32` | context 32K | 9/12 | 75% (47%–91%) | 46.1 | 38.1 | 235 | 4105 | 0.92 | 2 / 1 / 9; p = 1.0000 |
-| Stage 2 | `B-ctx128` | context 128K | 9/12 | 75% (47%–91%) | 58.2 | 37.8 | 294 | 5422 | 0.94 | 1 / 0 / 11; p = 1.0000 |
-| Stage 2 | `B-kv8` | KV q8_0 | 9/12 | 75% (47%–91%) | 39.0 | 30.5 | 265 | 5038 | 0.92 | 1 / 0 / 11; p = 1.0000 |
-| Stage 2 | `B-kv16` | KV f16 | 7/12 | 58% (32%–81%) | 34.6 | 32.0 | 306 | 5754 | 0.91 | 1 / 2 / 9; p = 1.0000 |
-| Stage 3 | `B-q6` | Q6_K (unsloth) | 10/12 | 83% (55%–95%) | 37.0 | 34.3 | 301 | 5162 | 0.92 | 2 / 0 / 10; p = 0.5000 |
-| Stage 3 | `B-q8` | Q8_0 (unsloth) | 8/12 | 67% (39%–86%) | 38.5 | 32.2 | 317 | 6033 | 0.94 | 1 / 1 / 10; p = 1.0000 |
-| Stage 3 | `B-nocache` | prompt cache off | 9/12 | 75% (47%–91%) | 115.5 | 81.7 | 7498 | 4521 | 0.00 | 2 / 1 / 9; p = 1.0000 |
-| Stage 3 | `B-think` | thinking on (temp 0,6, top_p 0,95, top_k 20) | 11/12 | 92% (65%–99%) | 110.1 | 108.9 | 214 | 4535 | 0.95 | 3 / 0 / 9; p = 0.2500 |
+<img src="docs/figures/pipeline.svg" alt="Flow of one episode. A task goes to the OpenCode agent, which talks to llama-server. The visible test runs next. If it passes, the private oracle scores the attempt. If it fails, the agent retries once with thinking on." width="100%">
 
-Interpretation, with caution:
+- **Tasks.** The results below use 12 pilot tasks in 6 classes: Python fixes, JavaScript fixes, writing tests, two-phase continuation, stubbed tool use, and tool recovery. They run on snapshots of [Bottle](https://github.com/bottlepy/bottle) and [ms](https://github.com/vercel/ms).
+- **Scoring.** A private oracle runs once at the end of each attempt. It is never mounted in the sandbox and never appears in a prompt, so the agent cannot fit its answer to the test.
+- **Isolation.** OpenCode runs in bubblewrap, without access to the repository, `/mnt/d`, `/home`, or the oracles.
+- **Comparison.** Early stages change one factor from a control. Later campaigns replicate promising results and combine them. We report 95% Wilson intervals and exact, paired McNemar tests.
 
-- **Control:** 16 of 24 episodes (67%, 95% CI 47–82%).
-- **Context:** at 16K, passes fall to 3 of 12. Nine episodes ended in a CLI error, and the stage 2 report records a context exceeded message (16 384 tokens). At 32K, 64K (control), and 128K, pass rates are between 67% and 75%, with no detectable difference. 128K uses more VRAM (peak 5 422 MiB, versus 4 567 MiB in the control).
-- **KV cache:** q8_0 passed 9 of 12 and f16 passed 7 of 12. The control's q4_0 passed 16 of 24. The differences are within the noise. Among KV arms, f16 has the highest peak VRAM (5 754 MiB).
-- **Weights:** Q6_K (unsloth) passed 10 of 12 and Q8_0 (unsloth) passed 8 of 12. The control uses another quantizer (bartowski), so the effect of bit width cannot be separated from the quantizer effect.
-- **Prompt cache:** without caching, median TTFT increases from 296 ms to about 7,5 s and median episode time from 42 s to 115 s. The pass rate did not change detectably (9 of 12, paired p = 1,0).
-- **Thinking always on:** 11/12 in stage 3 and 16/24 in stage 4; the advantage did not repeat. Thinking as escalation was confirmed, however: in the stage 5 replication, the cascade rose from 22/36 to 30/36 (McNemar p = 0,008). Combined with the original stage 5, it rose from 29/48 to 41/48.
-- **Stage 4 (replication and server):** control 25/36, Q6_K 27/36, MTP with 55% faster decode, context checkpoints with 34% lower success time. Full table in [docs/RESULTS.md](docs/RESULTS.md), section 7.
-- **Stage 5 and replication:** the thinking cascade rose from 7/12 to 11/12 in the first collection and from 22/36 to 30/36 in replication. RTK scored 17/36 versus 22/36 for the replicated control (p = 0,23), with no significant difference. See [docs/RESULTS.md](docs/RESULTS.md), sections 8 and 11.
-- **Combined campaign:** MTP, checkpoints, and the 2 GiB cache limit kept Q4's final pass rate close to control (29/36 versus 30/36) and reduced escalations from 10 to 3. Q6_K_L scored 28/36, with no gain over Q4 (29/36), and used 0,8 GB more VRAM. RAM cache changed alongside the other factors. See [docs/RESULTS.md](docs/RESULTS.md), section 12.
-- **Long tasks (T2):** in marathons of 5 to 6 objectives, large context passed 9/9 oracles. Headroom scored 7/9, OpenCode compaction 6/9, and reset with `PROGRESS.md` 5/9. See section 9.
-- **Cached repository prefix (T3b):** with about 46 thousand tokens already cached, TTFT falls from 16,1 s to 0,16 s. v3 recorded 2/12 in all three arms. Excluding `js_sign` from P-W16 due to a proven verifier failure leaves that arm at 2/11; other episodes also received environmental diagnoses. The quality comparison is inconclusive. See section 10.
-- **Significance:** the thinking cascade in the stage 5 replication is the only new comparison with a significant result (p = 0,008). Paired comparisons in the combined campaign and RTK do not reach p < 0,05. In the 16K arm, with 5 losses and no wins, p = 0,0625 is the smallest possible value with five discordant pairs in the same direction. Treat the other numbers as signals, not a ranking.
+The retry runs only when the visible test or the agent fails. An attempt that passes the visible test and fails the oracle is not retried.
 
-## Recommended configuration
+Read more: [methodology](docs/METHODOLOGY.md) · [machine and versions](docs/HARDWARE.md) · [every table](docs/RESULTS.md).
 
-These recommendations come from stages 1 through 5, the stage 5 replication, and the combined, T2, and T3b campaigns (details in [docs/RESULTS.md](docs/RESULTS.md), sections 7 through 12).
+## Findings
 
-- **Context:** 32K is the minimum, and 64K provides headroom. With OpenCode, 16K is unsuitable for this corpus.
-- **KV cache:** q4_0. There was no measurable loss and it uses the least VRAM.
-- **Weights:** Q4_K_M. Q6_K_L scored 28/36 versus 29/36 for combined Q4 and used 818 MiB more. Stage 4 also showed no significant difference between Q4_K_M and Q6_K.
-- **Prompt cache:** on. Without it, latency increases about 25 times.
-- **Thinking:** off on the first attempt and on only for escalation. Replication rose from 22/36 to 30/36 (8 rescues in 10 escalations; McNemar p = 0,008). Combined with the original stage 5, the cascade rose from 29/48 to 41/48.
-- **RTK:** keep off. In replication it scored 17/36 versus 22/36 for the control, with no significant difference (p = 0,23).
-- **MTP and checkpoints:** enable `--spec-type draft-mtp --spec-draft-n-max 2` and `--ctx-checkpoints 64 --checkpoint-min-step 1024`. In the combined campaign, Q4 maintained final passes (29/36 versus 30/36) and used 3 escalations versus 10. Because factors changed together, this result cannot be attributed to one alone.
-- **RAM cache:** limit with `--cache-ram 2048`. The 8 GiB default equals all RAM configured for WSL and caused OOM during the combined campaign. The comparison arm used the 8 GiB default; the limit's effect was not isolated.
-- **Tools:** keep RTK off. The initial collection scored 6/12; replication scored 17/36 versus 22/36 for the control (p = 0,23). LSP was neutral, and the model did not call the lsp tool on its own.
-- **Long tasks:** large context with caching, while it fits in VRAM (peak 5,4 GB). If context must be limited, Headroom was better than native compaction and reset.
-- **Server:** MTP raised decode from 74 to 115 tok/s in stage 4 (91% acceptance). Checkpoints reduced success time from 37 to 25 s. In the combined campaign, both were used with the cascade; the design does not separate their effects.
-- **Sampling:** temperature 0 on the first attempt. For thinking escalation, temperature 0,6, top_p 0,95, and top_k 20. Qwen's recommended sampling scored 6/12.
-- **OpenCode steps:** 40. With 80 the result was 10/12, with no clear gain.
+### 1. One retry with thinking is the gain to keep
 
-### Ready-to-use profile
+<img src="docs/figures/retry-with-thinking.svg" alt="Pass rates out of 36. Control with thinking retry goes from 22 to 30, p 0.008. The recommended profile goes from 27 to 29. The same profile with Q6_K_L goes from 23 to 28. The RTK filter passes 17 with no retry." width="100%">
 
-Replace `<models>` with the directory containing the GGUF and start the recommended server:
+Thinking on for every attempt costs about 3.3 times more time, and its early lead did not repeat (11/12, then 16/24). Using it only after a failure gives most of the benefit at a much lower cost: 8 of 10 retries succeeded, and no first-attempt success was lost.
+
+Across the original stage 5 and its replication, the cascade rose from 29/48 to 41/48.
+
+The recommended profile starts stronger and needs fewer retries (3 instead of 10). Its 29/36 is not different from the control's 30/36 (p = 1.0).
+
+### 2. Most single settings stay inside the noise
+
+<img src="docs/figures/one-factor.svg" alt="Forest plot of ten arms with 95 percent Wilson intervals. The control passes 16 of 24. Context 16K passes 3 of 12. All other arms overlap the control's interval." width="100%">
+
+With 12 tasks, small effects cannot be separated from chance. The useful reading is what clearly breaks, and only 16K context does: nine of its twelve episodes ended in a CLI error, and the stage 2 report records the context limit being exceeded. The other differences are signals, not a ranking.
+
+### 3. The prompt cache is mandatory on this setup
+
+<img src="docs/figures/prompt-cache.svg" alt="Median time to first token without and with a cached prefix: agent episode 7.5 seconds to 0.30, 46K prefix in T3b v2 16.1 seconds to 0.16, 46K prefix in T3b v3 17.8 seconds to 2.1." width="100%">
+
+Without the cache, median episode time rises from 42 s to 115 s. With it, a repository prefix of about 46K tokens becomes usable on the 3070. The prefix improved latency only: all three T3b v3 arms passed the same 2 of 12 tasks. The bottleneck there is the edit protocol, because the 4B writes the SEARCH block from memory instead of copying it.
+
+### 4. 8 GB is enough, with room to spare
+
+<img src="docs/figures/vram.svg" alt="Peak VRAM in MiB against the 8,192 MiB limit: control 4,567, context 128K 5,422, KV f16 5,754, recommended 5,800, weights Q8_0 6,033, recommended with Q6_K_L 6,618." width="100%">
+
+Q6_K_L used 818 MiB more than Q4_K_M and finished at 28/36 against 29/36, so the extra precision did not pay for itself here.
+
+### 5. Long tasks favour a large context
+
+<img src="docs/figures/long-tasks.svg" alt="Oracles passed out of 9 and prompt tokens in millions. Large context 9 and 7.87. Headroom 7 and 2.41. OpenCode compaction 6 and 1.52. Reset with PROGRESS.md 5 and 2.01." width="100%">
+
+If the task fits in VRAM, keeping the whole history won. If context must be limited, Headroom did better than native compaction or a reset. This campaign has one repetition per arm, and instrumentation does not confirm that compaction finished, so a replication is planned.
+
+### 6. The corpus is now the main limit
+
+<img src="docs/figures/task-outcomes.svg" alt="Outcome grid for 12 tasks across four arms and three repetitions. Most tasks pass nearly always, tests_query and tests_range vary, and py_range never passes." width="100%">
+
+Most of the pilot tasks pass almost every time and `py_range` never does, so few tasks can separate one configuration from another. Corpus v2 adds 24 tasks, which are written and validated but not yet calibrated.
+
+## Recommended setup
+
+| Setting | Use | Why |
+| --- | --- | --- |
+| Weights | Q4_K_M | Q6 variants showed no significant gain and use more VRAM |
+| Context | 64K (32K minimum) | 16K fails with OpenCode on this corpus |
+| KV cache | q4_0 | No measurable loss, lowest VRAM |
+| Prompt cache | On, `--cache-ram 2048` | 25 times lower latency; the 8 GiB default caused a WSL out-of-memory stop |
+| Thinking | Off, then on for one retry | 22/36 → 30/36 (p = 0.008) |
+| Server | MTP and context checkpoints | 74 → 115 tok/s decode; 37 → 25 s success time, measured separately in stage 4 |
+| Sampling | Temperature 0, retry at 0.6 | Qwen's recommended sampling scored 6/12 |
+| OpenCode steps | 40 | 80 steps scored 10/12, with no clear gain |
+| RTK | Off | 17/36 against 22/36 (p = 0.23), no evidence to adopt it |
+| LSP | Not needed | Neutral, and the model never called the `lsp` tool on its own |
+
+MTP, checkpoints, and the 2 GiB cache limit were enabled together in the combined campaign, so that campaign cannot attribute its result to any one of them. The limit's effect on results is unknown.
+
+### Server
+
+Replace `<models>` with the directory containing the GGUF.
 
 ```sh
 llama-server \
@@ -83,7 +109,10 @@ llama-server \
   --cache-ram 2048
 ```
 
-An `opencode.json` snippet for the local provider. Thinking is off on the server; the 40 steps and temperature 0 are in the model profile.
+<details>
+<summary><strong>OpenCode profile</strong></summary>
+
+Thinking is off on the server. The 40 steps and temperature 0 are in the model profile.
 
 ```json
 {
@@ -113,7 +142,12 @@ An `opencode.json` snippet for the local provider. Thinking is off on the server
 }
 ```
 
-To escalate manually, start a second server or restart the same server with different thinking and sampling options:
+</details>
+
+<details>
+<summary><strong>Escalating with thinking</strong></summary>
+
+The benchmark runner escalates automatically when an attempt fails the visible test. In manual use, start a second server or restart the same one with these options:
 
 ```sh
 --reasoning on \
@@ -121,19 +155,32 @@ To escalate manually, start a second server or restart the same server with diff
 --temp 0.6 --top-p 0.95 --top-k 20
 ```
 
-In the OpenCode profile, also use `"options": { "temperature": 0.6, "topP": 0.95, "topK": 20 }`. The benchmark runner escalates automatically when an attempt fails the visible test; in manual use, this is a second step.
+In the OpenCode profile, also use `"options": { "temperature": 0.6, "topP": 0.95, "topK": 20 }`.
 
-## Reproduction
+</details>
 
-### Prerequisites
+## Next steps
 
-- Windows with WSL2 (Ubuntu 24.04) and an 8 GB NVIDIA GPU. Tested with RTX 3070, driver 610.62, and CUDA Toolkit 13.0 (see [docs/HARDWARE.md](docs/HARDWARE.md)).
-- Binaries and weights at the paths and with the SHA-256 hashes in `benchmark/configs/qwen-4b-opencode-baseline.json`: llama.cpp v0.8.0 `llama-server`, OpenCode 1.19.5, Node, bubblewrap, and the GGUF files. None are in the repository.
-- Python 3.12 with pytest and ruff. Versions used: pytest 9.1.1 and ruff 0.17.3.
+| When | Work |
+| --- | --- |
+| Now | Calibrate the 24 new tasks and keep those that pass 20% to 80% of the time |
+| Soon | Compare the recommended profile with the control on the calibrated corpus; separate the effects of MTP, checkpoints, and the cache limit; retest on the latest llama.cpp |
+| Later | Replicate long tasks with three repetitions; try a new edit protocol for the bounded worker; compare ExLlamaV3 and a large model on the same corpus |
+| Eventually | Build a separate confirmation set; add new host repositories; evaluate new small models; work through the remaining backlog |
 
-### Commands without GPU
+<details>
+<summary><strong>Backlog</strong></summary>
 
-From the repository root:
+- **P2:** mistral.rs with the same GGUF; bounded worker at scale; native Windows llama.cpp versus WSL2; rebuild with GGML_CUDA_FA_QUANTS for mixed KV.
+- **P3, outside the 4B scope:** vLLM or LMDeploy with AWQ and GPTQ-Marlin; offload of MoE larger than VRAM; models from 7 to 14B; agent LoRA.
+
+</details>
+
+## Reproduce
+
+**You need:** Windows with WSL2 (Ubuntu 24.04) and an 8 GB NVIDIA GPU, plus Python 3.12 with pytest and ruff. We tested with an RTX 3070, driver 610.62, CUDA Toolkit 13.0, pytest 9.1.1, and ruff 0.17.3 ([details](docs/HARDWARE.md)). Binaries and weights are not in the repository: `benchmark/configs/qwen-4b-opencode-baseline.json` lists the paths and SHA-256 hashes for llama.cpp v0.8.0, OpenCode 1.19.5, Node, bubblewrap, and the GGUF files.
+
+Without a GPU, from the repository root:
 
 ```sh
 export PYTHONDONTWRITEBYTECODE=1
@@ -144,9 +191,7 @@ $PY -m benchmark.opencode_baseline --dry-run --arm B0 # 24 units
 PYTHONDONTWRITEBYTECODE=1 $PY corpus/validate_corpus.py --node /path/to/node   # 36/36 PASS, a few minutes
 ```
 
-### Commands with GPU
-
-These commands start `llama-server`. Run only when the GPU is free. The runner refuses to start if a `llama-server` is already active.
+With a GPU (run only when it is free; the runner refuses to start if a `llama-server` is already active):
 
 ```sh
 $PY -m benchmark.opencode_baseline --smoke                  # 1 episode: B0, task py_query
@@ -155,19 +200,21 @@ $PY -m benchmark.opencode_baseline --arm B-kv8              # one arm
 $PY -m benchmark.opencode_baseline --stage N                # every unit of stage N (N from 1 to 4)
 ```
 
-The current protocol writes to `results/qwen-4b-opencode-baseline-bwrap-v7` because `benchmark/configs/qwen-4b-opencode-baseline.json` is already the stage 4 v7 revision. To reproduce stages 1 through 3, use the v5 and v6 configs from earlier commits in the git history (the last commit before this refactoring is `c2cf750`). Results with different manifests are not mixed: the runner refuses them.
+The current protocol writes to `results/qwen-4b-opencode-baseline-bwrap-v7`, because the config is already the stage 4 v7 revision. To reproduce stages 1 through 3, use the v5 and v6 configs from earlier commits (the last commit before the refactoring is `c2cf750`). The runner refuses to mix results with different manifests.
 
-### Reports
+Reports and figures:
 
 ```sh
 $PY -m benchmark.baseline_report DIR_v5 DIR_v6 \
   --markdown report.md --csv report.csv \
   --control-dir DIR_v5 --control B0
+$PY docs/figures/build_figures.py
 ```
 
-Generated aggregates are in [results/3070-benchmark/](results/3070-benchmark/). Raw results (workspaces, logs, and JSON per attempt) remain outside the repository.
+Generated aggregates are in [results/3070-benchmark/](results/3070-benchmark/). Raw results (workspaces, logs, and JSON per attempt) stay outside the repository.
 
-## Repository structure
+<details>
+<summary><strong>Repository structure</strong></summary>
 
 ```
 README.md
@@ -176,6 +223,7 @@ docs/
   HARDWARE.md             machine, versions, weights and storage
   RESULTS.md              every table: per arm, per task, paired and configuration
   RENAMES.md              old Portuguese paths mapped to their English names
+  figures/                README figures and the script that builds them
   restricted-python-v2.md, methodology/pristine-grading-protocol.md
                           documentation of retained code (removal candidates)
 benchmark/
@@ -197,40 +245,34 @@ results/3070-benchmark/   aggregates for stages 1 to 5, replication, combined ca
 reports/                  F0, F1, F3 and T1 reports, copied without logs or snapshots
 ```
 
+</details>
+
 ## Limitations
 
-- **Small, saturated corpus.** There are 12 pilot tasks. Eight almost always pass; py_range never passed. Many arms have only 12 episodes; comparisons with 36 episodes still have little power for small differences.
+Read every number here as a measurement of one machine on a small development corpus. The results have not been tested on a separate confirmation set.
+
+<details>
+<summary><strong>Full list</strong></summary>
+
+- **Small, saturated corpus.** There are 12 pilot tasks. Eight almost always pass; py_range never passed. Many arms have only 12 episodes, and comparisons with 36 episodes still have little power for small differences.
+- **Pilot corpus.** The results use the original 12 tasks, which were not calibrated with the model and are not a confirmation set. Corpus v2 adds 24 tasks (36 in total) that still await calibration. `bottle.py` has about 51 thousand tokens, estimated from character count.
+- **Significance.** The thinking cascade in the stage 5 replication is the only new comparison with a significant result. In the 16K arm, with 5 losses and no wins, p = 0.0625 is the smallest possible value with five discordant pairs in the same direction.
 - **Different quantizers.** The control uses bartowski Q4_K_M. Q6_K and Q8_0 are from unsloth, and unsloth Q4_K_M only appears in stage 4.
 - **Storage.** Q6_K and Q8_0 GGUF files are read from `/mnt/d` (D: drive). The laboratory rule requires WSL ext4. The effect on metrics was not measured.
-- **Sandbox.** OpenCode execution permits networking; bash confinement has not been proven for all commands. Current evaluations use a separate sandbox without networking; historical results were produced with earlier versions.
+- **Sandbox.** OpenCode execution permits networking, and bash confinement has not been proven for all commands. Current evaluations use a separate sandbox without networking; historical results were produced with earlier versions.
 - **Device VRAM.** VRAM is sampled for the whole device at about 1 Hz, and the Windows desktop shares the GPU. It is not exclusive process memory.
 - **Proxy TTFT.** TTFT measures time until the first content, reasoning, or tool call, as seen by the local proxy. It may be unavailable for some requests.
-- **Combined factors.** MTP, checkpoints, and the 2 GiB RAM cache limit were enabled together. The comparison used an arm with the default 8 GiB RAM cache as reference; the isolated effect of the limit is unknown.
+- **Combined factors.** MTP, checkpoints, and the 2 GiB RAM cache limit were enabled together. The reference arm used the default 8 GiB RAM cache, so the isolated effect of the limit is unknown.
 - **Missing fields in v5 and v6 results.** Automatic termination taxonomy and diff quality metrics (lines, scope, weakened tests) were added later. Results for stages 1 through 3 have these fields empty or null. Failure causes come from `failure` labels recorded by the runner.
-- **Infrastructure retries.** Two v6 units had their first attempt invalidated by grader failure. The second attempt, which passed, counted as a pass. This follows the protocol. In v5, a model failure was classified as infrastructure and retried. This classification was corrected in v6.
-- **Timeouts in stages 4 and 5.** Nine final results and two intermediate attempts also recorded a connection reset. Current rules would prioritize the server error, but logs do not prove whether the reset preceded the timeout; historical numbers were retained. See the [revalidation](reports/strategy-analysis-4b-2026-10-28/execution/F1/pr45-review-fixes.md).
-- **Unequal repetitions.** Many exploratory arms in stages 4 and 5 have 12 episodes. The replicated cascade and combined campaign have 36 episodes per arm. T2 still has one repetition per arm, and the conclusion about compaction does not confirm that it finished.
-- **T3b.** The 4B writes the SEARCH block from memory and resubmits rejected edits. OpenSSL errors affected v2 and v3 verification; historical passes do not isolate the context effect. See the [revalidation](reports/strategy-analysis-4b-2026-10-28/execution/F1/pr45-review-fixes.md).
+- **Infrastructure retries.** Two v6 units had their first attempt invalidated by grader failure. The second attempt, which passed, counted as a pass. This follows the protocol. In v5, a model failure was classified as infrastructure and retried; this classification was corrected in v6.
+- **Timeouts in stages 4 and 5.** Nine final results and two intermediate attempts also recorded a connection reset. Current rules would prioritize the server error, but logs do not prove whether the reset preceded the timeout, so historical numbers were retained. See the [revalidation](reports/strategy-analysis-4b-2026-10-28/execution/F1/pr45-review-fixes.md).
+- **Unequal repetitions.** Many exploratory arms in stages 4 and 5 have 12 episodes. The replicated cascade and combined campaign have 36 episodes per arm. T2 still has one repetition per arm, and its conclusion about compaction does not confirm that compaction finished.
+- **T3b.** The 4B writes the SEARCH block from memory and resubmits rejected edits. OpenSSL errors affected v2 and v3 verification, so historical passes do not isolate the context effect. Excluding `js_sign` from P-W16 due to a proven verifier failure leaves that arm at 2/11, and other episodes also received environmental diagnoses, so the quality comparison is inconclusive. See the [revalidation](reports/strategy-analysis-4b-2026-10-28/execution/F1/pr45-review-fixes.md).
 - **Landlock on drvfs.** The historical T3b run used a repository copy on WSL ext4. The revised verifier was also tested on `/mnt/d`.
-- **Pilot corpus.** The results above use the original 12 tasks, which were not calibrated with the model and are not a confirmation set. Corpus v2 adds 24 tasks (36 in total) that still await calibration. `bottle.py` has about 51 thousand tokens, estimated from character count.
-- **Reproduction on another machine.** The config has laboratory paths and SHA-256 hashes. A different machine requires a new `protocol_id` because the manifest refuses to mix protocols.
+- **Reproduction on another machine.** The config has laboratory paths and SHA-256 hashes. A different machine requires a new `protocol_id`, because the manifest refuses to mix protocols.
 
-## Roadmap
-
-Completed: stage 4, stage 5 and its three-repetition replication, the combined MTP and checkpoints campaign, long tasks (T2), and cached prefix (T3b).
-
-Next steps:
-
-1. **Expand the corpus:** from 12 to 24–36 new tasks.
-2. **Repeat T2:** three repetitions per arm and confirmation that compaction finished.
-3. **P1 backlog:** compare ExLlamaV3 with TabbyAPI against llama.cpp after checking hybrid Qwen3.5 tool calls; compare cost with a large model on the same corpus.
-4. **MCP and new quantizations**, as they are released.
-
-Backlog:
-
-- **P2:** mistral.rs with the same GGUF; bounded worker at scale; native Windows llama.cpp versus WSL2; rebuild with GGML_CUDA_FA_QUANTS for mixed KV.
-- **P3, outside the 4B scope:** vLLM or LMDeploy with AWQ and GPTQ-Marlin; offload of MoE larger than VRAM; models from 7 to 14B; agent LoRA.
+</details>
 
 ## History
 
-Campaigns before 28/10/2026 were removed from this tree. They remain in git history through commit `c2cf750` of `refactor/3070-benchmark` and its predecessors. The refactoring pull request lists what was removed and why.
+Campaigns before 2026-10-28 were removed from this tree. They remain in git history through commit `c2cf750` of `refactor/3070-benchmark` and its predecessors. The refactoring pull request lists what was removed and why. Reports written before the translation are mapped in [docs/RENAMES.md](docs/RENAMES.md).

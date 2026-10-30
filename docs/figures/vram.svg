@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 382" width="960" height="382" role="img" aria-label="The recommended profile leaves about 2.4 GB free. Peak VRAM in MiB for the whole device, including the Windows desktop."><title>The recommended profile leaves about 2.4 GB free. Peak VRAM in MiB for the whole device, including the Windows desktop.</title><style>
+text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;fill:#0b0b0b;font-size:14px}
+.bg{fill:#fcfcfb}.edge{fill:none;stroke:#0b0b0b;stroke-opacity:.1}
+.card{fill:#f9f9f7;stroke:#c3c2b7}
+.title{font-size:22px;font-weight:600}.hero{font-size:36px;font-weight:600}.big{font-size:30px;font-weight:600}
+.strong{font-weight:600}.sub,.sub tspan{fill:#52514e}.mute{fill:#898781;font-size:12px}.foot{fill:#52514e;font-size:12px}
+.tick{fill:#898781;font-size:12px;font-variant-numeric:tabular-nums}.num{font-variant-numeric:tabular-nums}
+.inv{fill:#fff;font-size:12px;font-weight:600}
+.blue{fill:#2a78d6}.orange{fill:#eb6834}.gray{fill:#898781}.empty{fill:#f0efec}.band{fill:#2a78d6;fill-opacity:.1}
+.ring{stroke:#fcfcfb;stroke-width:2}
+.grid{stroke:#e1e0d9}.axis{stroke:#c3c2b7}.link{stroke:#898781;stroke-width:2;stroke-linecap:round}
+.arrow{stroke:#52514e;stroke-width:1.5;fill:none}.head{fill:#52514e}.check{stroke:#fff;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+@media (prefers-color-scheme:dark){
+text{fill:#f0efec}
+.bg{fill:#1a1a19}.edge{stroke:#fff}
+.card{fill:#0d0d0d;stroke:#383835}
+.sub,.sub tspan,.foot{fill:#c3c2b7}
+.blue{fill:#3987e5}.orange{fill:#d95926}.empty{fill:#383835}.band{fill:#3987e5}
+.ring{stroke:#1a1a19}
+.grid{stroke:#2c2c2a}.axis{stroke:#383835}
+.arrow{stroke:#c3c2b7}.head{fill:#c3c2b7}
+.inv{fill:#fff}.mute,.tick{fill:#898781}
+}
+</style><rect class="bg" width="960" height="382" rx="14"/><rect class="edge" x=".5" y=".5" width="959" height="381" rx="14"/><text x="32.0" y="44.0" class="title">The recommended profile leaves about 2.4 GB free</text><text x="32.0" y="70.0" class="sub">Peak VRAM in MiB for the whole device, including the Windows desktop.</text><line x1="230.0" y1="104.0" x2="230.0" y2="324.0" class="grid"/><text x="230.0" y="344.0" class="tick" text-anchor="middle">0</text><line x1="386.7" y1="104.0" x2="386.7" y2="324.0" class="grid"/><text x="386.7" y="344.0" class="tick" text-anchor="middle">2K</text><line x1="543.5" y1="104.0" x2="543.5" y2="324.0" class="grid"/><text x="543.5" y="344.0" class="tick" text-anchor="middle">4K</text><line x1="700.2" y1="104.0" x2="700.2" y2="324.0" class="grid"/><text x="700.2" y="344.0" class="tick" text-anchor="middle">6K</text><line x1="857.0" y1="104.0" x2="857.0" y2="324.0" class="grid"/><text x="857.0" y="344.0" class="tick" text-anchor="middle">8K</text><line x1="872.0" y1="104.0" x2="872.0" y2="324.0" class="axis"/><text x="872.0" y="96.0" class="mute" text-anchor="end">8,192 MiB card limit</text><text x="32.0" y="133.0">Control</text><path class="gray" d="M230.0 116.0H583.9Q587.9 116.0 587.9 120.0V136.0Q587.9 140.0 583.9 140.0H230.0Z"/><text x="595.9" y="133.0" class="num">4,567</text><text x="32.0" y="169.0">Context 128K</text><path class="gray" d="M230.0 152.0H650.9Q654.9 152.0 654.9 156.0V172.0Q654.9 176.0 650.9 176.0H230.0Z"/><text x="662.9" y="169.0" class="num">5,422</text><text x="32.0" y="205.0">KV f16</text><path class="gray" d="M230.0 188.0H676.9Q680.9 188.0 680.9 192.0V208.0Q680.9 212.0 676.9 212.0H230.0Z"/><text x="688.9" y="205.0" class="num">5,754</text><text x="32.0" y="241.0" class="strong">Recommended</text><path class="blue" d="M230.0 224.0H680.5Q684.5 224.0 684.5 228.0V244.0Q684.5 248.0 680.5 248.0H230.0Z"/><text x="692.5" y="241.0" class="strong num">5,800</text><text x="32.0" y="277.0">Weights Q8_0</text><path class="gray" d="M230.0 260.0H698.8Q702.8 260.0 702.8 264.0V280.0Q702.8 284.0 698.8 284.0H230.0Z"/><text x="710.8" y="277.0" class="num">6,033</text><text x="32.0" y="313.0">Recommended, Q6_K_L</text><path class="gray" d="M230.0 296.0H744.6Q748.6 296.0 748.6 300.0V316.0Q748.6 320.0 744.6 320.0H230.0Z"/><text x="756.6" y="313.0" class="num">6,618</text><text x="32.0" y="364.0" class="foot">Sections 2 and 12 of docs/RESULTS.md.</text></svg>
