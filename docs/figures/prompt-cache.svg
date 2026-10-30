@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 372" width="960" height="372" role="img" aria-label="Prompt cache cuts time to first token by 8 to 100 times. Median time to first token. The pass rate showed no detectable change."><title>Prompt cache cuts time to first token by 8 to 100 times. Median time to first token. The pass rate showed no detectable change.</title><style>
+text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;fill:#0b0b0b;font-size:14px}
+.bg{fill:#fcfcfb}.edge{fill:none;stroke:#0b0b0b;stroke-opacity:.1}
+.card{fill:#f9f9f7;stroke:#c3c2b7}
+.title{font-size:22px;font-weight:600}.hero{font-size:36px;font-weight:600}.big{font-size:30px;font-weight:600}
+.strong{font-weight:600}.sub,.sub tspan{fill:#52514e}.mute{fill:#898781;font-size:12px}.foot{fill:#52514e;font-size:12px}
+.tick{fill:#898781;font-size:12px;font-variant-numeric:tabular-nums}.num{font-variant-numeric:tabular-nums}
+.inv{fill:#fff;font-size:12px;font-weight:600}
+.blue{fill:#2a78d6}.orange{fill:#eb6834}.gray{fill:#898781}.empty{fill:#f0efec}.band{fill:#2a78d6;fill-opacity:.1}
+.ring{stroke:#fcfcfb;stroke-width:2}
+.grid{stroke:#e1e0d9}.axis{stroke:#c3c2b7}.link{stroke:#898781;stroke-width:2;stroke-linecap:round}
+.arrow{stroke:#52514e;stroke-width:1.5;fill:none}.head{fill:#52514e}.check{stroke:#fff;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+@media (prefers-color-scheme:dark){
+text{fill:#f0efec}
+.bg{fill:#1a1a19}.edge{stroke:#fff}
+.card{fill:#0d0d0d;stroke:#383835}
+.sub,.sub tspan,.foot{fill:#c3c2b7}
+.blue{fill:#3987e5}.orange{fill:#d95926}.empty{fill:#383835}.band{fill:#3987e5}
+.ring{stroke:#1a1a19}
+.grid{stroke:#2c2c2a}.axis{stroke:#383835}
+.arrow{stroke:#c3c2b7}.head{fill:#c3c2b7}
+.inv{fill:#fff}.mute,.tick{fill:#898781}
+}
+</style><rect class="bg" width="960" height="372" rx="14"/><rect class="edge" x=".5" y=".5" width="959" height="371" rx="14"/><text x="32.0" y="44.0" class="title">Prompt cache cuts time to first token by 8 to 100 times</text><text x="32.0" y="70.0" class="sub">Median time to first token. The pass rate showed no detectable change.</text><rect x="32.0" y="92.0" width="12" height="12" rx="3" class="gray"/><text x="50.0" y="102.0" class="sub">no cached prefix</text><rect x="192.4" y="92.0" width="12" height="12" rx="3" class="blue"/><text x="210.4" y="102.0" class="sub">cached prefix</text><line x1="230.0" y1="118.0" x2="230.0" y2="312.0" class="grid"/><text x="230.0" y="332.0" class="tick" text-anchor="middle">0 s</text><line x1="382.5" y1="118.0" x2="382.5" y2="312.0" class="grid"/><text x="382.5" y="332.0" class="tick" text-anchor="middle">5 s</text><line x1="535.0" y1="118.0" x2="535.0" y2="312.0" class="grid"/><text x="535.0" y="332.0" class="tick" text-anchor="middle">10 s</text><line x1="687.5" y1="118.0" x2="687.5" y2="312.0" class="grid"/><text x="687.5" y="332.0" class="tick" text-anchor="middle">15 s</text><line x1="840.0" y1="118.0" x2="840.0" y2="312.0" class="grid"/><text x="840.0" y="332.0" class="tick" text-anchor="middle">20 s</text><text x="32.0" y="150.0">Agent episode, stage 3</text><path class="gray" d="M230.0 128.0H454.7Q458.7 128.0 458.7 132.0V146.0Q458.7 150.0 454.7 150.0H230.0Z"/><path class="blue" d="M230.0 152.0H235.0Q239.0 152.0 239.0 156.0V170.0Q239.0 174.0 235.0 174.0H230.0Z"/><text x="466.7" y="144.0" class="num">7.5 s</text><text x="247.0" y="168.0" class="strong num">0.30 s</text><text x="32.0" y="216.0">46K prefix, T3b v2</text><path class="gray" d="M230.0 194.0H717.0Q721.0 194.0 721.0 198.0V212.0Q721.0 216.0 717.0 216.0H230.0Z"/><path class="blue" d="M230.0 218.0H230.8Q234.8 218.0 234.8 222.0V236.0Q234.8 240.0 230.8 240.0H230.0Z"/><text x="729.0" y="210.0" class="num">16.1 s</text><text x="242.8" y="234.0" class="strong num">0.16 s</text><text x="32.0" y="282.0">46K prefix, T3b v3</text><path class="gray" d="M230.0 260.0H768.9Q772.9 260.0 772.9 264.0V278.0Q772.9 282.0 768.9 282.0H230.0Z"/><path class="blue" d="M230.0 284.0H290.1Q294.1 284.0 294.1 288.0V302.0Q294.1 306.0 290.1 306.0H230.0Z"/><text x="780.9" y="276.0" class="num">17.8 s</text><text x="302.1" y="300.0" class="strong num">2.1 s</text><text x="32.0" y="354.0" class="foot">Sections 2 and 10 of docs/RESULTS.md.</text></svg>
