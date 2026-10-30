@@ -167,6 +167,8 @@ Most of the pilot tasks pass almost every time and `py_range` never does, so few
 
 MTP, checkpoints, and the 2 GiB cache limit were enabled together in the combined campaign, so that campaign cannot attribute its result to any one of them. The limit's effect on results is unknown.
 
+On 18 calibrated tasks with three repetitions, MTP and checkpoints raised decode speed from about 73 to 107 tok/s and cut total time by 25% to 31%. Final passes were 30/54 against 34/54 without them (p = 0.34). That difference is not significant, but the data still allow a loss of up to about 19 points, so these two settings are recommended for speed and have not been shown to preserve quality. Details are in the [comparison report](reports/strategy-analysis-4b-2026-10-28/execution/F1/calibrated-comparison.md).
+
 ### Server
 
 Replace `<models>` with the directory containing the GGUF.
@@ -241,8 +243,8 @@ In the OpenCode profile, also use `"options": { "temperature": 0.6, "topP": 0.95
 
 | When | Work |
 | --- | --- |
-| Now | Calibrate the 24 new tasks and keep those that pass 20% to 80% of the time |
-| Soon | Compare the recommended profile with the control on the calibrated corpus; separate the effects of MTP, checkpoints, and the cache limit; retest on the latest llama.cpp |
+| Now | Work out why retries rescued fewer units with MTP and checkpoints on (8 against 13) |
+| Soon | Separate the effects of MTP, checkpoints, and the cache limit; retest on the latest llama.cpp |
 | Later | Replicate long tasks with three repetitions; try a new edit protocol for the bounded worker; compare ExLlamaV3 and a large model on the same corpus |
 | Eventually | Build a separate confirmation set; add new host repositories; evaluate new small models; work through the remaining backlog |
 
