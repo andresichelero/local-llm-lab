@@ -1,0 +1,17 @@
+{
+  "id": "py_config",
+  "class": "python_fix",
+  "host": "bottle-0.13.2",
+  "objective": "Restore ConfigDict.load_dict nested namespace handling: flatten nested dictionaries into dot-separated keys, honor an optional namespace, and preserve sibling keys and leaf values.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium"
+}

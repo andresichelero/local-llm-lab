@@ -56,6 +56,23 @@ def test_prefix_masks_all_original_solution_lines():
     assert 40000 < len(prefix) / 3.5 < 100000
 
 
+def test_corpus_v2_distribution_and_frozen_prefixes():
+    import json
+    from collections import Counter
+
+    validator = load_validator()
+    tasks = [json.loads(path.read_text(encoding="utf-8"))
+             for path in (validator.ROOT / "tasks").glob("*/task.json")]
+    assert Counter(task["class"] for task in tasks) == {
+        "python_fix": 10, "javascript_fix": 5, "continuation": 6,
+        "mcp": 5, "tool_recovery": 5, "authored_tests": 5,
+    }
+    assert len({task["id"] for task in tasks}) == 36
+    for host in ("bottle-0.13.2", "ms-2.1.3"):
+        frozen = (validator.ROOT / "prefixes" / f"{host}.txt").read_text(encoding="utf-8")
+        assert frozen == validator.masked_prefix(validator.ROOT, host)
+
+
 @pytest.mark.parametrize(
     ("statement", "expected"), [("assert False", 1), ("pytest.fail('failure')", 1), ("raise RuntimeError('error')", 2), ("pass", 0)]
 )
@@ -97,12 +114,23 @@ def test_continuation_keeps_followup_out_of_first_metadata():
     import json
 
     validator = load_validator()
-    for task in ("cont_path", "cont_quote"):
+    for task in ("cont_path", "cont_quote", "cont_forms", "cont_redirect", "cont_plugins", "cont_cache"):
         folder = validator.ROOT / "tasks" / task
         first = json.loads((folder / "task.json").read_text(encoding="utf-8"))
         second = json.loads((folder / "followup.json").read_text(encoding="utf-8"))
         assert first["phase"] == 1 and second["phase"] == 2
         assert second["objective"] not in json.dumps(first)
+
+
+@pytest.mark.parametrize(('body', 'expected'), [
+    ('assert False', 1), ('raise RuntimeError("broken")', 2),
+    ('raise SystemExit(1)', 2), ('pass', 0),
+])
+def test_phase1_classifies_assertion_separately_from_infrastructure(tmp_path, body, expected):
+    validator = load_validator()
+    script = tmp_path / 'verify_phase1.py'
+    script.write_text(body, encoding='utf-8')
+    assert validator.run_phase1(script, tmp_path, dict(os.environ)) == expected
 
 
 @pytest.mark.parametrize(
@@ -148,3 +176,25 @@ def test_detect_node_reports_invalid_override(tmp_path, monkeypatch):
     monkeypatch.setenv('CORPUS_NODE', str(tmp_path / 'missing-node'))
     with pytest.raises(RuntimeError, match='CORPUS_NODE.*executable'):
         validator.detect_node()
+
+
+def test_development_distribution_accepts_extra_tasks_and_rejects_missing_or_unknown_classes():
+    validator = load_validator()
+    metadata = [{'class': name} for name in validator.CLASSES for _ in range(2)]
+    assert validator.valid_distribution(metadata + [{'class': 'python_fix'}], development=True)
+    assert not validator.valid_distribution(metadata[:-1], development=True)
+    assert not validator.valid_distribution(metadata + [{'class': 'unknown'}], development=True)
+
+
+def test_default_distribution_rejects_thirteen_tasks():
+    validator = load_validator()
+    metadata = [{'class': name} for name in validator.CLASSES for _ in range(2)]
+    assert not validator.valid_distribution(metadata + [{'class': 'python_fix'}])
+
+
+def test_development_manifest_bypass_requires_single_task():
+    validator = load_validator()
+    result = subprocess.run([sys.executable, str(validator.ROOT / 'validate_corpus.py'),
+                             '--skip-manifest-for-development'], capture_output=True, text=True)
+    assert result.returncode != 0
+    assert 'requires --task' in result.stderr

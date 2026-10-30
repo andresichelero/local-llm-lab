@@ -1,0 +1,17 @@
+{
+  "id": "js_invalid",
+  "class": "javascript_fix",
+  "host": "ms-2.1.3",
+  "objective": "For nonempty strings, parse valid durations and return undefined for invalid strings, including whitespace-only strings. Reject empty strings, non-finite numbers, and other types with an Error; format finite numbers normally.",
+  "relevant_files": [
+    "index.js"
+  ],
+  "writable_files": [
+    "index.js"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium"
+}

@@ -1,0 +1,9 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -4269,5 +4269,5 @@
+         stdout = []
++        env.update(kwargs)
+         for dictarg in args:
+             env.update(dictarg)
+-        env.update(kwargs)
+         self.execute(stdout, env)

@@ -1,0 +1,11 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -2438,7 +2438,7 @@
+             if isinstance(key, basestring):
+                 nskey = (namespace + '.' + key).strip('.')
+                 if isinstance(value, dict):
+-                    self.load_dict(value, namespace=key)
++                    self.load_dict(value, namespace=nskey)
+                 else:
+                     self[nskey] = value
+             else:

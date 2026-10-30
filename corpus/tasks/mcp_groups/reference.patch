@@ -1,0 +1,15 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -290,10 +290,10 @@
+ def _re_flatten(p):
+     """ Turn all capturing groups in a regular expression pattern into
+         non-capturing groups. """
+-    if '(?' not in p:
++    if '(' not in p:
+         return p
+     return re.sub(r'(\\*)(\(\?P<[^>]+>|\((?!\?))', lambda m: m.group(0) if
+-                  not len(m.group(1)) % 2 else m.group(1) + '(?:', p)
++                  len(m.group(1)) % 2 else m.group(1) + '(?:', p)
+ 
+ 
+ class Router(object):

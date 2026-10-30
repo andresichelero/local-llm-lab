@@ -1,0 +1,17 @@
+{
+  "id": "py_auth",
+  "class": "python_fix",
+  "host": "bottle-0.13.2",
+  "objective": "Restore Basic authentication parsing: match the scheme case-insensitively, decode the credentials, split on the first colon so passwords may contain colons, and return None for unsupported schemes or credentials without a colon.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium"
+}

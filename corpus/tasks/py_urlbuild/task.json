@@ -1,0 +1,17 @@
+{
+  "id": "py_urlbuild",
+  "class": "python_fix",
+  "host": "bottle-0.13.2",
+  "objective": "Restore route URL building: substitute and convert named and anonymous wildcards, remove consumed wildcard values from the query string, and encode any remaining query arguments.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium"
+}

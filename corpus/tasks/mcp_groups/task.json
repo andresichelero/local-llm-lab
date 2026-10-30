@@ -1,0 +1,19 @@
+{
+  "id": "mcp_groups",
+  "class": "mcp",
+  "host": "bottle-0.13.2",
+  "objective": "Read the tool evidence and restore regular expression group flattening: turn capturing and named groups into noncapturing groups, preserving escaped parentheses and existing noncapturing groups.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium",
+  "stub": "corpus/stubs/mcp_groups/tool.py",
+  "adaptation": "A deterministic tool response supplies external evidence; no live service is required."
+}

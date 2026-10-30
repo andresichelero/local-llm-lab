@@ -1,0 +1,13 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -1609,8 +1609,8 @@
+ 
+ 
+ def _hval(value):
+-    value = tonat(value).strip()
+-    if '\n' in value or '\r' in value:
++    value = tonat(value)
++    if '\n' in value or '\r' in value or '\0' in value:
+         raise ValueError("Header value must not contain control characters: %r" % value)
+     return value
+ 

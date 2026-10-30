@@ -1,0 +1,5 @@
+{
+  "phase": 2,
+  "objective": "Complete route plugin skipping by plugin name, instance, class, or True, while preserving route-specific precedence for duplicate names.",
+  "visible_test": "verify.py"
+}

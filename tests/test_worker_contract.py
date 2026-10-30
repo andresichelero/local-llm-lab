@@ -13,7 +13,7 @@ def test_package_excludes_private_and_reference(tmp_path):
     rendered = json.dumps(package.to_dict()) + package.markdown
     for private in (root / 'oracles').rglob('*.py'):
         assert private.read_text(encoding='utf-8') not in rendered
-    for patch in (root / 'tasks').rglob('reference.patch'):
+    for patch in (root / 'tasks').rglob('reference*.patch'):
         content = patch.read_text(encoding='utf-8')
         if content:
             assert content not in rendered
@@ -65,7 +65,7 @@ def test_metadata_and_blocked_result_have_closed_typed_contract(tmp_path):
 def test_all_corpus_packages_exclude_private_files():
     root = Path(__file__).resolve().parents[1] / 'corpus'
     private = [p.read_text(encoding='utf-8') for p in (root / 'oracles').rglob('*.py')]
-    private += [p.read_text(encoding='utf-8') for p in (root / 'tasks').rglob('reference.patch')]
+    private += [p.read_text(encoding='utf-8') for p in (root / 'tasks').rglob('reference*.patch')]
     for task_file in (root / 'tasks').glob('*/task.json'):
         task = json.loads(task_file.read_text(encoding='utf-8'))
         package = build_package(root, task['id'], root / 'hosts' / task['host'], 'rev')

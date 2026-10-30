@@ -1,0 +1,31 @@
+--- a/index.js
++++ b/index.js
+@@ -6,8 +6,8 @@
+ var m = s * 60;
+ var h = m * 60;
+ var d = h * 24;
+-var w = d * 7;
+-var y = d * 365.25;
++var w = d * 6;
++var y = d * 365;
+ 
+ /**
+  * Parse or format the given `val`.
+@@ -115,7 +115,7 @@
+   if (msAbs >= d) {
+     return Math.round(ms / d) + 'd';
+   }
+-  if (msAbs >= h) {
++  if (msAbs > h) {
+     return Math.round(ms / h) + 'h';
+   }
+   if (msAbs >= m) {
+@@ -140,7 +140,7 @@
+   if (msAbs >= d) {
+     return plural(ms, msAbs, d, 'day');
+   }
+-  if (msAbs >= h) {
++  if (msAbs > h) {
+     return plural(ms, msAbs, h, 'hour');
+   }
+   if (msAbs >= m) {

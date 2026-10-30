@@ -1,0 +1,19 @@
+{
+  "id": "cont_plugins",
+  "class": "continuation",
+  "host": "bottle-0.13.2",
+  "objective": "First delivery: when application and route plugins share a name, only the route-specific plugin is applied to the callback.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium",
+  "phase": 1,
+  "visible_test": "verify_phase1.py"
+}

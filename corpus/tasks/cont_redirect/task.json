@@ -1,0 +1,19 @@
+{
+  "id": "cont_redirect",
+  "class": "continuation",
+  "host": "bottle-0.13.2",
+  "objective": "First delivery: redirect defaults to status 303 for HTTP/1.1 and 302 for other protocols; an explicitly supplied status takes precedence.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium",
+  "phase": 1,
+  "visible_test": "verify_phase1.py"
+}

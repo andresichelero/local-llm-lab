@@ -10,12 +10,22 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path
 
 from support.prefix import masked_prefix
 
 ROOT = Path(__file__).resolve().parent
 CLASSES = {"python_fix", "javascript_fix", "authored_tests", "continuation", "mcp", "tool_recovery"}
+FROZEN_DISTRIBUTION = {"python_fix": 10, "javascript_fix": 5, "authored_tests": 5,
+                       "continuation": 6, "mcp": 5, "tool_recovery": 5}
+
+
+def valid_distribution(metadata, development=False):
+    counts = Counter(t["class"] for t in metadata)
+    if development:
+        return not (counts.keys() - CLASSES) and all(counts[c] >= 2 for c in CLASSES)
+    return counts == FROZEN_DISTRIBUTION
 
 
 def detect_node():
@@ -77,6 +87,14 @@ def run(cmd, cwd, env):
     except (OSError, subprocess.TimeoutExpired) as error:
         raise RuntimeError(f"runner infrastructure failure: {error}") from error
     return result.returncode
+
+
+def run_phase1(script, cwd, env):
+    program = ("import runpy,sys\n"
+               "try: runpy.run_path(sys.argv[1], run_name='__main__')\n"
+               "except AssertionError: sys.exit(1)\n"
+               "except BaseException: sys.exit(2)\n")
+    return run([sys.executable, '-c', program, str(script)], cwd, env)
 
 
 def classify_pytest(code, evidence):
@@ -155,14 +173,27 @@ def validate_task(task_dir, node):
         buggy = hash_tree(workspace)
         if changed_paths(before, buggy) - writable:
             raise ValueError("bug patch changes files outside writable scope")
-        if task["class"] == "continuation" and run([sys.executable, str(task_dir / "verify_phase1.py")], workspace, env):
-            raise ValueError("continuation phase-one check failed")
+        phase1_patch = task_dir / "reference_phase1.patch"
+        if task["class"] == "continuation":
+            phase1 = task_dir / "verify_phase1.py"
+            if phase1_patch.exists():
+                if run_phase1(phase1, workspace, env) != 1:
+                    raise ValueError("phase one must initially fail by assertion")
+                apply_patch(phase1_patch, workspace, env)
+                intermediate = hash_tree(workspace)
+                if not changed_paths(buggy, intermediate) or changed_paths(buggy, intermediate) - writable:
+                    raise ValueError("phase-one reference is empty or outside writable scope")
+                buggy = intermediate
+            if run_phase1(phase1, workspace, env) != 0:
+                raise ValueError("continuation phase-one check failed")
         bug = run_oracle(oracle, workspace, env, "bug")
         bug_stub = check_stub(stub, workspace, env) if stub else None
         apply_patch(task_dir / "reference.patch", workspace, env)
         fixed = hash_tree(workspace)
         if not changed_paths(buggy, fixed) or changed_paths(buggy, fixed) - writable:
             raise ValueError("reference patch is empty or changes files outside writable scope")
+        if task["class"] == "continuation" and run_phase1(task_dir / "verify_phase1.py", workspace, env) != 0:
+            raise ValueError("final reference regresses phase one")
         reference = run_oracle(oracle, workspace, env, "reference")
         reference_stub = check_stub(stub, workspace, env) if stub else None
         visible = run([sys.executable, str(task_dir / "verify.py")], workspace, env)
@@ -180,7 +211,11 @@ def main():
     parser.add_argument("--task")
     parser.add_argument("--node")
     parser.add_argument("--write-manifest", action="store_true")
+    parser.add_argument("--skip-manifest-for-development", action="store_true",
+                        help="validate one task before freezing manifest and prefixes")
     args = parser.parse_args()
+    if args.skip_manifest_for_development and (not args.task or args.write_manifest):
+        parser.error("--skip-manifest-for-development requires --task and cannot write the manifest")
     if args.node is None:
         try:
             args.node = detect_node()
@@ -195,20 +230,23 @@ def main():
         manifest.write_text(json.dumps(corpus_hashes(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print("manifest written")
         return 0
-    expected = json.loads(manifest.read_text(encoding="utf-8"))
-    actual = corpus_hashes()
-    mismatches = sorted(key for key in expected.keys() | actual.keys() if expected.get(key) != actual.get(key))
-    if mismatches:
-        print("manifest mismatch:", ", ".join(mismatches))
-        return 1
-    for host in ("bottle-0.13.2", "ms-2.1.3"):
-        prefix = (ROOT / "prefixes" / f"{host}.txt").read_text(encoding="utf-8")
-        if prefix != masked_prefix(ROOT, host):
-            print(f"invalid prefix: {host}")
+    if not args.skip_manifest_for_development:
+        expected = json.loads(manifest.read_text(encoding="utf-8"))
+        actual = corpus_hashes()
+        mismatches = sorted(key for key in expected.keys() | actual.keys() if expected.get(key) != actual.get(key))
+        if mismatches:
+            print("manifest mismatch:", ", ".join(mismatches))
             return 1
+        for host in ("bottle-0.13.2", "ms-2.1.3"):
+            prefix = (ROOT / "prefixes" / f"{host}.txt").read_text(encoding="utf-8")
+            if prefix != masked_prefix(ROOT, host):
+                print(f"invalid prefix: {host}")
+                return 1
+    else:
+        print("DEVELOPMENT: manifest and prefixes are not checked")
     tasks = sorted((ROOT / "tasks").iterdir())
     metadata = [json.loads((task / "task.json").read_text(encoding="utf-8")) for task in tasks]
-    if len(tasks) != 12 or any(sum(t["class"] == c for t in metadata) != 2 for c in CLASSES):
+    if not valid_distribution(metadata, development=args.skip_manifest_for_development):
         print("invalid task count or class distribution")
         return 1
     if args.task:

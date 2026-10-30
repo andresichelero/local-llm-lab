@@ -1,0 +1,5 @@
+{
+  "phase": 2,
+  "objective": "Complete static_file conditional handling: If-None-Match matches the supplied ETag exactly and case-sensitively; retain the If-Modified-Since behavior from the first delivery.",
+  "visible_test": "verify.py"
+}

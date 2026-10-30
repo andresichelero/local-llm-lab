@@ -1,0 +1,11 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -1226,7 +1226,7 @@
+                 hash = hmac.new(tob(secret), msg, digestmod=digestmod).digest()
+                 if _lscmp(sig, base64.b64encode(hash)):
+                     dst = pickle.loads(base64.b64decode(msg))
+-                    if dst:
++                    if dst and dst[0] == key:
+                         return dst[1]
+             return default
+         return value or default
