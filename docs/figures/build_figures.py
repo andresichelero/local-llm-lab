@@ -20,7 +20,7 @@ text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-
 .bg{fill:#fcfcfb}.edge{fill:none;stroke:#0b0b0b;stroke-opacity:.1}
 .card{fill:#f9f9f7;stroke:#c3c2b7}
 .title{font-size:22px;font-weight:600}.hero{font-size:36px;font-weight:600}.big{font-size:30px;font-weight:600}
-.strong{font-weight:600}.sub,.sub tspan{fill:#52514e}.mute{fill:#898781;font-size:12px}.foot{fill:#52514e;font-size:12px}
+.val{font-size:20px;font-weight:600}.strong{font-weight:600}.sub,.sub tspan{fill:#52514e}.mute{fill:#898781;font-size:12px}.foot{fill:#52514e;font-size:12px}
 .tick{fill:#898781;font-size:12px;font-variant-numeric:tabular-nums}.num{font-variant-numeric:tabular-nums}
 .inv{fill:#fff;font-size:12px;font-weight:600}
 .blue{fill:#2a78d6}.orange{fill:#eb6834}.gray{fill:#898781}.empty{fill:#f0efec}.band{fill:#2a78d6;fill-opacity:.1}
@@ -132,34 +132,16 @@ def count(arm: str, outcome: str) -> int:
 
 
 def hero() -> None:
-    body = [text(PAD, 52, "Qwen3.5-4B as a local coding agent", "hero")]
-    body.append(text(PAD, 82, "One RTX 3070 with 8 GB. Private oracles. One factor at a time.", "sub"))
-    tiles = [
-        ("81%", "final pass rate of the", "recommended profile (29/36)"),
-        ("61 → 83%", "gain from one retry with", "thinking on (p = 0.008)"),
-        ("5,800 MiB", "peak VRAM of the", "recommended profile"),
+    body = [
+        text(PAD, 66, "Local LLM Lab", "hero"),
+        text(PAD, 98, "Testing how well a small AI model can work on code, using one home graphics card.", "sub"),
     ]
-    for index, (value, first, second) in enumerate(tiles):
-        x = PAD + index * 196
-        body.append(text(x, 150, value, "big"))
-        body.append(text(x, 176, first, "sub"))
-        body.append(text(x, 196, second, "sub"))
-
-    outcomes = "".join(OUTCOMES["R-q4"][task] for task in OUTCOMES["R-q4"])
-    ordered = sorted(outcomes, key="1F0".index)
-    left, top, step = 662, 38, 44
-    classes = {"1": "blue", "F": "orange", "0": "empty"}
-    for index, outcome in enumerate(ordered):
-        row, column = divmod(index, 6)
-        x, y = left + column * step, top + row * 26
-        body.append(f'<rect x="{x}" y="{y}" width="36" height="18" rx="4" class="{classes[outcome]}"/>')
-    body.append(legend(left, 208, [("blue", "first try"), ("orange", "retry"), ("empty", "failed")]))
-    write(
-        "hero", 232,
-        "Qwen3.5-4B on one RTX 3070: the recommended profile passed 29 of 36 episodes, "
-        "27 on the first try and 2 after a retry",
-        "".join(body),
-    )
+    stack = [("MODEL", "Qwen3.5-4B"), ("SERVER", "llama.cpp"), ("AGENT", "OpenCode"), ("GRAPHICS CARD", "RTX 3070, 8 GB")]
+    for index, (label, value) in enumerate(stack):
+        x = PAD + index * 224
+        body.append(text(x, 146, label, "mute"))
+        body.append(text(x, 172, value, "val"))
+    write("hero", 204, "Local LLM Lab: Qwen3.5-4B, llama.cpp and OpenCode on an RTX 3070 with 8 GB", "".join(body))
 
 
 def card(x: float, y: float, width: float, height: float, lines: list[tuple[str, str]]) -> str:

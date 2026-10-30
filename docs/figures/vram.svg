@@ -3,7 +3,7 @@ text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-
 .bg{fill:#fcfcfb}.edge{fill:none;stroke:#0b0b0b;stroke-opacity:.1}
 .card{fill:#f9f9f7;stroke:#c3c2b7}
 .title{font-size:22px;font-weight:600}.hero{font-size:36px;font-weight:600}.big{font-size:30px;font-weight:600}
-.strong{font-weight:600}.sub,.sub tspan{fill:#52514e}.mute{fill:#898781;font-size:12px}.foot{fill:#52514e;font-size:12px}
+.val{font-size:20px;font-weight:600}.strong{font-weight:600}.sub,.sub tspan{fill:#52514e}.mute{fill:#898781;font-size:12px}.foot{fill:#52514e;font-size:12px}
 .tick{fill:#898781;font-size:12px;font-variant-numeric:tabular-nums}.num{font-variant-numeric:tabular-nums}
 .inv{fill:#fff;font-size:12px;font-weight:600}
 .blue{fill:#2a78d6}.orange{fill:#eb6834}.gray{fill:#898781}.empty{fill:#f0efec}.band{fill:#2a78d6;fill-opacity:.1}

@@ -1,21 +1,21 @@
-<img src="docs/figures/hero.svg" alt="Qwen3.5-4B on one RTX 3070: the recommended profile passed 29 of 36 episodes, 27 on the first try and 2 after a retry." width="100%">
+<img src="docs/figures/hero.svg" alt="Local LLM Lab: Qwen3.5-4B, llama.cpp and OpenCode on an RTX 3070 with 8 GB." width="100%">
 
-# Local coding agent benchmark
+A coding agent is a program that reads a codebase, edits files and runs commands to finish a task on its own. Most of them depend on large cloud models. This repository tests how far one can go with a small model running at home, on a single 8 GB graphics card.
 
-How good can a coding agent get on a small local model and a mid-range GPU? This repository answers that with measurements on one machine: **Qwen3.5-4B**, served by **llama.cpp** to **OpenCode**, on an **RTX 3070 with 8 GB**.
+We give the agent real bugs to fix in two open-source projects and check each fix with tests it never sees. Then we change one setting, run everything again and compare pass rate, time and video memory.
 
-Each experiment gives the agent a real bug to fix and scores the result with a hidden test. We change one setting at a time, so we can see what each setting really does to the pass rate, speed, and memory use.
+## Results so far
 
-**The short answer:** the settings that matter most are few. Use enough context, keep the prompt cache on, and when an attempt fails, retry once with thinking on. That retry is the only gain confirmed by a significant test. Higher-precision weights, a bigger KV cache, and output filters did not show a measurable benefit.
+The setup we recommend fixed 29 of 36 task attempts (81%) and peaked at 5,800 MiB of video memory.
 
-| Result | Value |
-| --- | --- |
-| Best confirmed gain | One retry with thinking: 22/36 → 30/36 (exact McNemar p = 0.008) |
-| Recommended profile | 29/36 final, 27/36 on the first attempt, peak VRAM 5,800 MiB |
-| Largest latency gain | Prompt cache: 8 to 100 times faster to the first token |
-| Clear failure mode | 16K context: 3/12 passes |
+- Retrying a failed attempt once, with the model's thinking mode on, raised one setup from 22 to 30 passes out of 36. This is the only statistically significant gain so far (p = 0.008).
+- A 16K context window passed 3 of 12 attempts. At 32K and above, passes stayed between 67% and 75%.
+- The prompt cache made the first token arrive 8 to 100 times sooner.
+- Higher-precision weights, a larger KV cache and the RTK output filter showed no measurable benefit.
 
-**Jump to:** [Method](#how-it-works) · [Findings](#findings) · [Recommended setup](#recommended-setup) · [Next steps](#next-steps) · [Reproduce](#reproduce) · [Limitations](#limitations)
+These numbers come from one machine and 12 tasks, so treat them as early results. The [limitations](#limitations) section lists what they cannot show.
+
+To run this yourself, start at [Recommended setup](#recommended-setup). The method is in [How it works](#how-it-works), and every table is in [docs/RESULTS.md](docs/RESULTS.md).
 
 ## How it works
 
@@ -32,7 +32,7 @@ Read more: [methodology](docs/METHODOLOGY.md) · [machine and versions](docs/HAR
 
 ## Findings
 
-### 1. One retry with thinking is the gain to keep
+### 1. Retry once with thinking on
 
 <img src="docs/figures/retry-with-thinking.svg" alt="Pass rates out of 36. Control with thinking retry goes from 22 to 30, p 0.008. The recommended profile goes from 27 to 29. The same profile with Q6_K_L goes from 23 to 28. The RTK filter passes 17 with no retry." width="100%">
 
@@ -46,15 +46,15 @@ The recommended profile starts stronger and needs fewer retries (3 instead of 10
 
 <img src="docs/figures/one-factor.svg" alt="Forest plot of ten arms with 95 percent Wilson intervals. The control passes 16 of 24. Context 16K passes 3 of 12. All other arms overlap the control's interval." width="100%">
 
-With 12 tasks, small effects cannot be separated from chance. The useful reading is what clearly breaks, and only 16K context does: nine of its twelve episodes ended in a CLI error, and the stage 2 report records the context limit being exceeded. The other differences are signals, not a ranking.
+With 12 tasks, small effects cannot be separated from chance. Only 16K context clearly fails: nine of its twelve episodes ended in a CLI error, and the stage 2 report records the context limit being exceeded. The other differences are signals, not a ranking.
 
-### 3. The prompt cache is mandatory on this setup
+### 3. Keep the prompt cache on
 
 <img src="docs/figures/prompt-cache.svg" alt="Median time to first token without and with a cached prefix: agent episode 7.5 seconds to 0.30, 46K prefix in T3b v2 16.1 seconds to 0.16, 46K prefix in T3b v3 17.8 seconds to 2.1." width="100%">
 
 Without the cache, median episode time rises from 42 s to 115 s. With it, a repository prefix of about 46K tokens becomes usable on the 3070. The prefix improved latency only: all three T3b v3 arms passed the same 2 of 12 tasks. The bottleneck there is the edit protocol, because the 4B writes the SEARCH block from memory instead of copying it.
 
-### 4. 8 GB is enough, with room to spare
+### 4. 8 GB is enough
 
 <img src="docs/figures/vram.svg" alt="Peak VRAM in MiB against the 8,192 MiB limit: control 4,567, context 128K 5,422, KV f16 5,754, recommended 5,800, weights Q8_0 6,033, recommended with Q6_K_L 6,618." width="100%">
 
