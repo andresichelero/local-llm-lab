@@ -315,7 +315,7 @@ def task_grid() -> None:
     figure(
         "task-outcomes", 508,
         "The 12-task corpus saturates, so corpus v2 adds 24 tasks",
-        "Three repetitions per arm. Most tasks pass almost always; py_range never does.",
+        "Each square is one run, and every task ran three times per setup. py_range never passed.",
         "Sections 11 and 12 of docs/RESULTS.md.", body,
     )
 
@@ -393,15 +393,15 @@ def vram() -> None:
 
 def long_tasks() -> None:
     rows = [
-        ("Large context", 9, 7.87),
-        ("Headroom", 7, 2.41),
-        ("OpenCode compaction", 6, 1.52),
-        ("Reset with PROGRESS.md", 5, 2.01),
+        ("Large context (128K)", 9, 7.87),
+        ("Headroom (32K)", 7, 2.41),
+        ("OpenCode compaction (32K)", 6, 1.52),
+        ("Reset with PROGRESS.md (32K)", 5, 2.01),
     ]
-    first, second = 220, 600
-    width = 260
+    first, second = 256, 620
+    width = 236
     top, step = 134, 42
-    body = [text(first, 112, "Oracles passed, of 9", "strong"), text(second, 112, "Prompt tokens, millions", "strong")]
+    body = [text(first, 112, "Hidden tests passed, of 9", "strong"), text(second, 112, "Prompt tokens, millions", "strong")]
     for index, (label, passed, tokens) in enumerate(rows):
         y = top + index * step
         body.append(text(PAD, y + 17, label))
@@ -414,7 +414,7 @@ def long_tasks() -> None:
     figure(
         "long-tasks", 340,
         "Long tasks favour a large context, at a token cost",
-        "Two marathons of 5 to 6 objectives, one repetition per arm.",
+        "Two marathons of 5 and 6 objectives, one repetition per approach.",
         "A first read, not a confirmed ranking. Section 9 of docs/RESULTS.md.", body,
     )
 

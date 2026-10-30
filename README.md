@@ -2,7 +2,7 @@
 
 A coding agent is a program that reads a codebase, edits files and runs commands to finish a task on its own. Most of them depend on large cloud models. This repository tests how far one can go with a small model running at home, on a single 8 GB graphics card.
 
-We give the agent real bugs to fix in two open-source projects and check each fix with tests it never sees. Then we change one setting, run everything again and compare pass rate, time and video memory.
+We plant bugs in two real open-source projects, ask the agent to fix them and check each fix with tests it never sees. Then we change one setting, run everything again and compare pass rate, time and video memory.
 
 ## Results so far
 
@@ -21,14 +21,81 @@ To run this yourself, start at [Recommended setup](#recommended-setup). The meth
 
 <img src="docs/figures/pipeline.svg" alt="Flow of one episode. A task goes to the OpenCode agent, which talks to llama-server. The visible test runs next. If it passes, the private oracle scores the attempt. If it fails, the agent retries once with thinking on." width="100%">
 
-- **Tasks.** The results below use 12 pilot tasks in 6 classes: Python fixes, JavaScript fixes, writing tests, two-phase continuation, stubbed tool use, and tool recovery. They run on snapshots of [Bottle](https://github.com/bottlepy/bottle) and [ms](https://github.com/vercel/ms).
-- **Scoring.** A private oracle runs once at the end of each attempt. It is never mounted in the sandbox and never appears in a prompt, so the agent cannot fit its answer to the test.
-- **Isolation.** OpenCode runs in bubblewrap, without access to the repository, `/mnt/d`, `/home`, or the oracles.
-- **Comparison.** Early stages change one factor from a control. Later campaigns replicate promising results and combine them. We report 95% Wilson intervals and exact, paired McNemar tests.
+One run of one task is called an **episode**. The agent gets a copy of a project with a bug in it and a written request. It works until it stops on its own or reaches a limit of 40 steps or 10 minutes.
 
-The retry runs only when the visible test or the agent fails. An attempt that passes the visible test and fails the oracle is not retried.
+Two checks then run. The **visible test** is one the agent can read and run itself. The **private oracle** is a second set of tests kept outside the agent's sandbox, so it cannot adapt its answer to them. An episode passes only if both succeed.
 
-Read more: [methodology](docs/METHODOLOGY.md) · [machine and versions](docs/HARDWARE.md) · [every table](docs/RESULTS.md).
+If the visible test fails or the agent crashes, some setups retry once with thinking on. An attempt that passes the visible test and fails the oracle gets no retry, because the agent has no sign that anything is wrong.
+
+### The tasks
+
+The set of tasks is called the **corpus**. All results below use the 12 tasks in this table, on copies of two small open-source projects: [Bottle](https://github.com/bottlepy/bottle), a Python web framework, and [ms](https://github.com/vercel/ms), a JavaScript time-format library. The tasks are synthetic: we planted each bug ourselves, so we know the correct fix.
+
+| Task | Project | Type | What the agent has to do |
+| --- | --- | --- | --- |
+| `py_query` | Bottle | Fix a bug | Decode form query strings: plus as space, percent escapes, blank values, repeated keys |
+| `py_range` | Bottle | Fix a bug | Repair HTTP byte ranges: inclusive ends, clamping to the file length, skipping invalid ranges |
+| `js_sign` | ms | Fix a bug | Parse signed durations, keeping fractions and case-insensitive units |
+| `js_plural` | ms | Fix a bug | Restore the singular/plural limit at 1.5 units, for negative durations too |
+| `tests_query` | Bottle | Write tests | Cover query parsing with new tests, without changing the code |
+| `tests_range` | Bottle | Write tests | Write tests that catch byte-range regressions, without changing the code |
+| `cont_quote` | Bottle | Two requests | Escape HTML characters, then also escape control whitespace in attributes |
+| `cont_path` | Bottle | Two requests | Shift path fragments in both directions, then keep the trailing slash |
+| `mcp_header` | Bottle | Use a tool first | Read a tool's report, then fix how header names are normalized |
+| `mcp_params` | Bottle | Use a tool first | Read a report about a parser failure, then fix parameter names |
+| `recover_date` | Bottle | Diagnose a failure | Read a failure report, then repair HTTP date conversion |
+| `recover_decode` | Bottle | Diagnose a failure | Read a failure report, then repair byte-to-text conversion |
+
+In the two-request tasks, the second request arrives in the same session after the first one passes its visible test. The `mcp` and `recover` tasks use a small scripted tool, not a live service.
+
+The agent can give a different answer to the same task even at temperature 0, and in the control four tasks changed result between two runs. That is why tasks run more than once. Each run is a **repetition**, and each row of the [task chart](#6-the-corpus-is-now-the-main-limit) shows three squares per setup, one per repetition.
+
+### What we change
+
+**Control** is the baseline setup: Q4_K_M weights, q4_0 KV cache, 64K context, prompt cache on, thinking off, temperature 0. Each alternative setup, called an **arm**, changes something from the control.
+
+| Setting | What it means | Values tried |
+| --- | --- | --- |
+| Context size | How many tokens the model can hold at once: the request, the code it read and the conversation so far | 16K, 32K, 48K, 64K, 128K |
+| KV cache | How that context is stored in video memory. Smaller formats use less memory | q4_0, q8_0, f16 |
+| Weights | The model file, stored at reduced precision so it fits the card. Higher numbers are larger and more precise | Q4, Q6 and Q8 variants |
+| Prompt cache | Reuses work done on earlier text, so each turn processes only what is new | On, off |
+| Thinking | The model writes out its reasoning before it answers, which takes longer | Off, always on, retry only |
+| Sampling | How the next token is chosen. Temperature 0 always takes the most likely one | Temperature 0, 0.6, Qwen's recommended values |
+| Steps | The limit on agent turns per attempt | 40, 80 |
+| MTP | A small extra layer in the model guesses the next tokens ahead of time, which speeds up generation | Off, 2 tokens |
+| Context checkpoints | The server keeps snapshots of its state, so it can go back to an earlier point without reprocessing the text | Off, 64 snapshots |
+| `--cache-ram` | The limit on system memory used to keep prompts | 8 GiB (default), 2 GiB |
+| RTK | [A tool](https://github.com/rtk-ai/rtk) that shortens command output before the agent reads it, for example keeping only test failures | Off, on |
+| LSP | Gives the agent Pyright's code diagnostics | Off, on |
+
+### What we ran
+
+| Campaign | Question | Runs |
+| --- | --- | --- |
+| Stage 1 | How does the control perform? | 24 episodes |
+| Stage 2 | Do context size and KV cache change the result? | 60 episodes |
+| Stage 3 | Do weights, prompt cache and thinking change it? | 48 episodes |
+| Stage 4 | Do the early results repeat? Do server options help? | 168 episodes |
+| Stage 5 | Do other weights, code tools or a retry help? | 96 episodes |
+| Replication | Does the retry with thinking hold up? Does RTK hurt? | 72 episodes |
+| Combined | Do the best options work together? | 72 episodes |
+| T2 | Which approach copes best with very long tasks? | 8 marathons |
+| T3b | Does loading about 46K tokens of the repository up front help? | 144 episodes |
+
+### Reading the charts
+
+| Term | Meaning |
+| --- | --- |
+| Token | The unit a model reads and writes, roughly a short word or part of one |
+| VRAM | Memory on the graphics card |
+| Time to first token | How long the model takes to start answering |
+| Pass rate | Passed episodes divided by all episodes in an arm |
+| 95% interval | The range where the true pass rate probably sits. With 12 episodes it is very wide |
+| p value | How likely a difference this large would be if two setups were equal. Below 0.05 is the usual bar |
+| McNemar test | Compares two setups on the same tasks, counting only the runs where they disagree |
+
+Details: [methodology](docs/METHODOLOGY.md), [machine and versions](docs/HARDWARE.md), [every table](docs/RESULTS.md).
 
 ## Findings
 
@@ -38,7 +105,7 @@ Read more: [methodology](docs/METHODOLOGY.md) · [machine and versions](docs/HAR
 
 Thinking on for every attempt costs about 3.3 times more time, and its early lead did not repeat (11/12, then 16/24). Using it only after a failure gives most of the benefit at a much lower cost: 8 of 10 retries succeeded, and no first-attempt success was lost.
 
-Across the original stage 5 and its replication, the cascade rose from 29/48 to 41/48.
+Across the original stage 5 and its replication, this setup rose from 29/48 to 41/48.
 
 The recommended profile starts stronger and needs fewer retries (3 instead of 10). Its 29/36 is not different from the control's 30/36 (p = 1.0).
 
@@ -52,7 +119,7 @@ With 12 tasks, small effects cannot be separated from chance. Only 16K context c
 
 <img src="docs/figures/prompt-cache.svg" alt="Median time to first token without and with a cached prefix: agent episode 7.5 seconds to 0.30, 46K prefix in T3b v2 16.1 seconds to 0.16, 46K prefix in T3b v3 17.8 seconds to 2.1." width="100%">
 
-Without the cache, median episode time rises from 42 s to 115 s. With it, a repository prefix of about 46K tokens becomes usable on the 3070. The prefix improved latency only: all three T3b v3 arms passed the same 2 of 12 tasks. The bottleneck there is the edit protocol, because the 4B writes the SEARCH block from memory instead of copying it.
+Without the cache, median episode time rises from 42 s to 115 s. With it, a repository prefix of about 46K tokens becomes usable on the 3070. The prefix improved latency only: all three T3b v3 arms passed the same 2 of 12 tasks. The problem there is editing: to change code, the model has to quote the existing lines exactly, and the 4B writes them from memory instead of copying them.
 
 ### 4. 8 GB is enough
 
@@ -62,9 +129,20 @@ Q6_K_L used 818 MiB more than Q4_K_M and finished at 28/36 against 29/36, so the
 
 ### 5. Long tasks favour a large context
 
-<img src="docs/figures/long-tasks.svg" alt="Oracles passed out of 9 and prompt tokens in millions. Large context 9 and 7.87. Headroom 7 and 2.41. OpenCode compaction 6 and 1.52. Reset with PROGRESS.md 5 and 2.01." width="100%">
+<img src="docs/figures/long-tasks.svg" alt="Hidden tests passed out of 9 and prompt tokens in millions. Large context 9 and 7.87. Headroom 7 and 2.41. OpenCode compaction 6 and 1.52. Reset with PROGRESS.md 5 and 2.01." width="100%">
 
-If the task fits in VRAM, keeping the whole history won. If context must be limited, Headroom did better than native compaction or a reset. This campaign has one repetition per arm, and instrumentation does not confirm that compaction finished, so a replication is planned.
+A marathon gives the agent 5 or 6 objectives in a row on one copy of Bottle, using the bugs from the task table. The conversation grows with each objective until it no longer fits, so we compared four ways to handle that. Two marathons give 9 hidden tests in total.
+
+| Approach | Context | What happens as the conversation grows |
+| --- | --- | --- |
+| Large context | 128K | One session that keeps the full history |
+| Headroom | 32K | One session. [Headroom](https://github.com/headroomlabs-ai/headroom) is a third-party proxy that sits between the agent and the model and compresses tool output before the model sees it |
+| OpenCode compaction | 32K | One session. OpenCode replaces older messages with a summary when the context fills up |
+| Reset with `PROGRESS.md` | 32K | A new session for each objective. A notes file carries over past objectives, changed files and visible test results |
+
+Prompt tokens count everything sent to the model across the marathon. The large context costs more because each turn carries the whole history.
+
+Keeping the whole history won when it fit in VRAM. Among the 32K options, Headroom did better than compaction or a reset. This campaign has one repetition per approach, and our logs do not confirm that compaction finished, so a replication is planned.
 
 ### 6. The corpus is now the main limit
 
