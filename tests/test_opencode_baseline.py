@@ -26,7 +26,9 @@ def test_grader_sandbox_unavailable_is_infrastructure(tmp_path):
     assert baseline.grade(config, 'py_query', workspace, tmp_path)['status'] == 'infrastructure'
 
 
-@pytest.mark.parametrize('broken', ['import definitely_missing_module\n', 'def broken(:\n'])
+@pytest.mark.parametrize('broken', ['import definitely_missing_module\n', 'def broken(:\n',
+                                    '    def broken():\n        pass\n',
+                                    'def broken():\n\tif True:\n        pass\n'])
 @pytest.mark.skipif(shutil.which('bwrap') is None, reason='bubblewrap unavailable')
 def test_collection_error_from_workspace_is_model_failure(tmp_path, broken):
     config = baseline.load_config()

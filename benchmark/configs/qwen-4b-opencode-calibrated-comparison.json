@@ -1,0 +1,45 @@
+{
+  "protocol_id": "qwen-4b-opencode-calibrated-comparison-v1",
+  "output": "/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-calibrated-comparison-v1",
+  "lsp_prefix": "/home/foxtrot/local-llm-benchmark/envs/lsp-tools-20261029",
+  "rtk_binary": "/home/foxtrot/local-llm-benchmark/envs/rtk-tools-20261029/rtk",
+  "rtk_plugin": "/home/foxtrot/local-llm-benchmark/envs/rtk-tools-20261029/probe-home/.config/opencode/plugins/rtk.ts",
+  "tasks": [
+    "cont_forms", "cont_plugins", "py_config", "py_cookie", "py_urlbuild", "tests_list",
+    "js_decimal", "js_invalid", "js_units", "mcp_groups", "mcp_render", "recover_httpdate",
+    "cont_path", "cont_quote", "py_query", "recover_date", "tests_query", "tests_range"
+  ],
+  "models": {},
+  "arms": {
+    "CMP-base": {
+      "stage": 5,
+      "repetitions": 3,
+      "model": "q4",
+      "context": 65536,
+      "kv_k": "q4_0",
+      "kv_v": "q4_0",
+      "cache_prompt": true,
+      "thinking": false,
+      "cascade": "think",
+      "server_extra_args": ["--cache-ram", "2048"]
+    },
+    "CMP-rec": {
+      "stage": 5,
+      "repetitions": 3,
+      "model": "q4",
+      "context": 65536,
+      "kv_k": "q4_0",
+      "kv_v": "q4_0",
+      "cache_prompt": true,
+      "thinking": false,
+      "cascade": "think",
+      "server_extra_args": [
+        "--spec-type", "draft-mtp",
+        "--spec-draft-n-max", "2",
+        "--ctx-checkpoints", "64",
+        "--checkpoint-min-step", "1024",
+        "--cache-ram", "2048"
+      ]
+    }
+  }
+}
