@@ -7,12 +7,12 @@ import tempfile
 from pathlib import Path
 
 
-def test_authored_suite_detects_two_mutants():
+def test_authored_suite_detects_mutants():
     root = Path.cwd()
     test_file = Path('test/test_tests_list.py')
     assert test_file.is_file()
     original = (root / "bottle.py").read_text(encoding="utf-8")
-    for mutation in [None, *[('return list(data)', 'return [data]'), ('elif data:', 'elif data is not None:')]]:
+    for mutation in [None, *[('return list(data)', 'return [data]'), ('elif data:', 'elif data is not None:'), ('return [data]', 'return []'), ('if isinstance(data, (tuple, list, set, dict)):', 'if isinstance(data, list): return []\n    if isinstance(data, (tuple, list, set, dict)):')]]:
         with tempfile.TemporaryDirectory() as temp:
             target = Path(temp) / "workspace"
             shutil.copytree(root, target)

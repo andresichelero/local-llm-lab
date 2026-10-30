@@ -7,12 +7,12 @@ import tempfile
 from pathlib import Path
 
 
-def test_authored_suite_detects_two_mutants():
+def test_authored_suite_detects_mutants():
     root = Path.cwd()
     test_file = Path('test/test_tests_compare.py')
     assert test_file.is_file()
     original = (root / "bottle.py").read_text(encoding="utf-8")
-    for mutation in [None, *[('0 if x == y else 1', '0'), ('and len(a) == len(b)', 'and True')]]:
+    for mutation in [None, *[('0 if x == y else 1', '0'), ('and len(a) == len(b)', 'and True'), ('return not sum(0 if x == y else 1', 'return False and not sum(0 if x == y else 1'), ('return not sum(0 if x == y else 1', 'return bool(a or b) and not sum(0 if x == y else 1')]]:
         with tempfile.TemporaryDirectory() as temp:
             target = Path(temp) / "workspace"
             shutil.copytree(root, target)

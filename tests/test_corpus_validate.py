@@ -178,12 +178,18 @@ def test_detect_node_reports_invalid_override(tmp_path, monkeypatch):
         validator.detect_node()
 
 
-def test_distribution_accepts_extra_tasks_and_rejects_missing_or_unknown_classes():
+def test_development_distribution_accepts_extra_tasks_and_rejects_missing_or_unknown_classes():
     validator = load_validator()
     metadata = [{'class': name} for name in validator.CLASSES for _ in range(2)]
-    assert validator.valid_distribution(metadata + [{'class': 'python_fix'}])
-    assert not validator.valid_distribution(metadata[:-1])
-    assert not validator.valid_distribution(metadata + [{'class': 'unknown'}])
+    assert validator.valid_distribution(metadata + [{'class': 'python_fix'}], development=True)
+    assert not validator.valid_distribution(metadata[:-1], development=True)
+    assert not validator.valid_distribution(metadata + [{'class': 'unknown'}], development=True)
+
+
+def test_default_distribution_rejects_thirteen_tasks():
+    validator = load_validator()
+    metadata = [{'class': name} for name in validator.CLASSES for _ in range(2)]
+    assert not validator.valid_distribution(metadata + [{'class': 'python_fix'}])
 
 
 def test_development_manifest_bypass_requires_single_task():

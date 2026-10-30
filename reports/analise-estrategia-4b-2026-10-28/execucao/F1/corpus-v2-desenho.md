@@ -40,3 +40,7 @@ Os prefixos e o manifesto foram regenerados para o corpus ampliado. Os resultado
 ## Próximo passo
 
 Calibrar na GPU, sem escalada: controle Q4_K_M, KV q4_0, 64K, cache e temperatura zero; comparar a configuração recomendada com MTP n-max 2 e checkpoints, thinking desligado. Fazer duas repetições nas 24 tarefas novas. Manter as tarefas com acerto aproximadamente entre 20% e 80%. Não há calibração executada nesta mudança.
+
+## Correções da revisão
+
+Os oráculos verificam conversores de rota registrados, o separador obrigatório de cookies e a codificação alternativa de texto WSGI em `decode` e `getunicode`. Os testes de autoria incluem mutantes para aspas duplas, escalares verdadeiros e igualdade verdadeira, com contraexemplos automatizados para as soluções parciais. O validador padrão exige a distribuição congelada de 36 tarefas (10/5/6/5/5/5); a flexibilidade permanece restrita ao modo explícito de desenvolvimento.

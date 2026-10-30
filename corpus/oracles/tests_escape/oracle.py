@@ -7,12 +7,12 @@ import tempfile
 from pathlib import Path
 
 
-def test_authored_suite_detects_two_mutants():
+def test_authored_suite_detects_mutants():
     root = Path.cwd()
     test_file = Path('test/test_tests_escape.py')
     assert test_file.is_file()
     original = (root / "bottle.py").read_text(encoding="utf-8")
-    for mutation in [None, *[(".replace('&', '&amp;')", ".replace('&', '&')"), ('.replace("\'", \'&#039;\')', '.replace("\'", "\'")')]]:
+    for mutation in [None, *[(".replace('&', '&amp;')", ".replace('&', '&')"), ('.replace("\'", \'&#039;\')', '.replace("\'", "\'")'), ('.replace(\'"\', \'&quot;\')', '.replace(\'"\', \'"\')'), (".replace('<', '&lt;')", ".replace('<', '<')"), (".replace('>', '&gt;')", ".replace('>', '>')"), ("return string.replace('&', '&amp;')", "return (string if any(c in string for c in \"&<>\\\"'\") else string.upper()).replace('&', '&amp;')")]]:
         with tempfile.TemporaryDirectory() as temp:
             target = Path(temp) / "workspace"
             shutil.copytree(root, target)

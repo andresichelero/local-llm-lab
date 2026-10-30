@@ -10,17 +10,22 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path
 
 from support.prefix import masked_prefix
 
 ROOT = Path(__file__).resolve().parent
 CLASSES = {"python_fix", "javascript_fix", "authored_tests", "continuation", "mcp", "tool_recovery"}
+FROZEN_DISTRIBUTION = {"python_fix": 10, "javascript_fix": 5, "authored_tests": 5,
+                       "continuation": 6, "mcp": 5, "tool_recovery": 5}
 
 
-def valid_distribution(metadata):
-    return (all(t["class"] in CLASSES for t in metadata)
-            and all(sum(t["class"] == c for t in metadata) >= 2 for c in CLASSES))
+def valid_distribution(metadata, development=False):
+    counts = Counter(t["class"] for t in metadata)
+    if development:
+        return not (counts.keys() - CLASSES) and all(counts[c] >= 2 for c in CLASSES)
+    return counts == FROZEN_DISTRIBUTION
 
 
 def detect_node():
@@ -241,7 +246,7 @@ def main():
         print("DEVELOPMENT: manifest and prefixes are not checked")
     tasks = sorted((ROOT / "tasks").iterdir())
     metadata = [json.loads((task / "task.json").read_text(encoding="utf-8")) for task in tasks]
-    if not valid_distribution(metadata):
+    if not valid_distribution(metadata, development=args.skip_manifest_for_development):
         print("invalid task count or class distribution")
         return 1
     if args.task:
