@@ -235,3 +235,96 @@ Conclusões:
 - O prefixo em cache traz só ganho de latência.
 
 Na revalidação, 9 notas privadas da v2 e 5 da v3 passaram em cópias isoladas, embora tenham falhado na execução histórica por erro ambiental. Todas as 14 entregas foram rejeitadas; isso não permite reconstruir os reparos que teriam ocorrido com o verificador saudável. Além disso, `P-W16/js_sign` foi rejeitada por diagnóstico ambiental, sem falha de modelo comprovada: excluindo essa tarefa, o resultado do P-W16 passa de **2/12 para 2/11** tanto na v2 (três repetições) quanto na v3 (uma). As tabelas mantêm os registros históricos. Outros episódios receberam diagnósticos ambientais, portanto 2/11 não torna a comparação de qualidade conclusiva. Nas etapas 4 e 5, 11 tentativas com timeout também registraram reset de conexão: a aplicação literal da nova prioridade classificaria 9 resultados finais e 2 tentativas intermediárias como infraestrutura, mas os logs não mostram se o reset precedeu o timeout. As tabelas preservam as classificações históricas. Os detalhes e os limites dos logs estão na [revisão do PR 45](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/revisao-pr45-correcoes.md).
+
+## 11. Replicação da etapa 5 (stage5-rep3-v2)
+
+Dados brutos: /home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-stage5-rep3-v2 (72 episódios: 2 braços × 12 tarefas × 3 repetições, sem falha de infraestrutura).
+
+- Agregado: [stage5-rep3-summary.txt](../results/3070-benchmark/stage5-rep3-summary.txt).
+- Análise: [B-etapa5-replicacao-rep3.md](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/B-etapa5-replicacao-rep3.md).
+
+| Braço | 1ª tentativa | Final | Escaladas | Resgates |
+| --- | --- | --- | ---: | ---: |
+| X-think | 22/36 = 61% (IC 45%–75%) | 30/36 = 83% (IC 68%–92%) | 10 | 8 |
+| T5-rtk | 17/36 = 47% (IC 32%–63%) | 17/36 = 47% (IC 32%–63%) | 0 | 0 |
+
+Comparações pareadas, por tarefa e repetição (McNemar exato):
+
+| Comparação | Só a 1ª passou | Só a 2ª passou | p |
+| --- | ---: | ---: | ---: |
+| X-think: 1ª tentativa contra o resultado final | 0 | 8 | 0,008 |
+| Controle X-think contra T5-rtk, 1ª tentativa | 8 | 3 | 0,23 |
+
+Na cascata, 10 tentativas foram escaladas; 8 foram resgatadas e nenhum sucesso da primeira tentativa se perdeu no resultado final. Somada à etapa 5 original, a taxa final foi 41/48 (85%), contra 29/48 (60%) na primeira tentativa: 12 resgates em 14 escaladas.
+
+| Tarefa | X-think (r1, r2, r3) | T5-rtk (r1, r2, r3) |
+| --- | --- | --- |
+| cont_path | 111 | 010 |
+| cont_quote | FFF | 110 |
+| js_plural | 111 | 111 |
+| js_sign | 111 | 001 |
+| mcp_header | 111 | 111 |
+| mcp_params | 111 | 111 |
+| py_query | 1FF | 000 |
+| py_range | 000 | 000 |
+| recover_date | 110 | 000 |
+| recover_decode | 111 | 111 |
+| tests_query | 0F1 | 000 |
+| tests_range | F0F | 010 |
+
+1 = passou na primeira tentativa; F = passou só após a escalada; 0 = falhou. A sequência representa as repetições 1 a 3.
+
+Conclusões:
+- A cascata com thinking foi confirmada nesta replicação (p = 0,008).
+- O RTK manteve uma taxa menor que o controle, mas a diferença não foi significativa (p = 0,23). Não há evidência suficiente para adotar o filtro.
+- py_range não passou em nenhuma repetição.
+
+## 12. Campanha combinada (combined-v2)
+
+Dados brutos: /home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-combined-v2 (72 episódios: 2 braços × 12 tarefas × 3 repetições, sem falha de infraestrutura). X-think é a referência da replicação stage5-rep3-v2 (36 episódios).
+
+- Agregado: [combined-summary.txt](../results/3070-benchmark/combined-summary.txt).
+- Análise: [B-campanha-combinada.md](../reports/analise-estrategia-4b-2026-10-28/execucao/F1/B-campanha-combinada.md).
+
+| Braço | 1ª tentativa | Final | Escaladas (resgates) | Mediana por episódio (s) | Mediana dos sucessos na 1ª tentativa (s) | VRAM pico (MiB) | Tempo total |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| X-think (referência) | 22/36 = 61% | 30/36 = 83% | 10 (8) | 53,8 | 28,4 | 4546 | 77 min |
+| R-q4 | 27/36 = 75% | 29/36 = 81% | 3 (2) | 40,3 | 35,5 | 5800 | 72 min |
+| R-q6 | 23/36 = 64% | 28/36 = 78% | 7 (5) | 38,0 | 35,7 | 6618 | 59 min |
+
+Os dois braços combinados usam MTP, checkpoints de contexto, KV q4_0, cache de prompt, contexto 64K, temperatura 0 e --cache-ram 2048. R-q4 usa Q4_K_M; R-q6 usa Q6_K_L. Ambos fazem escalada com thinking se a verificação visível falha.
+
+Comparações pareadas (McNemar exato):
+
+| Comparação | Só o primeiro passou | Só o segundo passou | p |
+| --- | ---: | ---: | ---: |
+| R-q4 contra X-think, 1ª tentativa | 3 (X-think) | 8 (R-q4) | 0,227 |
+| R-q4 contra X-think, resultado final | 2 (X-think) | 1 (R-q4) | 1,000 |
+| R-q6 contra X-think, 1ª tentativa | 5 (X-think) | 6 (R-q6) | 1,000 |
+| R-q6 contra X-think, resultado final | 4 (X-think) | 2 (R-q6) | 0,688 |
+| R-q6 contra R-q4, 1ª tentativa | 7 (R-q4) | 3 (R-q6) | 0,344 |
+| R-q6 contra R-q4, resultado final | 3 (R-q4) | 2 (R-q6) | 1,000 |
+
+| Tarefa | X-think (r1, r2, r3) | R-q4 (r1, r2, r3) | R-q6 (r1, r2, r3) |
+| --- | --- | --- | --- |
+| cont_path | 111 | 111 | F11 |
+| cont_quote | FFF | 111 | 111 |
+| js_plural | 111 | 111 | 010 |
+| js_sign | 111 | 111 | 111 |
+| mcp_header | 111 | 111 | 111 |
+| mcp_params | 111 | 111 | 111 |
+| py_query | 1FF | 111 | F1F |
+| py_range | 000 | 000 | 000 |
+| recover_date | 110 | 000 | 010 |
+| recover_decode | 111 | 111 | 111 |
+| tests_query | 0F1 | 1FF | 1F1 |
+| tests_range | F0F | 101 | 01F |
+
+1 = passou na primeira tentativa; F = passou só após a escalada; 0 = falhou. A sequência representa as repetições 1 a 3.
+
+Leitura e conclusões:
+- R-q4 terminou com 29/36 contra 30/36 em X-think; a diferença pareada não foi significativa (p = 1,000). A primeira tentativa subiu de 22/36 para 27/36, também sem significância (p = 0,227).
+- R-q4 usou 3 escaladas, contra 10 na referência. O tempo mediano por episódio caiu de 53,8 s para 40,3 s, mas o tempo mediano dos sucessos na primeira tentativa foi maior (35,5 s contra 28,4 s).
+- R-q6 terminou com 28/36, sem ganho sobre R-q4 (29/36), e consumiu 818 MiB a mais de VRAM (cerca de 0,8 GB).
+- O limite de --cache-ram 2048 foi escolhido após o WSL encerrar o servidor por falta de memória: o RSS chegou a 6,9 GB, e o padrão de cache de 8 GiB coincide com os 8 GiB de RAM do WSL. Como X-think usou o cache padrão, esta comparação não isola o efeito do limite de 2 GiB.
+- py_range falhou em todos os braços. O corpus também satura: 8 das 12 tarefas quase sempre passam.
