@@ -1,0 +1,63 @@
+protocols qwen-4b-opencode-factor-separation-v1, -factor-cache-ram-nvml-v1; CMP-base from calibrated-comparison-v1
+all arms: Q4_K_M, KV q4_0, 64K, prompt cache, thinking cascade, build 8642541; 18 tasks, 3 repetitions
+CMP-base2 repeats CMP-base; CMP-mtp adds MTP n-max 2; CMP-ckpt adds ctx-checkpoints 64, min-step 1024
+CMP-ram4g uses cache-ram 4096, WSL memory 12 GB and NVML sampling
+
+metric                 CMP-base    CMP-base2   CMP-mtp     CMP-ckpt    CMP-ram4g   
+units                  54          54          54          54          54          
+first attempt pass     21          27          21          23          21          
+final pass             34          31          29          32          32          
+retries                20          12          17          17          16          
+rescued by retry       13          4           8           9           11          
+decode tok/s           72.7        74.8        107.8       71.4        70.0        
+prompt tok/s           2523        2511        2160        2543        2390        
+prompt tokens reused   95.8%       95.9%       95.2%       95.1%       95.1%       
+median unit s          125         89          105         83          62          
+arm total min          183         129         151         175         152         
+median VRAM MiB        4606        4619        5210        4369        4511        
+min WSL avail MiB      2454        2512        2180        1247        4406        
+
+mcnemar exact, final    a-only  b-only  p
+base vs base2           6       3       0.508
+base vs mtp             8       3       0.227
+base vs ckpt            5       3       0.727
+base vs ram4g           6       4       0.754
+base2 vs mtp            7       5       0.774
+base2 vs ckpt           4       5       1.000
+base2 vs ram4g          5       6       1.000
+
+R-q4, 36 units          combined-v2  master 792fcf4e7
+first attempt pass      27           25
+final pass              29           31 (mcnemar 1 vs 3, p=0.625)
+decode tok/s            97.6         110.2
+prompt tok/s            2145         2355
+arm total min           72           60
+median VRAM MiB         5259         4955
+
+cache events            evictions  over limit
+CMP-base2               68         0
+CMP-mtp                 38         21
+CMP-ckpt                31         18
+CMP-ram4g               24         0
+
+NVRM pool in the NVML run: 73 MiB and 76,214 live allocations at 05:20, 71 MiB and 65,790 at 09:19
+
+task                  CMP-base   CMP-base2  CMP-mtp    CMP-ckpt   CMP-ram4g  
+cont_forms            xxx>xPx    xxx>xxx    xxP>xxP    xxP>PxP    xxx>xPP    
+cont_plugins          PPP>PPP    PPx>PPx    Pxx>Pxx    Pxx>Pxx    xxx>xPx    
+py_config             PxP>PPP    PPP>PPP    xxP>PPP    xxx>xPP    PPP>PPP    
+py_cookie             xxP>PPP    PxP>PPP    PPx>PPx    PPP>PPP    PPP>PPP    
+py_urlbuild           PPx>PPP    PPx>PPx    xPP>xPP    xxx>PPP    xxP>PPP    
+tests_list            PxP>PPP    PPP>PPP    PPP>PPP    PPP>PPP    PPP>PPP    
+js_decimal            xxx>xxx    xxx>xxx    xxx>xxx    xxx>xxx    xxx>xxx    
+js_invalid            xxx>xxx    xxx>xxx    xxx>xxx    xxx>xxx    xxx>xxx    
+js_units              xxx>xxx    xxx>xxx    xxx>xxx    xxx>xxx    xxx>xxx    
+mcp_groups            xxx>xxx    xxx>xxx    xxx>xxx    xxx>xxx    xxx>xPx    
+mcp_render            xxx>PPP    xxx>xPP    xxx>PPP    xPP>PPP    xPP>PPP    
+recover_httpdate      xxx>xxx    xxx>xxx    xxx>xxx    xxx>xxx    xxx>xxx    
+cont_path             PPP>PPP    PPP>PPP    PPP>PPP    PPP>PPP    PPP>PPP    
+cont_quote            PxP>PPP    PPP>PPP    PPx>PPx    PPP>PPP    xPP>PPP    
+py_query              xPP>PPP    xPP>xPP    PPP>PPP    PPP>PPP    Pxx>Pxx    
+recover_date          PPx>PPx    PPP>PPP    xxx>xxx    PPx>PPx    PxP>PxP    
+tests_query           PPx>PPP    PPx>PPP    xPP>PPP    Pxx>PPP    xxx>PPP    
+tests_range           xxx>xPx    PxP>PxP    Pxx>PPP    Pxx>Pxx    xxP>xxP    
