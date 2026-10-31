@@ -1,0 +1,48 @@
+protocol qwen-4b-opencode-calibrated-comparison-v1 (CMP-rec finished under -rec-resume)
+both arms: Q4_K_M, KV q4_0, 64K, prompt cache, cache-ram 2048, thinking cascade; 18 tasks, 3 repetitions
+CMP-rec adds: MTP n-max 2, ctx-checkpoints 64, checkpoint-min-step 1024
+
+metric                 CMP-base        CMP-rec
+units                  54              54
+first attempt pass     21              22
+final pass             34              30
+wilson 95% final       49.6-74.6%      42.4-68.0%
+retries                20              15
+rescued by retry       13              8
+retry also failed      7               7
+oracle-only, no retry  13              17
+decode tok/s           72.7            107.1
+median first s         82.7            60.1
+median unit s          124.6           82.3
+arm total min          169-183         125.7
+peak VRAM MiB          5273            5282
+draft acceptance       n/a             86428/99506 (86.9%)
+
+mcnemar exact          base-only  rec-only  p
+first attempt          8          9         1.000
+final                  7          3         0.344
+final, crashed run=f   8          3         0.227
+final, unit dropped    7          3         0.344
+varied, final          5          1         0.219
+hard, final            0          1         1.000
+pilot, final           2          1         1.000
+
+task                  CMP-base     CMP-rec
+cont_forms            xxx>xPx      xxx>xPP
+cont_plugins          PPP>PPP      xPx>xPx
+py_config             PxP>PPP      xPx>PPP
+py_cookie             xxP>PPP      xxx>xxx
+py_urlbuild           PPx>PPP      PPP>PPP
+tests_list            PxP>PPP      PPP>PPP
+js_decimal            xxx>xxx      xxx>xxx
+js_invalid            xxx>xxx      Pxx>Pxx
+js_units              xxx>xxx      xxx>xxx
+mcp_groups            xxx>xxx      xxx>xxx
+mcp_render            xxx>PPP      PxP>PPP
+recover_httpdate      xxx>xxx      xxx>xxx
+cont_path             PPP>PPP      PPP>PPP
+cont_quote            PxP>PPP      PPP>PPP
+py_query              xPP>PPP      xPP>PPP
+recover_date          PPx>PPx      xxx>xxx
+tests_query           PPx>PPP      PxP>PPP
+tests_range           xxx>xPx      xPx>xPP

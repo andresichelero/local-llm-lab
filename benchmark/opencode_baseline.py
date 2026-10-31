@@ -554,7 +554,8 @@ def candidate_exception_only(pytest_output):
 
 def candidate_collection_error(proc, workspace):
     text = proc.stdout + proc.stderr
-    if proc.returncode != 2 or not re.search(r'\b(?:ImportError|ModuleNotFoundError|SyntaxError)\b', text):
+    if proc.returncode != 2 or not re.search(
+            r'\b(?:ImportError|ModuleNotFoundError|SyntaxError|IndentationError|TabError)\b', text):
         return False
     root = workspace.resolve()
     matches = re.findall(r'^([^\s:]+\.py):\d+|File "([^"\n]+\.py)", line \d+', text, re.MULTILINE)
