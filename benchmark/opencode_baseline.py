@@ -22,6 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.request import urlopen
 
+from benchmark import nvml_session
 from benchmark.harness_runner import summarize_usage
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -631,20 +632,38 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
 
 
+def windows_memory(stop, host):
+    """Ask one PowerShell for free memory each second; it exits when its stdin closes."""
+    script = ('while ($null -ne [Console]::In.ReadLine()) '
+              '{ (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory }')
+    try:
+        proc = subprocess.Popen(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script],
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, text=True, bufsize=1)
+    except OSError:
+        return
+    def read():
+        for line in proc.stdout:
+            try:
+                host.update(value=int(line.strip()) / 1024, at=time.monotonic())
+            except ValueError:
+                pass
+    threading.Thread(target=read, daemon=True).start()
+    try:
+        while not stop.is_set():
+            proc.stdin.write('\n')
+            proc.stdin.flush()
+            stop.wait(1)
+        proc.stdin.close()
+        proc.wait(timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        proc.kill()
+
+
 def sample_vram(stop, rows):
     """Collect host resources without blocking the one-second sampling loop on interop."""
     host = {'value': None, 'at': 0}
-    def windows_memory():
-        while not stop.is_set():
-            try:
-                raw = subprocess.check_output(['powershell.exe', '-NoProfile', '-NonInteractive',
-                    '-Command', '(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory'],
-                    text=True, timeout=0.8, stderr=subprocess.DEVNULL)
-                host.update(value=int(raw.strip()) / 1024, at=time.monotonic())
-            except (OSError, ValueError, subprocess.SubprocessError):
-                host.update(value=None, at=time.monotonic())
-            stop.wait(1)
-    host_thread = threading.Thread(target=windows_memory, daemon=True)
+    host_thread = threading.Thread(target=windows_memory, args=(stop, host), daemon=True)
     host_thread.start()
     previous = None
     while not stop.is_set():
@@ -665,15 +684,13 @@ def sample_vram(stop, rows):
         except (OSError, ValueError, IndexError):
             pass
         try:
-            raw = subprocess.check_output(['nvidia-smi', '--query-gpu=memory.used',
-                                           '--format=csv,noheader,nounits'], text=True, timeout=0.8)
-            row['vram_mib'] = int(raw.splitlines()[0])
-        except (OSError, ValueError, subprocess.SubprocessError):
+            row['vram_mib'] = nvml_session.memory_mib()[2]
+        except nvml_session.NvmlError:
             pass
         row['monotonic_seconds'] = start
         rows.append(row)
         stop.wait(max(0, 1 - (time.monotonic() - start)))
-    host_thread.join(timeout=1)
+    host_thread.join(timeout=6)
 
 
 def resource_summary(rows):
@@ -859,7 +876,7 @@ class Server:
 
 
 def manifest(config):
-    files = [CONFIG, Path(__file__), ROOT / 'benchmark/harness_runner.py',
+    files = [CONFIG, Path(__file__), ROOT / 'benchmark/harness_runner.py', ROOT / 'benchmark/nvml_session.py',
              ROOT / 'benchmark/configs/harnesses/opencode.json', CORPUS / 'manifest.json',
              CORPUS / 'validate_corpus.py']
     # Bytecode caches are not corpus content; a stray `python` run without
