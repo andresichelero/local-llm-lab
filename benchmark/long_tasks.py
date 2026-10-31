@@ -472,7 +472,10 @@ def execute(config, units, smoke):
     with (root / 'supervisor.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         check_gpu_free()
-        manifest = baseline.manifest(baseline.load_config())
+        frozen = baseline.load_config()
+        used = {arm['model'] for arm in config['arms'].values()}
+        frozen['models'] = {name: model for name, model in frozen['models'].items() if name in used}
+        manifest = baseline.manifest(frozen)
         manifest.update(protocol_id=config['protocol_id'], config=config, schedule=units,
                         server_lifecycle='one server process per marathon',
                         long_tasks_sha256=baseline.digest(Path(__file__)),
