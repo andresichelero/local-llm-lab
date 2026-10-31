@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import signal
-import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:
+    from benchmark import nvml_session
+except ModuleNotFoundError:  # harness_runner starts this file as a script
+    import nvml_session
 
 running = True
 
@@ -70,13 +73,19 @@ def cpu_ticks() -> tuple[int, int]:
     return sum(numbers), idle
 
 
-def parse_nvidia_smi(output: str) -> dict[str, str | None]:
-    parts = [part.strip() for part in output.strip().split(",")]
-    if len(parts) >= 5:
-        data = dict(zip(["vram_used_mb", "gpu_util_pct", "temperature_c", "gpu_clock_mhz", "power_w"], parts[:5]))
-        data["system_vram_used_mib"] = data["vram_used_mb"]
-        return data
-    return {key: None for key in ["vram_used_mb", "gpu_util_pct", "temperature_c", "gpu_clock_mhz", "power_w", "system_vram_used_mib"]}
+def gpu_values(values: dict[str, float | None]) -> dict[str, str | None]:
+    """Keep the string form of the telemetry rows; a missing sensor stays N/A."""
+    if not values:
+        return {key: None for key in ["vram_used_mb", "gpu_util_pct", "temperature_c", "gpu_clock_mhz", "power_w", "system_vram_used_mib"]}
+    text = {key: "[N/A]" if value is None else str(value) for key, value in values.items()}
+    return {
+        "vram_used_mb": text["vram_used_mib"],
+        "gpu_util_pct": text["gpu_util_pct"],
+        "temperature_c": text["temperature_c"],
+        "gpu_clock_mhz": text["gpu_clock_mhz"],
+        "power_w": text["power_w"],
+        "system_vram_used_mib": text["vram_used_mib"],
+    }
 
 
 def gpu() -> dict[str, str | None]:
@@ -84,27 +93,10 @@ def gpu() -> dict[str, str | None]:
 
 
 def gpu_collection() -> tuple[dict[str, str | None], str, str | None]:
-    query = "memory.used,utilization.gpu,temperature.gpu,clocks.gr,power.draw"
-    executable = shutil.which("nvidia-smi")
-    if executable is None:
-        wsl_path = Path("/usr/lib/wsl/lib/nvidia-smi")
-        if not wsl_path.is_file():
-            empty = parse_nvidia_smi("")
-            return empty, "unavailable", "nvidia_smi_not_found"
-        executable = str(wsl_path)
     try:
-        result = subprocess.run(
-            [executable, f"--query-gpu={query}", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, check=True, timeout=5,
-        )
-        parsed = parse_nvidia_smi(result.stdout)
-        if all(value is None for value in parsed.values()):
-            return parsed, "error", "nvidia_smi_output_unparseable"
-        return parsed, "measured", None
-    except FileNotFoundError:
-        return parse_nvidia_smi(""), "unavailable", "nvidia_smi_not_found"
-    except (OSError, subprocess.SubprocessError):
-        return parse_nvidia_smi(""), "error", "nvidia_smi_query_failed"
+        return gpu_values(nvml_session.metrics()), "measured", None
+    except nvml_session.NvmlError:
+        return gpu_values({}), "unavailable", "nvml_unavailable"
 
 
 def _metric(value: object, reason: str | None = None, *, error: bool = False) -> dict[str, object]:
@@ -175,18 +167,18 @@ def sample_metrics(previous_ticks: tuple[int, int] | None) -> tuple[dict[str, ob
         raw = gpu_values.get(metric_key)
         if raw is None:
             metrics[metric_key] = _metric(
-                None, gpu_reason or "nvidia_smi_unavailable", error=gpu_status == "error",
+                None, gpu_reason or "nvml_unavailable", error=gpu_status == "error",
             )
             legacy[legacy_key] = None
             continue
         if raw.strip() in {"[N/A]", "N/A"}:
-            metrics[metric_key] = _metric(None, "nvidia_smi_metric_unavailable")
+            metrics[metric_key] = _metric(None, "nvml_metric_unavailable")
             legacy[legacy_key] = None
             continue
         try:
             value: int | float = float(raw) if "." in raw else int(raw)
         except ValueError:
-            metrics[metric_key] = _metric(None, "nvidia_smi_value_unparseable", error=True)
+            metrics[metric_key] = _metric(None, "nvml_value_unparseable", error=True)
             legacy[legacy_key] = None
         else:
             metrics[metric_key] = _metric(value)
