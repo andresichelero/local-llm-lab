@@ -1,0 +1,9 @@
+--- /dev/null
++++ b/test/test_tests_query.py
+@@ -0,0 +1,6 @@
++import bottle
++
++
++def test_contract():
++    assert bottle._parse_qsl('q=a+b&q=%2B') == [('q', 'a b'), ('q', '+')]
++    assert bottle._parse_qsl('x=1&x=2') == [('x', '1'), ('x', '2')]

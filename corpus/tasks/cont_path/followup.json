@@ -1,0 +1,5 @@
+{
+  "phase": 2,
+  "objective": "Complete the follow-up to path shifting: preserve a trailing slash on a nonempty remaining path while supporting shifts in both directions.",
+  "visible_test": "verify.py"
+}

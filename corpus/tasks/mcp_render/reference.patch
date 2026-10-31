@@ -1,0 +1,13 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -4460,8 +4460,8 @@
+ 
+     @staticmethod
+     def process_inline(chunk):
+-        if chunk[0] == '!': return '_escape(%s)' % chunk[1:]
+-        return '_str(%s)' % chunk
++        if chunk[0] == '!': return '_str(%s)' % chunk[1:]
++        return '_escape(%s)' % chunk
+ 
+     def write_code(self, line, comment=''):
+         code = '  ' * (self.indent + self.indent_mod)

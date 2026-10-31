@@ -1,0 +1,19 @@
+{
+  "id": "cont_cache",
+  "class": "continuation",
+  "host": "bottle-0.13.2",
+  "objective": "First delivery: static_file returns 304 when If-Modified-Since is at or after the file modification time, and serves older or invalid dates normally.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium",
+  "phase": 1,
+  "visible_test": "verify_phase1.py"
+}

@@ -1,0 +1,9 @@
+--- /dev/null
++++ b/test/test_tests_range.py
+@@ -0,0 +1,6 @@
++import bottle
++
++
++def test_contract():
++    assert list(bottle.parse_range_header('bytes=0-0', 3)) == [(0, 1)]
++    assert list(bottle.parse_range_header('bytes=-2', 5)) == [(3, 5)]

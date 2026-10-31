@@ -1,0 +1,20 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -2959,7 +2959,7 @@
+ 
+ def http_date(value):
+     if isinstance(value, basestring):
+-        return value
++        return value.strip()
+     if isinstance(value, datetime):
+         # aware datetime.datetime is converted to UTC time
+         # naive datetime.datetime is treated as UTC time
+@@ -2970,7 +2970,7 @@
+     if not isinstance(value, (int, float)):
+         # convert struct_time in UTC to UNIX timestamp
+         value = calendar.timegm(value)
+-    return email.utils.formatdate(value, usegmt=True)
++    return email.utils.formatdate(value, usegmt=False)
+ 
+ 
+ def parse_date(ims):

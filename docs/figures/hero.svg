@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 204" width="960" height="204" role="img" aria-label="Local LLM Lab: Qwen3.5-4B, llama.cpp and OpenCode on an RTX 3070 with 8 GB"><title>Local LLM Lab: Qwen3.5-4B, llama.cpp and OpenCode on an RTX 3070 with 8 GB</title><style>
+text{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;fill:#0b0b0b;font-size:14px}
+.bg{fill:#fcfcfb}.edge{fill:none;stroke:#0b0b0b;stroke-opacity:.1}
+.card{fill:#f9f9f7;stroke:#c3c2b7}
+.title{font-size:22px;font-weight:600}.hero{font-size:36px;font-weight:600}.big{font-size:30px;font-weight:600}
+.val{font-size:20px;font-weight:600}.strong{font-weight:600}.sub,.sub tspan{fill:#52514e}.mute{fill:#898781;font-size:12px}.foot{fill:#52514e;font-size:12px}
+.tick{fill:#898781;font-size:12px;font-variant-numeric:tabular-nums}.num{font-variant-numeric:tabular-nums}
+.inv{fill:#fff;font-size:12px;font-weight:600}
+.blue{fill:#2a78d6}.orange{fill:#eb6834}.gray{fill:#898781}.empty{fill:#f0efec}.band{fill:#2a78d6;fill-opacity:.1}
+.ring{stroke:#fcfcfb;stroke-width:2}
+.grid{stroke:#e1e0d9}.axis{stroke:#c3c2b7}.link{stroke:#898781;stroke-width:2;stroke-linecap:round}
+.arrow{stroke:#52514e;stroke-width:1.5;fill:none}.head{fill:#52514e}.check{stroke:#fff;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+@media (prefers-color-scheme:dark){
+text{fill:#f0efec}
+.bg{fill:#1a1a19}.edge{stroke:#fff}
+.card{fill:#0d0d0d;stroke:#383835}
+.sub,.sub tspan,.foot{fill:#c3c2b7}
+.blue{fill:#3987e5}.orange{fill:#d95926}.empty{fill:#383835}.band{fill:#3987e5}
+.ring{stroke:#1a1a19}
+.grid{stroke:#2c2c2a}.axis{stroke:#383835}
+.arrow{stroke:#c3c2b7}.head{fill:#c3c2b7}
+.inv{fill:#fff}.mute,.tick{fill:#898781}
+}
+</style><rect class="bg" width="960" height="204" rx="14"/><rect class="edge" x=".5" y=".5" width="959" height="203" rx="14"/><text x="32.0" y="66.0" class="hero">Local LLM Lab</text><text x="32.0" y="98.0" class="sub">Testing how well a small AI model can work on code, using one home graphics card.</text><text x="32.0" y="146.0" class="mute">MODEL</text><text x="32.0" y="172.0" class="val">Qwen3.5-4B</text><text x="256.0" y="146.0" class="mute">SERVER</text><text x="256.0" y="172.0" class="val">llama.cpp</text><text x="480.0" y="146.0" class="mute">AGENT</text><text x="480.0" y="172.0" class="val">OpenCode</text><text x="704.0" y="146.0" class="mute">GRAPHICS CARD</text><text x="704.0" y="172.0" class="val">RTX 3070, 8 GB</text></svg>

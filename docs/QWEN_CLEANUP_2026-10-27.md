@@ -1,6 +1,6 @@
 # Local cleanup — 2026-10-27
 
-The cleanup below affected local files under `D:\Usuario\Downloads\LLM`, not tracked files in the active campaign checkout. The Qwen R3-DNS run continued independently. Counts are a dated checkpoint, not a live free-space measurement.
+The cleanup below affected local files under `<workspace>`, not tracked files in the active campaign checkout. The Qwen R3-DNS run continued independently. Counts are a dated checkpoint, not a live free-space measurement.
 
 ## Space and models
 

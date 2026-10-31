@@ -1,0 +1,18 @@
+{
+  "id": "tests_escape",
+  "class": "authored_tests",
+  "host": "bottle-0.13.2",
+  "objective": "Write tests for HTML escaping: ampersands, angle brackets, double and single quotes are escaped, and ordinary text stays unchanged. Do not change implementation.",
+  "relevant_files": [
+    "bottle.py",
+    "test"
+  ],
+  "writable_files": [
+    "test/test_tests_escape.py"
+  ],
+  "invariants": [
+    "Do not modify bottle.py or existing tests.",
+    "Tests must pass on the original implementation."
+  ],
+  "difficulty": "medium"
+}

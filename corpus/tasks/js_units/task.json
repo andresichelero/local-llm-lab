@@ -1,0 +1,17 @@
+{
+  "id": "js_units",
+  "class": "javascript_fix",
+  "host": "ms-2.1.3",
+  "objective": "Parse week and year durations using seven days per week and 365.25 days per year, including singular, plural, abbreviated and mixed-case units and decimal values. Format durations using the largest of days, hours, minutes or seconds whose absolute value reaches the unit; round the selected value as in JavaScript Math.round, with short and long formats.",
+  "relevant_files": [
+    "index.js"
+  ],
+  "writable_files": [
+    "index.js"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium"
+}

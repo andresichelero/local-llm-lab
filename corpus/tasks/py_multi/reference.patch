@@ -1,0 +1,11 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -2188,7 +2188,7 @@
+                     the default value to be returned.
+         """
+         try:
+-            val = self.dict[key][-1]
++            val = self.dict[key][index]
+             return type(val) if type else val
+         except Exception:
+             pass

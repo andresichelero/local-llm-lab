@@ -1,0 +1,23 @@
+X-think (rep3)   n=36 first=22 final=30 esc=10 rescued=8 median_total_s=53.8 sum_total_min=77 median_first_success_s=28.4 max_peak_vram=4546
+R-q4             n=36 first=27 final=29 esc=3 rescued=2 median_total_s=40.3 sum_total_min=72 median_first_success_s=35.5 max_peak_vram=5800
+R-q6             n=36 first=23 final=28 esc=7 rescued=5 median_total_s=38.0 sum_total_min=59 median_first_success_s=35.7 max_peak_vram=6618
+  R-q4 vs X-think first_pass: base_only=3 new_only=8 p=0.227
+  R-q4 vs X-think final_pass: base_only=2 new_only=1 p=1.000
+  R-q6 vs X-think first_pass: base_only=5 new_only=6 p=1.000
+  R-q6 vs X-think final_pass: base_only=4 new_only=2 p=0.688
+  R-q6 vs R-q4 first_pass: q4_only=7 q6_only=3 p=0.344
+  R-q6 vs R-q4 final_pass: q4_only=3 q6_only=2 p=1.000
+
+per task (1=first pass, F=rescued, 0=fail; r1 r2 r3):
+  cont_path       X-think (rep3)=111  R-q4=111  R-q6=F11
+  cont_quote      X-think (rep3)=FFF  R-q4=111  R-q6=111
+  js_plural       X-think (rep3)=111  R-q4=111  R-q6=010
+  js_sign         X-think (rep3)=111  R-q4=111  R-q6=111
+  mcp_header      X-think (rep3)=111  R-q4=111  R-q6=111
+  mcp_params      X-think (rep3)=111  R-q4=111  R-q6=111
+  py_query        X-think (rep3)=1FF  R-q4=111  R-q6=F1F
+  py_range        X-think (rep3)=000  R-q4=000  R-q6=000
+  recover_date    X-think (rep3)=110  R-q4=000  R-q6=010
+  recover_decode  X-think (rep3)=111  R-q4=111  R-q6=111
+  tests_query     X-think (rep3)=0F1  R-q4=1FF  R-q6=1F1
+  tests_range     X-think (rep3)=F0F  R-q4=101  R-q6=01F

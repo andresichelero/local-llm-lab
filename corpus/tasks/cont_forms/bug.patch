@@ -1,0 +1,14 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -2227,9 +2227,9 @@
+ 
+     def _fix(self, s, encoding=None):
+         if isinstance(s, unicode) and self.recode_unicode:  # Python 3 WSGI
+-            return s.encode('latin1').decode(encoding or self.input_encoding)
++            return s.encode('latin1').decode('latin1')
+         elif isinstance(s, bytes):  # Python 2 WSGI
+-            return s.decode(encoding or self.input_encoding)
++            return s.decode('latin1')
+         else:
+             return s
+ 

@@ -1,0 +1,19 @@
+{
+  "id": "recover_hvalue",
+  "class": "tool_recovery",
+  "host": "bottle-0.13.2",
+  "objective": "Inspect the deterministic failure report and restore HTTP header value handling: preserve valid value whitespace and reject newline, carriage return, and NUL control characters.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium",
+  "stub": "corpus/stubs/recover_hvalue/tool.py",
+  "adaptation": "A deterministic tool response supplies external evidence; no live service is required."
+}

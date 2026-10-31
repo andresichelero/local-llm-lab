@@ -1,0 +1,17 @@
+{
+  "id": "py_query",
+  "class": "python_fix",
+  "host": "bottle-0.13.2",
+  "objective": "Restore form query decoding, including plus as space in values, percent escapes, blank values and ordering of repeated keys.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium"
+}

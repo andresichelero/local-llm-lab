@@ -1,0 +1,19 @@
+{
+  "id": "cont_forms",
+  "class": "continuation",
+  "host": "bottle-0.13.2",
+  "objective": "First delivery: getunicode must decode WSGI Latin-1 text values using the form input encoding, returning the supplied default for missing or undecodable values.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium",
+  "phase": 1,
+  "visible_test": "verify_phase1.py"
+}

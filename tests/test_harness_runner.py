@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -30,6 +32,76 @@ except ImportError:
 
 
 class HarnessRunnerTests(unittest.TestCase):
+    def test_guarded_edit_runs_from_isolated_workspace_without_pythonpath(self) -> None:
+        self.assertTrue(callable(_isolated_environment), "isolated environment builder is not implemented")
+        if os.name == "nt":
+            self.skipTest("The isolated launcher requires the WSL/POSIX shell environment")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            repo = root / "repo with spaces"
+            tool = repo / "benchmark/guarded_edit.py"
+            tool.parent.mkdir(parents=True)
+            shutil.copy2(Path(__file__).resolve().parents[1] / "benchmark/guarded_edit.py", tool)
+
+            run_dir = root / "run with spaces"
+            workspace = run_dir / "workspace"
+            (workspace / "src").mkdir(parents=True)
+            target = workspace / "src/example.py"
+            target.write_text('VALUE = "before"\n', encoding="utf-8")
+
+            with patch("benchmark.harness_runner.REPO_ROOT", repo):
+                env = _isolated_environment("opencode", run_dir, root / "install", workspace)
+
+            self.assertNotIn("PYTHONPATH", env)
+            result = subprocess.run(
+                [
+                    str(run_dir / "bin/guarded-edit"),
+                    "apply",
+                    "--file", "src/example.py",
+                    "--search", "before",
+                    "--replace", "after",
+                    "--json",
+                ],
+                cwd=workspace,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["status"], "applied")
+            self.assertEqual(target.read_text(encoding="utf-8"), 'VALUE = "after"\n')
+
+            outside_target = root / "outside.py"
+            outside_target.write_text('VALUE = "before"\n', encoding="utf-8")
+            symlink = workspace / "src/outside_link.py"
+            try:
+                symlink.symlink_to(outside_target)
+            except OSError as exc:
+                self.skipTest(f"Symlinks are unavailable: {exc}")
+            rejected = subprocess.run(
+                [
+                    str(run_dir / "bin/guarded-edit"),
+                    "apply",
+                    "--file", "src/outside_link.py",
+                    "--search", "before",
+                    "--replace", "changed",
+                    "--json",
+                ],
+                cwd=workspace,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+
+            self.assertEqual(rejected.returncode, 1)
+            self.assertEqual(json.loads(rejected.stdout)["status"], "symlink_rejected")
+            self.assertEqual(outside_target.read_text(encoding="utf-8"), 'VALUE = "before"\n')
+
     def test_task_registry_resolves_distinct_fixture_and_prompt(self) -> None:
         self.assertTrue(callable(resolve_task), "harness task registry is not implemented")
         fixture, prompt = resolve_task("whitespace_normalization")

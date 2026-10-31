@@ -1,0 +1,17 @@
+{
+  "id": "js_sign",
+  "class": "javascript_fix",
+  "host": "ms-2.1.3",
+  "objective": "Repair signed duration parsing, retaining fractional and case-insensitive units without changing formatting.",
+  "relevant_files": [
+    "index.js"
+  ],
+  "writable_files": [
+    "index.js"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium"
+}

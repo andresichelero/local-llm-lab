@@ -1,0 +1,5 @@
+{
+  "phase": 2,
+  "objective": "Complete redirect URL handling: resolve relative and absolute targets against the request URL while retaining the default and explicit status behavior from the first delivery.",
+  "visible_test": "verify.py"
+}

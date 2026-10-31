@@ -1,0 +1,13 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -550,8 +550,8 @@
+         for p in reversed(self.app.plugins + self.plugins):
+             if True in self.skiplist: break
+             name = getattr(p, 'name', False)
+-            if name and (name in self.skiplist or name in unique): continue
+-            if p in self.skiplist or type(p) in self.skiplist: continue
++            if name and name in self.skiplist: continue
++            if p in self.skiplist: continue
+             if name: unique.add(name)
+             yield p
+ 

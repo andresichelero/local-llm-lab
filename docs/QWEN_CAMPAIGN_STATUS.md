@@ -2,7 +2,7 @@
 
 **Protocol:** `qwen-quant-harness-optimization-final-oom-v2`
 **Local output:** `/home/foxtrot/local-llm-benchmark/results/qwen-quant-harness-optimization-final-oom-v2`
-**Campaign checkout:** `D:\Usuario\Downloads\LLM\.worktrees\practical-agent-v2`
+**Campaign checkout:** `<workspace>\.worktrees\practical-agent-v2`
 **Status:** the qualification stage was started on 2026-10-27; consult the live output for current progress.
 
 The campaign evaluates five GGUF variants each for Qwen3.5-4B and Qwen3.5-9B. They are Unsloth conversions of the base models, not additional model families. Each catalog entry records its source, revision, file hashes, tokenizer and template information as available.

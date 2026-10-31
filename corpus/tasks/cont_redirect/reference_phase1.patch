@@ -1,0 +1,11 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -2816,7 +2816,7 @@
+     """ Aborts execution and causes a 303 or 302 redirect, depending on
+         the HTTP protocol version. """
+     if not code:
+-        code = 302 if request.get('SERVER_PROTOCOL') == "HTTP/1.1" else 303
++        code = 303 if request.get('SERVER_PROTOCOL') == "HTTP/1.1" else 302
+     res = response.copy(cls=HTTPResponse)
+     res.status = code
+     res.body = ""

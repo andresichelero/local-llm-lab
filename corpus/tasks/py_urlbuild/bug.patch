@@ -1,0 +1,11 @@
+--- a/bottle.py
++++ b/bottle.py
+@@ -457,7 +457,7 @@
+         try:
+             for i, value in enumerate(anons):
+                 query['anon%d' % i] = value
+-            url = ''.join([f(query.pop(n)) if n else f for (n, f) in builder])
++            url = ''.join([f(query[n]) if n else f for (n, f) in builder])
+             return url if not query else url + '?' + urlencode(query)
+         except KeyError as E:
+             raise RouteBuildError('Missing URL argument: %r' % E.args[0])

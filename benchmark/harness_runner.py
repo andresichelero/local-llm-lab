@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import statistics
 import subprocess
@@ -20,7 +21,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from benchmark.provenance import git_provenance  # noqa: E402
-from benchmark.harness_eval import grade_workspace  # noqa: E402
+from benchmark.harness_eval import GRADER_PROTOCOL_VERSION, grade_workspace  # noqa: E402
+from benchmark.safe_execution_guard import block_legacy_execution  # noqa: E402
 
 DEFAULT_ROOT = Path.home() / "local-llm-benchmark"
 DEFAULT_MODEL = "Qwen3.5-9B-Q4_K_M"
@@ -78,20 +80,20 @@ def build_command(
 ) -> list[str]:
     prompt = prompt_file.read_text(encoding="utf-8").strip()
     if harness == "pi":
-        executable = install_root / "envs/node-harnesses/pi/node_modules/.bin/pi"
+        executable = install_root / "envs/node-harnesses-update-20261028/pi/node_modules/.bin/pi"
         return [
             str(executable), "--provider", "local-llama", "--model", model,
             "--thinking", "off", "--tools", "read,bash,edit,write", "--no-mcp",
             "--mode", "json", "--print", prompt,
         ]
     if harness == "opencode":
-        executable = install_root / "envs/node-harnesses/opencode/node_modules/.bin/opencode"
+        executable = install_root / "envs/node-harnesses-update-20261028/opencode/node_modules/.bin/opencode"
         return [
             str(executable), "run", "--auto", "--format", "json", "--model",
             f"local/{model}", prompt,
         ]
     if harness == "vibe":
-        executable = install_root / "envs/mistral-vibe/bin/vibe"
+        executable = install_root / "envs/mistral-vibe-20261028/bin/vibe"
         return [
             str(executable), "--prompt-file", str(prompt_file), "--workdir", str(workspace),
             "--trust", "--auto-approve", "--max-turns", str(max_turns),
@@ -298,8 +300,9 @@ def _isolated_environment(
     bin_dir = run_dir / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
     guarded_edit = bin_dir / "guarded-edit"
+    guarded_edit_script = shlex.quote(str(REPO_ROOT / "benchmark/guarded_edit.py"))
     guarded_edit.write_text(
-        "#!/usr/bin/env bash\nexec python3 -m benchmark.guarded_edit \"$@\"\n",
+        f'#!/usr/bin/env bash\nexec python3 {guarded_edit_script} "$@"\n',
         encoding="utf-8",
     )
     guarded_edit.chmod(0o755)
@@ -422,6 +425,7 @@ def run_one(
     results_output: Path | None = None,
     task: str = "calculator_division",
 ) -> dict[str, Any]:
+    block_legacy_execution("benchmark.harness_runner.run_one")
     source_revision, source_tree_dirty = git_provenance(REPO_ROOT)
     resolved_model_path = install_root / DEFAULT_MODEL_PATH if model_path is None else model_path
     resolved_server_log = install_root / "logs/harness-llama-server.log" if server_log is None else server_log
@@ -491,7 +495,7 @@ def run_one(
     wall_seconds = round(time.perf_counter() - start, 3)
 
     try:
-        quality = grade_workspace(workspace, fixture_path, task=task)
+        quality = grade_workspace(workspace, fixture_path, task=task, artifact_dir=run_dir / "grader-artifacts")
     except Exception as error:  # Preserve benchmark outcomes if independent grading itself fails.
         quality = {"success": False, "grader_error": f"{type(error).__name__}: {error}"}
     (run_dir / "quality.json").write_text(json.dumps(quality, indent=2) + "\n", encoding="utf-8")
@@ -514,6 +518,7 @@ def run_one(
     ).stdout.splitlines()
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "grader_protocol_version": GRADER_PROTOCOL_VERSION,
         "experiment": (
             "harness-coding-task-smoke" if task == "calculator_division" else f"harness-{task}"
         ),

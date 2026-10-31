@@ -1,5 +1,0 @@
-method,phase,weight_precision,task_runs,task_successes,cases_passed,cases_total,median_reference_nll,median_reference_perplexity,median_generation_seconds
-qlora,base_nf4,NF4,15,15,54,54,0.266511,1.305402,0.5627
-qlora,qlora_adapter,NF4,15,15,54,54,0.084842,1.088545,0.7201
-lora,base_fp16,FP16,15,12,39,54,0.300461,1.350481,0.6647
-lora,lora_adapter,FP16,15,15,54,54,0.069606,1.072086,0.5251

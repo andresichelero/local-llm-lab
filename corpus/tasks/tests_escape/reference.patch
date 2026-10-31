@@ -1,0 +1,9 @@
+--- /dev/null
++++ b/test/test_tests_escape.py
+@@ -0,0 +1,6 @@
++import bottle
++
++def test_escape():
++    assert bottle.html_escape('a&<b>') == 'a&amp;&lt;b&gt;'
++    assert bottle.html_escape(chr(34) + chr(39)) == '&quot;&#039;'
++    assert bottle.html_escape('plain') == 'plain'

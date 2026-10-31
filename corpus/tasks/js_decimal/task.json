@@ -1,0 +1,17 @@
+{
+  "id": "js_decimal",
+  "class": "javascript_fix",
+  "host": "ms-2.1.3",
+  "objective": "Parse signed decimal durations, with or without a leading integer, using zero or more spaces before a recognized unit; omitted units mean milliseconds. Recognize unit names case-insensitively.",
+  "relevant_files": [
+    "index.js"
+  ],
+  "writable_files": [
+    "index.js"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium"
+}

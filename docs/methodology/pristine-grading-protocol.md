@@ -1,0 +1,13 @@
+# Pristine grading protocol
+
+**Status:** `pristine-workspace-v1` is a diagnostic replay checkpoint. Its result is not authenticated against candidate code running in the same Python interpreter and is not eligible for capability claims.
+
+The grader accepts a fixed task policy and committed fixture fingerprint, checks candidate workspace structure before reading allowlisted source and test paths, and replays source bytes into a fresh fixture. The replay excludes candidate Git metadata, bytecode caches, startup hooks, and candidate-authored tests. Candidate tests are parsed only for workflow metadata. The legacy direct-workspace grader remains available for historical reproduction and is not comparable with this protocol.
+
+The returned gates are `functional_pass`, `regression_pass`, `integrity_pass`, `scope_pass`, and `workflow_pass`; `success` is their labeled compatibility aggregate. `integrity_pass` covers static workspace structure and protected files only. Every result must retain `runtime_result_authenticated=false`, `adversarial_evaluation_validated=false`, `aggregate_is_security_proof=false`, `private_holdout=false`, and `capability_evidence_eligible=false`. Git metadata is explicitly unaudited. These fields describe the checkpoint honestly; they do not secure its result authority.
+
+The independent no-model matrix has 29 controls: 18 no-op, known-reference, and required-behavior mutation cases across six tasks; two bytecode cases comparing legacy and pristine grading; candidate-test sentinel and deletion cases; and seven structure controls for extra files, startup shadowing, Git spoofing, executable mode, symlink, hardlink, and FIFO. Expected outcomes and raw artifacts are retained externally. Passing this matrix does not establish adversarial grader security.
+
+An end-to-end proof showed that candidate import code can patch `unittest` so a wrong `divide()` implementation reports successful functional, regression, integrity, scope, workflow, and aggregate gates while trusted test methods never run. The next gate must move assertion and result authority outside the candidate-controlled interpreter and authenticate the result across that boundary. OS and network isolation and separate private holdout custody also remain unverified.
+
+Protocol identity changes whenever grader behavior, fixtures, task policy, controls, or result semantics change. Preserve prior direct-grader evidence and protocol identities; do not retroactively reclassify it. The validation report (`../../results/reports/pristine-grading-validation-20261013.md`) and metadata-only evidence index (`../../results/reports/pristine-grading-validation-evidence-index-20261014.json`) are not included in this checkout.

@@ -1,4 +1,0 @@
-Derived run summary (the complete measured JSONL is in results/raw/qwen25-coder-7b-adamw32-heldout-20261011T192253Z.jsonl).
-Command: benchmark/qlora_quality.py --method qlora --adapter-training-backend transformers-peft --adapter-training-optimizer adamw32 --repeats 3 --warmup.
-Exit status: 0. Rows: 30; adapter rows: 15; passed: 54/54.
-This is a post-run summary of the saved JSONL, not a terminal transcript.

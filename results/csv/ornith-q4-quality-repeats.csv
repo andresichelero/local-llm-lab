@@ -1,9 +1,0 @@
-run_kind,repetition,mode,success,wall_time_s,prompt_tokens,completion_tokens,input_tokens,output_tokens,tool_calls,failed_tool_calls,retries,sample_count,sampled_vram_peak_mb,sampled_ram_peak_mb,git_sha,runtime_commit
-measurement,1,structured_json,True,0.3286,33,12,,,,,,4,6020,1308,324fd5aca29ee5102da51bc78b92ac6031e07dee,d81235049384534c167caea52b85a694f6103d14
-measurement,1,tool_round_trip,True,1.4221,,,400,54,1,0,0,4,6020,1308,324fd5aca29ee5102da51bc78b92ac6031e07dee,d81235049384534c167caea52b85a694f6103d14
-measurement,2,structured_json,True,0.299,33,12,,,,,,4,6021,1306,324fd5aca29ee5102da51bc78b92ac6031e07dee,d81235049384534c167caea52b85a694f6103d14
-measurement,2,tool_round_trip,True,1.4072,,,400,54,1,0,0,4,6021,1306,324fd5aca29ee5102da51bc78b92ac6031e07dee,d81235049384534c167caea52b85a694f6103d14
-measurement,3,structured_json,True,0.336,33,12,,,,,,4,6021,1315,324fd5aca29ee5102da51bc78b92ac6031e07dee,d81235049384534c167caea52b85a694f6103d14
-measurement,3,tool_round_trip,True,1.3807,,,400,54,1,0,0,4,6021,1315,324fd5aca29ee5102da51bc78b92ac6031e07dee,d81235049384534c167caea52b85a694f6103d14
-warmup,0,structured_json,True,0.3224,33,12,,,,,,4,6027,1269,324fd5aca29ee5102da51bc78b92ac6031e07dee,d81235049384534c167caea52b85a694f6103d14
-warmup,0,tool_round_trip,True,1.3166,,,400,54,1,0,0,4,6027,1269,324fd5aca29ee5102da51bc78b92ac6031e07dee,d81235049384534c167caea52b85a694f6103d14

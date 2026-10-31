@@ -1,0 +1,18 @@
+{
+  "id": "tests_list",
+  "class": "authored_tests",
+  "host": "bottle-0.13.2",
+  "objective": "Write tests for makelist: convert tuples and lists to lists, wrap truthy scalars, and return an empty list for None or other false scalar values. Do not change implementation.",
+  "relevant_files": [
+    "bottle.py",
+    "test"
+  ],
+  "writable_files": [
+    "test/test_tests_list.py"
+  ],
+  "invariants": [
+    "Do not modify bottle.py or existing tests.",
+    "Tests must pass on the original implementation."
+  ],
+  "difficulty": "medium"
+}

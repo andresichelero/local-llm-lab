@@ -1,0 +1,17 @@
+{
+  "id": "py_cookie",
+  "class": "python_fix",
+  "host": "bottle-0.13.2",
+  "objective": "Restore signed cookie reading: accept a correctly signed value only for its original cookie name and matching secret; return the supplied default for a missing cookie, wrong name, or wrong secret.",
+  "relevant_files": [
+    "bottle.py"
+  ],
+  "writable_files": [
+    "bottle.py"
+  ],
+  "invariants": [
+    "Preserve the public API and unrelated behavior.",
+    "Do not modify upstream tests."
+  ],
+  "difficulty": "medium"
+}
