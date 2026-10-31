@@ -249,7 +249,7 @@ In the OpenCode profile, also use `"options": { "temperature": 0.6, "topP": 0.95
 | Now | Add repetitions on the 12 tasks that separate configurations |
 | Soon | Find out whether speed on this GPU follows power or memory, then work through the tuning options |
 | Later | Try a new edit protocol for the bounded worker; compare ExLlamaV3 and a large model on the same corpus |
-| Eventually | Build a separate confirmation set; add new host repositories; evaluate new small models; work through the remaining backlog |
+| Eventually | Build a separate confirmation set; add new host repositories; work through the remaining backlog |
 
 <details>
 <summary><strong>Backlog</strong></summary>
