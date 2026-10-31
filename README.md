@@ -80,7 +80,7 @@ The agent can give a different answer to the same task even at temperature 0, an
 | Stage 5 | Do other weights, code tools or a retry help? | 96 episodes |
 | Replication | Does the retry with thinking hold up? Does RTK hurt? | 72 episodes |
 | Combined | Do the best options work together? | 72 episodes |
-| T2 | Which approach copes best with very long tasks? | 8 marathons |
+| T2 | Which approach copes best with very long tasks? | 32 marathons |
 | T3b | Does loading about 46K tokens of the repository up front help? | 144 episodes |
 
 ### Reading the charts
@@ -127,11 +127,9 @@ Without the cache, median episode time rises from 42 s to 115 s. With it, a repo
 
 Q6_K_L used 818 MiB more than Q4_K_M and finished at 28/36 against 29/36, so the extra precision did not pay for itself here.
 
-### 5. Long tasks favour a large context
+### 5. Long tasks: compaction at 32K did best
 
-<img src="docs/figures/long-tasks.svg" alt="Hidden tests passed out of 9 and prompt tokens in millions. Large context 9 and 7.87. Headroom 7 and 2.41. OpenCode compaction 6 and 1.52. Reset with PROGRESS.md 5 and 2.01." width="100%">
-
-A marathon gives the agent 5 or 6 objectives in a row on one copy of Bottle, using the bugs from the task table. The conversation grows with each objective until it no longer fits, so we compared four ways to handle that. Two marathons give 9 hidden tests in total.
+A marathon gives the agent 5 or 6 objectives in a row on one copy of Bottle, using the bugs from the task table. The conversation grows with each objective until it no longer fits, so we compared four ways to handle that. Two marathons give 9 hidden tests per repetition, 27 over three repetitions.
 
 | Approach | Context | What happens as the conversation grows |
 | --- | --- | --- |
@@ -142,7 +140,14 @@ A marathon gives the agent 5 or 6 objectives in a row on one copy of Bottle, usi
 
 Prompt tokens count everything sent to the model across the marathon. The large context costs more because each turn carries the whole history.
 
-Keeping the whole history won when it fit in VRAM. Among the 32K options, Headroom did better than compaction or a reset. This campaign has one repetition per approach, and our logs do not confirm that compaction finished, so a replication is planned.
+| Approach | Hidden tests passed | Peak VRAM |
+| --- | --- | --- |
+| OpenCode compaction | 23/27 | 4,101 MiB |
+| Large context | 18/27 | 5,435 MiB |
+| Reset | 17/27 | 4,099 MiB |
+| Headroom | 14/27 | 4,099 MiB |
+
+A first run with one repetition had put the large context first, 9 of 9, and that ranking did not hold. Most of the gap comes from three objectives in one marathon, so treat the order as provisional. Only compaction against Headroom is clear (9 against 0, p = 0.004). Details are in the [T2 report](reports/strategy-analysis-4b-2026-10-28/execution/F1/T2-long-task-results-v3.md).
 
 ### 6. The corpus is now the main limit
 
@@ -156,6 +161,7 @@ Most of the pilot tasks pass almost every time and `py_range` never does, so few
 | --- | --- | --- |
 | Weights | Q4_K_M | Q6 variants showed no significant gain and use more VRAM |
 | Context | 64K (32K minimum) | 16K fails with OpenCode on this corpus |
+| Long tasks | 32K with OpenCode compaction | 23/27 hidden tests against 18/27 with 128K, and 1.3 GB less VRAM |
 | KV cache | q4_0 | No measurable loss, lowest VRAM |
 | Prompt cache | On, `--cache-ram 2048` | 25 times lower latency; the 8 GiB default caused a WSL out-of-memory stop |
 | Thinking | Off, then on for one retry | 22/36 → 30/36 (p = 0.008) |
@@ -240,8 +246,8 @@ In the OpenCode profile, also use `"options": { "temperature": 0.6, "topP": 0.95
 
 | When | Work |
 | --- | --- |
-| Now | Find out why the grader times out in the sandbox; run the long tasks with three repetitions and confirm compaction |
-| Soon | Add repetitions on the 12 tasks that separate configurations |
+| Now | Add repetitions on the 12 tasks that separate configurations |
+| Soon | Find out whether speed on this GPU follows power or memory, then work through the tuning options |
 | Later | Try a new edit protocol for the bounded worker; compare ExLlamaV3 and a large model on the same corpus |
 | Eventually | Build a separate confirmation set; add new host repositories; evaluate new small models; work through the remaining backlog |
 
@@ -343,7 +349,7 @@ Read every number here as a measurement of one machine on a small development co
 - **Missing fields in v5 and v6 results.** Automatic termination taxonomy and diff quality metrics (lines, scope, weakened tests) were added later. Results for stages 1 through 3 have these fields empty or null. Failure causes come from `failure` labels recorded by the runner.
 - **Infrastructure retries.** Two v6 units had their first attempt invalidated by grader failure. The second attempt, which passed, counted as a pass. This follows the protocol. In v5, a model failure was classified as infrastructure and retried; this classification was corrected in v6.
 - **Timeouts in stages 4 and 5.** Nine final results and two intermediate attempts also recorded a connection reset. Current rules would prioritize the server error, but logs do not prove whether the reset preceded the timeout, so historical numbers were retained. See the [revalidation](reports/strategy-analysis-4b-2026-10-28/execution/F1/pr45-review-fixes.md).
-- **Unequal repetitions.** Many exploratory arms in stages 4 and 5 have 12 episodes. The replicated cascade and combined campaign have 36 episodes per arm. T2 still has one repetition per arm, and its conclusion about compaction does not confirm that compaction finished.
+- **Unequal repetitions.** Many exploratory arms in stages 4 and 5 have 12 episodes. The replicated cascade and combined campaign have 36 episodes per arm. T2 now has three repetitions per arm, still few, and its first ranking did not hold.
 - **T3b.** The 4B writes the SEARCH block from memory and resubmits rejected edits. OpenSSL errors affected v2 and v3 verification, so historical passes do not isolate the context effect. Excluding `js_sign` from P-W16 due to a proven verifier failure leaves that arm at 2/11, and other episodes also received environmental diagnoses, so the quality comparison is inconclusive. See the [revalidation](reports/strategy-analysis-4b-2026-10-28/execution/F1/pr45-review-fixes.md).
 - **Landlock on drvfs.** The historical T3b run used a repository copy on WSL ext4. The revised verifier was also tested on `/mnt/d`.
 - **Reproduction on another machine.** The config has laboratory paths and SHA-256 hashes. A different machine requires a new `protocol_id`, because the manifest refuses to mix protocols.

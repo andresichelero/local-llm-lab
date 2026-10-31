@@ -193,6 +193,20 @@ Raw data are in `qwen-4b-opencode-long-tasks-20261029-v2`: 8 marathons (4 arms �
 
 There was no regression or OOM. Instrumentation records the compaction request but does not confirm that it finished.
 
+### Three repetitions (long-tasks-v3)
+
+Raw data are in `qwen-4b-opencode-long-tasks-v3`: 24 marathons (4 arms × 2 marathons × 3 repetitions). The v2 ranking did not hold.
+
+- Aggregate: [t2-long-tasks-v3-summary.txt](../results/3070-benchmark/t2-long-tasks-v3-summary.txt).
+- Analysis: [T2-long-task-results-v3.md](../reports/strategy-analysis-4b-2026-10-28/execution/F1/T2-long-task-results-v3.md).
+
+| Arm | Oracles passed | Marathons complete | Peak VRAM (MiB) | Compactions finished |
+| --- | --- | --- | --- | --- |
+| `L-compact` | 23/27 | 2/6 | 4101 | 10 of 10 |
+| `L-bigctx` | 18/27 | 1/6 | 5435 | 2 of 2 |
+| `L-reset` | 17/27 | 0/6 | 4099 | 35 of 116 |
+| `L-headroom` | 14/27 | 0/6 | 4099 | 13 of 13 |
+
 ## 10. Cached repository prefix (T3b, prefix-cache-v2 and v3 protocols)
 
 Raw data are in `qwen-4b-prefix-cache-v2`: 108 units (3 arms × 12 tasks × 3 repetitions), with no infrastructure failures recorded in the final classification. Revalidation found environmental verifier failures in some units; see below. Repetitions were identical at temperature 0, so the effective sample is 12 tasks per arm.

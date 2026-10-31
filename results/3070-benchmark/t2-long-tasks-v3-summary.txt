@@ -1,0 +1,41 @@
+protocol qwen-4b-opencode-long-tasks-v3
+4 arms x 2 marathons x 3 repetitions, 24 units, 108 oracle results
+
+unit                final  failure                 regressions  compactions  finished  seconds  peak MiB
+L-bigctx-M1-r1      3/4    model_oracle_failed     0            0            0         166      5427
+L-bigctx-M1-r2      3/4    model_oracle_failed     0            0            0         150      5429
+L-bigctx-M1-r3      4/4    none                    0            0            0         409      5435
+L-bigctx-M2-r1      3/5    model_oracle_failed     0            0            0         163      5435
+L-bigctx-M2-r2      3/5    model_oracle_failed     0            0            0         174      5429
+L-bigctx-M2-r3      2/5    supervisor_wall_budget  0            2            2         1716     5431
+L-compact-M1-r1     3/4    model_oracle_failed     0            1            1         111      4095
+L-compact-M1-r2     3/4    model_oracle_failed     0            1            1         79       4083
+L-compact-M1-r3     3/4    model_oracle_failed     0            1            1         80       4085
+L-compact-M2-r1     5/5    none                    0            2            2         210      4085
+L-compact-M2-r2     5/5    none                    0            2            2         190      4101
+L-compact-M2-r3     4/5    model_oracle_failed     0            3            3         324      4085
+L-headroom-M1-r1    3/4    model_oracle_failed     0            1            1         74       4083
+L-headroom-M1-r2    3/4    model_oracle_failed     0            1            1         95       4083
+L-headroom-M1-r3    3/4    model_oracle_failed     0            1            1         98       4083
+L-headroom-M2-r1    2/5    model_oracle_failed     0            5            5         557      4097
+L-headroom-M2-r2    1/5    model_oracle_failed     0            2            2         316      4099
+L-headroom-M2-r3    2/5    model_oracle_failed     0            3            3         408      4099
+L-reset-M1-r1       3/4    model_cli_failure       0            5            5         131      4083
+L-reset-M1-r2       3/4    model_cli_failure       0            5            5         127      4099
+L-reset-M1-r3       3/4    model_cli_failure       0            5            5         127      4085
+L-reset-M2-r1       3/5    model_cli_failure       0            6            6         220      4099
+L-reset-M2-r2       2/5    model_cli_failure       0            8            8         522      4099
+L-reset-M2-r3       3/5    model_cli_failure       0            87           6         268      4099
+
+arm          oracles  complete  compactions  finished
+L-compact    23/27    2/6       10           10
+L-bigctx     18/27    1/6       2            2
+L-reset      17/27    0/6       116          35
+L-headroom   14/27    0/6       13           13
+
+mcnemar exact, oracles   first-only  second-only  p
+compact vs headroom      9           0            0.004
+compact vs reset         7           1            0.070
+compact vs bigctx        7           2            0.180
+bigctx vs headroom       6           2            0.289
+bigctx vs reset          2           1            1.000
