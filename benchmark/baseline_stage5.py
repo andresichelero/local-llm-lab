@@ -13,6 +13,7 @@ import threading
 import time
 from pathlib import Path
 
+from benchmark import nvml_session
 from benchmark import opencode_baseline as baseline
 
 CONFIG = baseline.ROOT / 'benchmark/configs/qwen-4b-opencode-stage5.json'
@@ -186,17 +187,12 @@ def manifest(config, config_path=CONFIG):
 
 
 def free_vram_mib():
-    proc = subprocess.run(['nvidia-smi', '--query-gpu=memory.free', '--format=csv,noheader,nounits'],
-                          capture_output=True, text=True, timeout=5, check=True)
-    return int(proc.stdout.splitlines()[0])
+    return nvml_session.memory_mib()[1]
 
 
 def vram_capacity_and_free():
-    proc = subprocess.run(['nvidia-smi', '--query-gpu=memory.total,memory.free',
-                           '--format=csv,noheader,nounits'], capture_output=True, text=True,
-                          timeout=5, check=True)
-    total, free = proc.stdout.splitlines()[0].split(',')
-    return int(total.strip()), int(free.strip())
+    total, free, _ = nvml_session.memory_mib()
+    return total, free
 
 
 def minimum_headroom(total, free, peak):

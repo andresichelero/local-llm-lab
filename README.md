@@ -6,7 +6,7 @@ We plant bugs in two real open-source projects, ask the agent to fix them and ch
 
 ## Results so far
 
-The setup we recommend fixed 29 of 36 task attempts (81%) and peaked at 5,800 MiB of video memory.
+A close variant of the setup we recommend fixed 31 of 36 task attempts (86%) on llama.cpp master and peaked at 4,973 MiB of video memory.
 
 - Retrying a failed attempt once, with the model's thinking mode on, raised one setup from 22 to 30 passes out of 36. This is the only statistically significant gain so far (p = 0.008).
 - A 16K context window passed 3 of 12 attempts. At 32K and above, passes stayed between 67% and 75%.
@@ -159,15 +159,13 @@ Most of the pilot tasks pass almost every time and `py_range` never does, so few
 | KV cache | q4_0 | No measurable loss, lowest VRAM |
 | Prompt cache | On, `--cache-ram 2048` | 25 times lower latency; the 8 GiB default caused a WSL out-of-memory stop |
 | Thinking | Off, then on for one retry | 22/36 → 30/36 (p = 0.008) |
-| Server | MTP and context checkpoints | 74 → 115 tok/s decode; 37 → 25 s success time, measured separately in stage 4 |
+| Server | llama.cpp master with MTP | Decode 73 → 108 tok/s from MTP, and 98 → 110 tok/s from master on the full profile; no measured change in passes |
 | Sampling | Temperature 0, retry at 0.6 | Qwen's recommended sampling scored 6/12 |
 | OpenCode steps | 40 | 80 steps scored 10/12, with no clear gain |
 | RTK | Off | 17/36 against 22/36 (p = 0.23), no evidence to adopt it |
 | LSP | Not needed | Neutral, and the model never called the `lsp` tool on its own |
 
-MTP, checkpoints, and the 2 GiB cache limit were enabled together in the combined campaign, so that campaign cannot attribute its result to any one of them. The limit's effect on results is unknown.
-
-On 18 calibrated tasks with three repetitions, MTP and checkpoints raised decode speed from about 73 to 107 tok/s and cut total time by 25% to 31%. Final passes were 30/54 against 34/54 without them (p = 0.34). That difference is not significant, but the data still allow a loss of up to about 19 points, so these two settings are recommended for speed and have not been shown to preserve quality. Details are in the [comparison report](reports/strategy-analysis-4b-2026-10-28/execution/F1/calibrated-comparison.md).
+A later campaign tested each setting alone on 18 calibrated tasks with three repetitions. A repeat of the control moved 9 of 54 outcomes, and no setting changed passes beyond that: 34 and 31 for the two controls, 29 with MTP, 32 with checkpoints, 32 with a 4 GiB cache. MTP raised decode speed by 44% to 48%, but total time stayed between the two controls. Checkpoints showed no benefit and used more RAM, so they left this profile. The exact combination below, master with MTP and no checkpoints, was measured in parts and not as one run. Details are in the [factor separation report](reports/strategy-analysis-4b-2026-10-28/execution/F1/factor-separation.md).
 
 ### Server
 
@@ -185,7 +183,6 @@ llama-server \
   --temp 0 --top-p 0.95 --top-k 20 \
   --cache-prompt --no-webui \
   --spec-type draft-mtp --spec-draft-n-max 2 \
-  --ctx-checkpoints 64 --checkpoint-min-step 1024 \
   --cache-ram 2048
 ```
 
@@ -243,9 +240,9 @@ In the OpenCode profile, also use `"options": { "temperature": 0.6, "topP": 0.95
 
 | When | Work |
 | --- | --- |
-| Now | Work out why retries rescued fewer units with MTP and checkpoints on (8 against 13) |
-| Soon | Separate the effects of MTP, checkpoints, and the cache limit; retest on the latest llama.cpp |
-| Later | Replicate long tasks with three repetitions; try a new edit protocol for the bounded worker; compare ExLlamaV3 and a large model on the same corpus |
+| Now | Find out why the grader times out in the sandbox; run the long tasks with three repetitions and confirm compaction |
+| Soon | Add repetitions on the 12 tasks that separate configurations |
+| Later | Try a new edit protocol for the bounded worker; compare ExLlamaV3 and a large model on the same corpus |
 | Eventually | Build a separate confirmation set; add new host repositories; evaluate new small models; work through the remaining backlog |
 
 <details>
@@ -342,7 +339,7 @@ Read every number here as a measurement of one machine on a small development co
 - **Sandbox.** OpenCode execution permits networking, and bash confinement has not been proven for all commands. Current evaluations use a separate sandbox without networking; historical results were produced with earlier versions.
 - **Device VRAM.** VRAM is sampled for the whole device at about 1 Hz, and the Windows desktop shares the GPU. It is not exclusive process memory.
 - **Proxy TTFT.** TTFT measures time until the first content, reasoning, or tool call, as seen by the local proxy. It may be unavailable for some requests.
-- **Combined factors.** MTP, checkpoints, and the 2 GiB RAM cache limit were enabled together. The reference arm used the default 8 GiB RAM cache, so the isolated effect of the limit is unknown.
+- **Noise.** Repeating the control moved 9 of 54 outcomes and 54 minutes of arm time, so a difference of a few points or a few minutes cannot be read from one run.
 - **Missing fields in v5 and v6 results.** Automatic termination taxonomy and diff quality metrics (lines, scope, weakened tests) were added later. Results for stages 1 through 3 have these fields empty or null. Failure causes come from `failure` labels recorded by the runner.
 - **Infrastructure retries.** Two v6 units had their first attempt invalidated by grader failure. The second attempt, which passed, counted as a pass. This follows the protocol. In v5, a model failure was classified as infrastructure and retried; this classification was corrected in v6.
 - **Timeouts in stages 4 and 5.** Nine final results and two intermediate attempts also recorded a connection reset. Current rules would prioritize the server error, but logs do not prove whether the reset preceded the timeout, so historical numbers were retained. See the [revalidation](reports/strategy-analysis-4b-2026-10-28/execution/F1/pr45-review-fixes.md).

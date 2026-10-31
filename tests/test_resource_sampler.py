@@ -8,7 +8,7 @@ import tempfile
 import time
 from pathlib import Path
 import unittest
-from benchmark.resource_sampler import parse_meminfo_kib, parse_nvidia_smi
+from benchmark.resource_sampler import gpu_values, parse_meminfo_kib
 
 
 class ResourceSamplerTests(unittest.TestCase):
@@ -40,18 +40,18 @@ class ResourceSamplerTests(unittest.TestCase):
         self.assertIsNone(parsed["ram_total_mb"])
         self.assertIsNone(parsed["ram_used_mb"])
 
-    def test_parse_nvidia_smi_extracts_metrics_and_aliases(self) -> None:
-        sample_smi = "1127, 2, 45, 1500, 25.5\n"
-        parsed = parse_nvidia_smi(sample_smi)
+    def test_gpu_values_extracts_metrics_and_aliases(self) -> None:
+        parsed = gpu_values({"vram_used_mib": 1127, "gpu_util_pct": 2, "temperature_c": 45,
+                             "gpu_clock_mhz": 1500, "power_w": None})
         self.assertEqual(parsed["vram_used_mb"], "1127")
         self.assertEqual(parsed["system_vram_used_mib"], "1127")
         self.assertEqual(parsed["gpu_util_pct"], "2")
         self.assertEqual(parsed["temperature_c"], "45")
         self.assertEqual(parsed["gpu_clock_mhz"], "1500")
-        self.assertEqual(parsed["power_w"], "25.5")
+        self.assertEqual(parsed["power_w"], "[N/A]")
 
-    def test_parse_nvidia_smi_handles_malformed_output(self) -> None:
-        parsed = parse_nvidia_smi("incomplete output")
+    def test_gpu_values_handles_missing_session(self) -> None:
+        parsed = gpu_values({})
         self.assertIsNone(parsed["vram_used_mb"])
         self.assertIsNone(parsed["system_vram_used_mib"])
 
