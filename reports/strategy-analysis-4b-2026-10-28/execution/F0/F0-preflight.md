@@ -67,7 +67,7 @@ Static confirmation in local source:
 - tools/server/server.cpp:290,292: POST /tokenize and POST /apply-template.
 - tools/server/server.cpp:303-304: GET /slots and POST /slots/:id_slot.
 - tools/server/server-context.cpp:5415-5421: dispatch of action=save and action=restore; handlers read filename from the body.
-- tools/server/server-common.cpp:86,88: fields timings.cache_n and timings.prompt_n.
+- tools/server/server-common.cpp:86.88: fields timings.cache_n and timings.prompt_n.
 
 No server was started; routes were checked in code, without an HTTP runtime test. Other llama-server binaries exist under tools/, but the three runners indicated resolve the symlink above; they are not builds referenced by those scripts.
 
@@ -141,7 +141,7 @@ The report was accepted. Independent checks:
 
 - Q4_K_M SHA-256 on E:: recalculated, matches (`13c16f42…8a983`).
 - `llama-server --version`: returns 0.7.0-dev, commit 620d222. All 5 cache flags are present in `--help`.
-- Free space in WSL: 36 GB, enough to copy the model (3,0 GB).
+- Free space in WSL: 36 GB, enough to copy the model (3.0 GB).
 
 Outstanding items before F1 and F3, dependent on user approval:
 

@@ -34,8 +34,8 @@ Date: 29/10/2026. Author: Claude (orchestrator).
 ## Operational cost (v5)
 
 - Median successful episode: **33 s**. Median TTFT of 200–450 ms per request.
-- **93,5%** of prompt tokens came from the cache.
-- Device VRAM peak in smoke tests: ~5,3 GiB.
+- **93.5%** of prompt tokens came from the cache.
+- Device VRAM peak in smoke tests: ~5.3 GiB.
 
 ## Interpretation
 

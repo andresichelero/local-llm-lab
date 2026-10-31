@@ -48,7 +48,7 @@ def private_oracle():
         return False
 ```
 
-Result observed after approximately 1,01 s:
+Result observed after approximately 1.01 s:
 
 ```json
 {"state":"accepted","oracle_passed":false,"reason":""}
@@ -174,7 +174,7 @@ Same inputs, budgets and injections as the earlier review. The compilation proof
 {"proof":"finalize_deadline","result":{"attempt_id":"5da0354e67624c31ae94fa097b889112","state":"accepted","input_tokens":10,"oracle_passed":true,"reason":""},"elapsed":2.001397736996296,"states":["prepared","generating","candidate","verifying","accepted"]}
 ```
 
-**Result:** the two-terminal defect is fixed. There is exactly one `accepted`, consistent with the returned result. The return in 2,00 s for a 1 s budget is real: the implementation disarms the timer before terminal persistence. The now-documented policy allows persistence started within the deadline to finish without interruption. This does not prove a hard end-to-end time limit; persistence time must be included in F4 cost/latency measurement. It was not treated as a new occurrence of the old defect because the decision and its single terminal record started within the deadline, and the extension occurs during protected persistence.
+**Result:** the two-terminal defect is fixed. There is exactly one `accepted`, consistent with the returned result. The return in 2.00 s for a 1 s budget is real: the implementation disarms the timer before terminal persistence. The now-documented policy allows persistence started within the deadline to finish without interruption. This does not prove a hard end-to-end time limit; persistence time must be included in F4 cost/latency measurement. It was not treated as a new occurrence of the old defect because the decision and its single terminal record started within the deadline, and the extension occurs during protected persistence.
 
 **Original proof 2 — private oracle swallows timeout:** same patch/budget, callback with `try: sleep(2); return True` and `except Exception: return False`. Actual output:
 
@@ -237,7 +237,7 @@ In addition to the four proofs, I injected failures in the stream returned by `P
 | `OSError` before writing terminal bytes | `JournalPersistenceError: terminal append failed; no retry is safe` | none |
 | Half the terminal line written, followed by `OSError` | `JournalPersistenceError: journal cannot be read unambiguously` | none |
 | Complete terminal line, followed by `OSError` on close | `accepted`, `oracle_passed=true` | one `accepted` |
-| Terminal write sleeps 1,2 s with a 1 s budget | `accepted`, `oracle_passed=true`, actual time 1,202796875993954 s | one `accepted` |
+| Terminal write sleeps 1.2 s with a 1 s budget | `accepted`, `oracle_passed=true`, actual time 1,202796875993954 s | one `accepted` |
 
 In all four proofs, upon return or exception propagation, the signal mask was empty and the timer returned `(0.0, 0.0)`. In the three `OSError` cases, `_journal_failed=true`; in the complete-line case, recovery returned the already persisted terminal record without another append. Existing tests also verify that the inconclusive attempt cannot be finalized again with an unsafe append.
 

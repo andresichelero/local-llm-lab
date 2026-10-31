@@ -30,7 +30,7 @@ The first tag in the order below is primary and the others are secondary. Signal
 
 It selects the first attempt except `server_exited`, `server_http_error`, `harness_configuration_error` or `grader_infrastructure`, using `failure`, not `category`. This retains the first attempt incorrectly classified as infrastructure in v5. Infrastructure-only attempts are excluded and not converted into model failures. Older results without taxonomy or complete timings do not receive invented values.
 
-Run only on v5, without reading v6: B0 **16/24**, rate 0,6667, Wilson 95% [0,4671; 0,8203]; median time 42,2508 s; 6.722.306 prompt tokens, 85.053 generated and 1.528,6387 s in unsuccessful episodes. Server totals remained blank because not all requests had complete timings. Outputs persisted alongside this report: `T1-analysis-v5.md` and `T1-analysis-v5.csv`.
+Run only on v5, without reading v6: B0 **16/24**, rate 0,6667, Wilson 95% [0.4671; 0.8203]; median time 42,2508 s; 6,722,306 prompt tokens, 85.053 generated and 1.528,6387 s in unsuccessful episodes. Server totals remained blank because not all requests had complete timings. Outputs persisted alongside this report: `T1-analysis-v5.md` and `T1-analysis-v5.csv`.
 
 ## Stage 4
 
@@ -40,7 +40,7 @@ All use Q4_K_M bartowski, KV q4_0/q4_0, context 65536, cache enabled, thinking d
 | --- | --- | ---: | ---: |
 | C4-q4 | control | 3 | 36 |
 | C4-q6 | Q6_K Unsloth | 3 | 36 |
-| S-qwen-sampling | temperature 0,7; top_p 0,8; top_k 20; min_p 0; presence_penalty 1,5 | 1 | 12 |
+| S-qwen-sampling | temperature 0.7; top_p 0.8; top_k 20; min_p 0; presence_penalty 1.5 | 1 | 12 |
 | S-steps80 | 80 steps | 1 | 12 |
 | S-ctx48 | context 49152 | 1 | 12 |
 | S-cache-reuse | `--cache-reuse 256 --ctx-checkpoints 16` | 1 | 12 |
