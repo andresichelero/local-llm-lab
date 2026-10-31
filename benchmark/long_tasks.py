@@ -37,7 +37,8 @@ def schedule(config):
     if len(arms) != 4 or len(marathons) != 2:
         raise ValueError('expected four arms and two marathons')
     ordered = arms + [arms[1], arms[0], arms[3], arms[2]]
-    return [{'arm': arm, 'marathon': marathons[index % 2], 'repetition': 1}
+    return [{'arm': arm, 'marathon': marathons[(index + repetition - 1) % 2], 'repetition': repetition}
+            for repetition in range(1, config.get('repetitions', 1) + 1)
             for index, arm in enumerate(ordered)]
 
 
@@ -120,14 +121,20 @@ def run_sequence(objectives, execute, reset):
 
 
 def count_compactions(home, sessions):
+    """Compaction requests, and summaries the model finished. OpenCode marks both in its database."""
     database = home / '.local/share/opencode/opencode.db'
     if not database.is_file() or not sessions:
         return None
     try:
         with sqlite3.connect(f'file:{database}?mode=ro', uri=True) as conn:
-            rows = conn.execute('SELECT session_id, data FROM part').fetchall()
-        return sum(1 for session, data in rows if session in sessions
-                   and json.loads(data).get('type') == 'compaction')
+            parts = conn.execute('SELECT session_id, data FROM part').fetchall()
+            messages = conn.execute('SELECT session_id, data FROM message').fetchall()
+        requested = sum(1 for session, data in parts if session in sessions
+                        and json.loads(data).get('type') == 'compaction')
+        summaries = [json.loads(data) for session, data in messages if session in sessions]
+        completed = sum(1 for row in summaries if row.get('mode') == 'compaction' and row.get('summary') is True
+                        and row.get('finish') == 'stop' and not row.get('error'))
+        return {'requested': requested, 'completed': completed}
     except (sqlite3.Error, ValueError, AttributeError):
         return None
 
@@ -435,7 +442,8 @@ def run_attempt(config, unit, output, server, smoke=False):
                 [{k: v['passed'] for k, v in row.items()} for row in [*history, final]]),
             passed_final=sum(v['passed'] is True for v in final.values()),
             private_oracles_available=len(scored), usage=usage,
-            compactions=seen, compaction_observation='SQLite compaction parts requested; completion not established',
+            compactions=seen['requested'] if seen else None,
+            compactions_completed=seen['completed'] if seen else None,
             resets=max(0, len(phases) - 1) if unit['arm'] == 'L-reset' else 0,
             context_by_request=timeline, proxy_requests=proxy.rows,
             request_metrics=baseline.request_metrics(proxy.rows), diff_quality=quality,
@@ -522,7 +530,7 @@ def main(argv=None):
     units = schedule(config)
     if args.dry_run:
         for index, unit in enumerate(units, 1):
-            print(f"{index:03d} {unit['arm']} {unit['marathon']} rep=1")
+            print(f"{index:03d} {unit['arm']} {unit['marathon']} rep={unit['repetition']}")
         print(f'Total: {len(units)}')
         return
     if args.smoke:
