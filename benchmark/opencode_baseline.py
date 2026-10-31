@@ -604,8 +604,13 @@ def sandbox_evaluate(config, task_id, workspace, output, phase1, timeout, visibl
                         str(max(0.01, timeout - 2))]
             env = {'PATH': '/usr/bin:/bin', 'HOME': '/home', 'TMPDIR': '/tmp',
                    'PYTHONDONTWRITEBYTECODE': '1'}
-            proc = subprocess.run(command, env=env, capture_output=True, text=True,
-                                  timeout=max(0.01, timeout), check=False)
+            try:
+                proc = subprocess.run(command, env=env, capture_output=True, text=True,
+                                      timeout=max(0.01, timeout), check=False)
+            except subprocess.TimeoutExpired:
+                # One rerun of a saved workspace took 2 s after a 90 s stall, so a stall is not a verdict.
+                proc = subprocess.run(command, env=env, capture_output=True, text=True,
+                                      timeout=max(0.01, timeout), check=False)
             if output is not None:
                 for name in ('oracle-output.txt', 'oracle-probe.json'):
                     source = Path(temp) / name
