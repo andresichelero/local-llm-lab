@@ -83,3 +83,22 @@ def test_windows_memory_uses_one_process_that_exits_on_stdin_close(tmp_path, mon
     assert not thread.is_alive()
     assert host['value'] == 2048
     assert starts.read_text().split() == ['x', 'exited']
+
+
+def test_windows_memory_restarts_a_helper_that_dies(tmp_path, monkeypatch):
+    if opencode_baseline.os.name == 'nt':
+        pytest.skip('the fake PowerShell is a POSIX script')
+    starts = tmp_path / 'starts'
+    fake = tmp_path / 'powershell.exe'
+    fake.write_text(f'#!/bin/sh\necho x >> {starts}\nread line\necho 1048576\n')
+    fake.chmod(0o755)
+    monkeypatch.setenv('PATH', f'{tmp_path}:{opencode_baseline.os.environ["PATH"]}')
+    stop, host = threading.Event(), {'value': None, 'at': 0}
+    thread = threading.Thread(target=opencode_baseline.windows_memory, args=(stop, host))
+    thread.start()
+    time.sleep(3.5)
+    stop.set()
+    thread.join(timeout=6)
+    assert not thread.is_alive()
+    assert host['value'] == 1024
+    assert len(starts.read_text().split()) >= 2

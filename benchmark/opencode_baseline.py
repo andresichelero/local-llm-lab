@@ -633,31 +633,36 @@ def write_json(path, value):
 
 
 def windows_memory(stop, host):
-    """Ask one PowerShell for free memory each second; it exits when its stdin closes."""
+    """Ask one PowerShell for free memory each second; it exits when its stdin closes.
+
+    A detached campaign once lost its helper mid-attempt, so a dead helper is replaced.
+    """
     script = ('while ($null -ne [Console]::In.ReadLine()) '
               '{ (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory }')
-    try:
-        proc = subprocess.Popen(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script],
-                                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                stderr=subprocess.DEVNULL, text=True, bufsize=1)
-    except OSError:
-        return
-    def read():
+    def read(proc):
         for line in proc.stdout:
             try:
                 host.update(value=int(line.strip()) / 1024, at=time.monotonic())
             except ValueError:
                 pass
-    threading.Thread(target=read, daemon=True).start()
-    try:
-        while not stop.is_set():
-            proc.stdin.write('\n')
-            proc.stdin.flush()
-            stop.wait(1)
-        proc.stdin.close()
-        proc.wait(timeout=5)
-    except (OSError, subprocess.SubprocessError):
-        proc.kill()
+    while not stop.is_set():
+        try:
+            proc = subprocess.Popen(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script],
+                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                    stderr=subprocess.DEVNULL, text=True, bufsize=1)
+        except OSError:
+            return
+        threading.Thread(target=read, args=(proc,), daemon=True).start()
+        try:
+            while not stop.is_set() and proc.poll() is None:
+                proc.stdin.write('\n')
+                proc.stdin.flush()
+                stop.wait(1)
+            proc.stdin.close()
+            proc.wait(timeout=5)
+        except (OSError, subprocess.SubprocessError):
+            proc.kill()
+        stop.wait(1)
 
 
 def sample_vram(stop, rows):
