@@ -49,7 +49,7 @@ All use Q4_K_M bartowski, KV q4_0/q4_0, context 65536, cache enabled, thinking d
 
 The v0.8.0 server `--help` confirms the three flag names; `common/speculative.cpp` creates the MTP draft context from the target, and the control GGUF contains `qwen35.nextn_predict_layers=1` and `blk.32.nextn.*` tensors. Interface support and metadata do not demonstrate operation or inference gains. The Unsloth model card at the revision below confirms general non-thinking parameters. The sampling profile was accepted by `opencode debug config` offline.
 
-Unsloth model: `Qwen3.5-4B-Q4_K_M-unsloth.gguf`, 2.740.937.888 bytes, `/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/`; revision `e87f176479d0855a907a41277aca2f8ee7a09523`, SHA-256 `00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4`, verified after download. URL: https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf.
+Unsloth model: `Qwen3.5-4B-Q4_K_M-unsloth.gguf`, 2,740,937,888 bytes, `/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/`; revision `e87f176479d0855a907a41277aca2f8ee7a09523`, SHA-256 `00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4`, verified after download. URL: https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf.
 
 ## Verification and future execution
 
