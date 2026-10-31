@@ -28,7 +28,7 @@ Prompt token values are the sum of usage recorded by OpenCode turns, including c
 | Cause / category | `model_oracle_failed` / model | `null` / success |
 | Visible test | failed | passed both phases |
 | Private oracle | failed | passed |
-| Total time | 47,40 s | 106,05 s |
+| Total time | 47.40 s | 106.05 s |
 | Model turns | 20 | 27 |
 | Tool calls | 20 | 26 |
 | Prompt tokens (sum, including cache) | 582.381 | 724.104 |
@@ -36,11 +36,11 @@ Prompt token values are the sum of usage recorded by OpenCode turns, including c
 | Requests with timings | 21 | 28 |
 | `prompt_n` minimum–maximum | 21–12.558 | 21–21.997 |
 | `cache_n` minimum–maximum | 0–34.720 | 0–31.259 |
-| Median TTFT | 314,8 ms | 251,8 ms |
-| Device peak VRAM | 5.329 MiB | 5.325 MiB |
+| Median TTFT | 314.8 ms | 251.8 ms |
+| Device peak VRAM | 5,329 MiB | 5,325 MiB |
 | OOM evidence in log | no | no |
 
-In the continuation, phase 1 finished in 57,91 s and phase 2 in 41,22 s; both returned code 0 and session `ses_e7a21b829ffeMCGvh2KtLxpQOx`. The phase-one visible test passed before the next files and objective were released. `result.json`, `events.jsonl`, `server-segment.log`, `workspace.diff`, `oracle-probe.json` and `isolation-probe.json` are in the `smoke/B0/py_query-r1/attempt-01/` and `smoke/B0/cont_path-r1/attempt-01/` directories of the protocol above.
+In the continuation, phase 1 finished in 57.91 s and phase 2 in 41.22 s; both returned code 0 and session `ses_e7a21b829ffeMCGvh2KtLxpQOx`. The phase-one visible test passed before the next files and objective were released. `result.json`, `events.jsonl`, `server-segment.log`, `workspace.diff`, `oracle-probe.json` and `isolation-probe.json` are in the `smoke/B0/py_query-r1/attempt-01/` and `smoke/B0/cont_path-r1/attempt-01/` directories of the protocol above.
 
 OpenCode event excerpts, without oracle content, show work in the mounted path:
 

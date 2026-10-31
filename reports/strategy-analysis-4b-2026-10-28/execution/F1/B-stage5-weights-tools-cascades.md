@@ -17,14 +17,14 @@ The combined Q4_K_M control (B0 from v5 plus C4-q4 from v7) scored **41/60 = 68%
 
 | Arm | Passed | 95% CI (Wilson) | s/episode (median) | Prompt tokens | Tool failures |
 |---|---|---|---:|---:|---:|
-| Q5-Q6KL (bartowski Q6_K_L) | 10/12 | 55–95% | 56,1 | 5,86 M | 4 |
-| Q5-UDQ6XL (unsloth UD-Q6_K_XL) | 10/12 | 55–95% | 40,1 | 3,32 M | 6 |
-| T5-lsp-tool (LSP + `lsp` tool) | 10/12 | 55–95% | 37,8 | 5,24 M | 3 |
-| Q5-UDQ4XL (unsloth UD-Q4_K_XL) | 9/12 | 47–91% | 34,2 | 3,90 M | 3 |
-| T5-lsp (Pyright diagnostics) | 9/12 | 47–91% | 67,0 | 6,13 M | 7 |
-| X-9b, 1st attempt (= control) | 8/12 | 39–86% | 37,3 | 4,38 M | 7 |
-| X-think, 1st attempt (= control) | 7/12 | 32–81% | 44,4 | 6,02 M | 6 |
-| **T5-rtk (RTK plugin)** | **6/12** | 25–75% | 44,2 | 6,55 M | 7 |
+| Q5-Q6KL (bartowski Q6_K_L) | 10/12 | 55–95% | 56.1 | 5.86 M | 4 |
+| Q5-UDQ6XL (unsloth UD-Q6_K_XL) | 10/12 | 55–95% | 40.1 | 3.32 M | 6 |
+| T5-lsp-tool (LSP + `lsp` tool) | 10/12 | 55–95% | 37.8 | 5.24 M | 3 |
+| Q5-UDQ4XL (unsloth UD-Q4_K_XL) | 9/12 | 47–91% | 34.2 | 3.90 M | 3 |
+| T5-lsp (Pyright diagnostics) | 9/12 | 47–91% | 67.0 | 6.13 M | 7 |
+| X-9b, 1st attempt (= control) | 8/12 | 39–86% | 37.3 | 4.38 M | 7 |
+| X-think, 1st attempt (= control) | 7/12 | 32–81% | 44.4 | 6.02 M | 6 |
+| **T5-rtk (RTK plugin)** | **6/12** | 25–75% | 44.2 | 6.55 M | 7 |
 
 The first attempt in the X arms runs exactly the control configuration. Combined, they score **15/24 = 62%**, consistent with the 68% stage 4 control: the control is stable across campaigns.
 
@@ -36,7 +36,7 @@ Cascades escalate only on a visible failure or an identified model failure. A pr
 
 | Cascade | 1st attempt | Escalations | Final | Total time | Extra escalation time |
 |---|---|---:|---|---:|---:|
-| X-think (2nd with reasoning enabled, sampling 0,6/0,95/20) | 7/12 | 4 | **11/12** | 1.518 s | 465 s |
+| X-think (2nd with reasoning enabled, sampling 0.6/0.95/20) | 7/12 | 4 | **11/12** | 1.518 s | 465 s |
 | X-9b (2nd with Qwen3.5-9B Q4_K_M) | 8/12 | 3 | 9/12 | 2.083 s | 813 s |
 
 Key points:
@@ -82,7 +82,7 @@ Interpretation:
 
 ### Hypothesis for RTK degradation (unverified)
 
-RTK had the worst result (6/12) and largest prompt volume (6,55 M tokens, with 292 model calls). The most likely explanation is that RTK summarizes pytest output, and the 4B loses error details such as asserts and tracebacks. The model then spends more turns and fails more often at the private oracle; 4 of the 6 failures were `oracle`.
+RTK had the worst result (6/12) and largest prompt volume (6.55 M tokens, with 292 model calls). The most likely explanation is that RTK summarizes pytest output, and the 4B loses error details such as asserts and tracebacks. The model then spends more turns and fails more often at the private oracle; 4 of the 6 failures were `oracle`.
 
 This contradicts RTK's goal of saving context. Confirmation would require comparing summarized output with the originals.
 

@@ -19,7 +19,7 @@ Labels used below: **F** is a fact from a primary source, **R** is a third-party
 
 ## Weights
 - Available quantizations:
-  - unsloth: UD-Q4_K_XL (2,91 GB), UD-Q6_K_XL (4,15 GB) and an MTP repository;
+  - unsloth: UD-Q4_K_XL (2.91 GB), UD-Q6_K_XL (4.15 GB) and an MTP repository;
   - bartowski: Q6_K_L and Q4_K_L, which store embeddings and output in Q8_0.
 - **F** According to unsloth, `attn_*` and `ssm_out` tensors are sensitive to quantization in hybrid models. This favors the XL and _L variants.
 - **R** In the llm-quant-bench benchmark (single-turn HumanEval), scores from Q4 upward are between 57% and 61%, and UD-Q4_K_XL was best.
@@ -29,10 +29,10 @@ Labels used below: **F** is a fact from a primary source, **R** is a third-party
 - **F** Supported since PR #22673 (16/05/2026), with `--spec-type draft-mtp --spec-draft-n-max 2`. The value 2 is the starting point; test 1 to 6.
 - **F** Requires `-np 1`.
 - **F** MTP can change output even at temperature 0 because of batch-size-dependent kernels (issue #23335).
-- **R** Reported gains: 1,5× to 2,9× in larger models, with no figure for 4B.
+- **R** Reported gains: 1.5× to 2.9× in larger models, with no figure for 4B.
 
 ## Official sampling (Qwen3.5-4B model card)
-- **Without thinking:** temperature 0,7, top_p 0,8, top_k 20, min_p 0, presence_penalty 1,5.
+- **Without thinking:** temperature 0,7, top_p 0,8, top_k 20, min_p 0, presence_penalty 1.5.
 - **Thinking for code:** temperature 0,6, top_p 0,95, top_k 20, presence_penalty 0.
 - The card does not prohibit temperature 0, but all presets use temperature above 0. The Qwen3 card discouraged greedy decoding because of the risk of loops.
 - **I** Check whether OpenCode sends `temperature` in the request body, because that value overrides the server value.

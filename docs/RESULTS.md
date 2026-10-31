@@ -59,7 +59,7 @@ Definitions:
 | Stage 3 | `B-q6` | Q6_K (unsloth) | 10/12 | 83% (55%–95%) | 37.0 | 34.3 | 301 | 5162 | 0.92 | 2 / 0 / 10; p = 0.5000 |
 | Stage 3 | `B-q8` | Q8_0 (unsloth) | 8/12 | 67% (39%–86%) | 38.5 | 32.2 | 317 | 6033 | 0.94 | 1 / 1 / 10; p = 1.0000 |
 | Stage 3 | `B-nocache` | prompt cache off | 9/12 | 75% (47%–91%) | 115.5 | 81.7 | 7498 | 4521 | 0.00 | 2 / 1 / 9; p = 1.0000 |
-| Stage 3 | `B-think` | thinking on (temp 0,6, top_p 0,95, top_k 20) | 11/12 | 92% (65%–99%) | 110.1 | 108.9 | 214 | 4535 | 0.95 | 3 / 0 / 9; p = 0.2500 |
+| Stage 3 | `B-think` | thinking on (temp 0.6, top_p 0.95, top_k 20) | 11/12 | 92% (65%–99%) | 110.1 | 108.9 | 214 | 4535 | 0.95 | 3 / 0 / 9; p = 0.2500 |
 
 ## 3. Detailed metrics
 
@@ -115,7 +115,7 @@ Each arm is compared with the v5 B0 control in pairs of task and repetition 1. S
 | `B-nocache` | 12 | 2 | 1 | 9 | 1.0000 |
 | `B-think` | 12 | 3 | 0 | 9 | 0.2500 |
 
-With twelve pairs per arm, no comparison reaches p < 0,05. The 16K arm has five losses and no wins, and p of 0,0625 is the smallest possible with five discordant pairs in the same direction.
+With twelve pairs per arm, no comparison reaches p < 0.05. The 16K arm has five losses and no wins, and p of 0.0625 is the smallest possible with five discordant pairs in the same direction.
 
 ## 6. Reading notes
 
@@ -143,7 +143,7 @@ Raw data: `qwen-4b-opencode-baseline-bwrap-v7` (168 episodes, protocol v7, 40 st
 
 Aggregating stages 1 through 4 (95% Wilson CI): Q4_K_M 41/60 = 68% (56%–79%); Q6_K 37/48 = 77% (63%–87%); thinking 27/36 = 75% (59%–86%). In the C4-q4 × C4-q6 pairing by task and repetition, 4 cases passed only Q4 and 6 only Q6, without significance.
 
-Interpretation: thinking's advantage in stage 3 (92%) did not repeat, and it costs about 3,3 times more time. MTP (+55% decode) and context checkpoints reduce median success time by about one third, without a measurable effect on passes. Q6_K remains the best weight, with no significant difference. With protocol v7 and stage 4, `test_schedule_matches_matrix` expects 300 units, matching the config.
+Interpretation: thinking's advantage in stage 3 (92%) did not repeat, and it costs about 3.3 times more time. MTP (+55% decode) and context checkpoints reduce median success time by about one third, without a measurable effect on passes. Q6_K remains the best weight, with no significant difference. With protocol v7 and stage 4, `test_schedule_matches_matrix` expects 300 units, matching the config.
 
 ## 8. Stage 5: weights, tools, and cascades (stage5-v2 protocol)
 
@@ -186,12 +186,26 @@ Raw data are in `qwen-4b-opencode-long-tasks-20261029-v2`: 8 marathons (4 arms �
 
 | Arm | M1 (of 4 oracles) | M2 (of 5 oracles) | Total | Prompt tokens | Peak VRAM (MiB) |
 | --- | --- | --- | --- | --- | --- |
-| `L-bigctx` | 4 | 5 | 9/9 | 7,87 M | 5432 |
-| `L-headroom` | 2 | 5 | 7/9 | 2,41 M | 4077 |
-| `L-compact` | 3 | 3 | 6/9 | 1,52 M | 4103 |
-| `L-reset` | 3 | 2 | 5/9 | 2,01 M | 4077 |
+| `L-bigctx` | 4 | 5 | 9/9 | 7.87 M | 5432 |
+| `L-headroom` | 2 | 5 | 7/9 | 2.41 M | 4077 |
+| `L-compact` | 3 | 3 | 6/9 | 1.52 M | 4103 |
+| `L-reset` | 3 | 2 | 5/9 | 2.01 M | 4077 |
 
 There was no regression or OOM. Instrumentation records the compaction request but does not confirm that it finished.
+
+### Three repetitions (long-tasks-v3)
+
+Raw data are in `qwen-4b-opencode-long-tasks-v3`: 24 marathons (4 arms × 2 marathons × 3 repetitions). The v2 ranking did not hold.
+
+- Aggregate: [t2-long-tasks-v3-summary.txt](../results/3070-benchmark/t2-long-tasks-v3-summary.txt).
+- Analysis: [T2-long-task-results-v3.md](../reports/strategy-analysis-4b-2026-10-28/execution/F1/T2-long-task-results-v3.md).
+
+| Arm | Oracles passed | Marathons complete | Peak VRAM (MiB) | Compactions finished |
+| --- | --- | --- | --- | --- |
+| `L-compact` | 23/27 | 2/6 | 4101 | 10 of 10 |
+| `L-bigctx` | 18/27 | 1/6 | 5435 | 2 of 2 |
+| `L-reset` | 17/27 | 0/6 | 4099 | 35 of 116 |
+| `L-headroom` | 14/27 | 0/6 | 4099 | 13 of 13 |
 
 ## 10. Cached repository prefix (T3b, prefix-cache-v2 and v3 protocols)
 
@@ -203,7 +217,7 @@ Raw data are in `qwen-4b-prefix-cache-v2`: 108 units (3 arms × 12 tasks × 3 re
 | Arm | Tasks passed | Median TTFT | Cached tokens | Median time (s) | Median episode peak VRAM (MiB) |
 | --- | --- | --- | --- | --- | --- |
 | `P-W16`: snippets up to 16K | 2/12 | 82 ms | 2.844 | 8.3 | 3871 |
-| `P-WL-cold`: prefix of about 46K, cold cache | 1/12 | 16,1 s | 0 | 22.1 | 4510 |
+| `P-WL-cold`: prefix of about 46K, cold cache | 1/12 | 16.1 s | 0 | 22.1 | 4510 |
 | `P-WL-warm`: same prefix, already cached | 2/12 | 158 ms | 45.455 | 9.2 | 4508 |
 
 Conclusions:
@@ -223,9 +237,9 @@ Raw data are in `qwen-4b-prefix-cache-v3`: 36 units (3 arms × 12 tasks × 1 rep
 
 | Arm | Tasks passed | Median TTFT | Median time (s) |
 | --- | --- | --- | --- |
-| `P-W16` | 2/12 | 1,0 s | 11.9 |
-| `P-WL-cold` | 2/12 | 17,8 s | 32.3 |
-| `P-WL-warm` | 2/12 | 2,1 s | 13.8 |
+| `P-W16` | 2/12 | 1.0 s | 11.9 |
+| `P-WL-cold` | 2/12 | 17.8 s | 32.3 |
+| `P-WL-warm` | 2/12 | 2.1 s | 13.8 |
 
 Conclusions:
 - The marker disappeared from SEARCH (0 of 36), but passes did not change: the same two tasks passed in all three arms.
@@ -252,8 +266,8 @@ Paired comparisons by task and repetition (exact McNemar):
 
 | Comparison | Only the 1st passed | Only the 2nd passed | p |
 | --- | ---: | ---: | ---: |
-| X-think: 1st attempt versus the final result | 0 | 8 | 0,008 |
-| Control X-think versus T5-rtk, 1st attempt | 8 | 3 | 0,23 |
+| X-think: 1st attempt versus the final result | 0 | 8 | 0.008 |
+| Control X-think versus T5-rtk, 1st attempt | 8 | 3 | 0.23 |
 
 In the cascade, 10 attempts were escalated; 8 were rescued and no first-attempt success was lost in the final result. Combined with the original stage 5, the final rate was 41/48 (85%), versus 29/48 (60%) on the first attempt: 12 rescues in 14 escalations.
 
@@ -275,8 +289,8 @@ In the cascade, 10 attempts were escalated; 8 were rescued and no first-attempt 
 1 = passed on the first attempt; F = passed only after escalation; 0 = failed. The sequence represents repetitions 1 through 3.
 
 Conclusions:
-- The thinking cascade was confirmed in this replication (p = 0,008).
-- RTK maintained a lower rate than the control, but the difference was not significant (p = 0,23). There is insufficient evidence to adopt the filter.
+- The thinking cascade was confirmed in this replication (p = 0.008).
+- RTK maintained a lower rate than the control, but the difference was not significant (p = 0.23). There is insufficient evidence to adopt the filter.
 - py_range did not pass in any repetition.
 
 ## 12. Combined campaign (combined-v2)
@@ -288,9 +302,9 @@ Raw data: /home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-combined-v2
 
 | Arm | 1st attempt | Final | Escalations (rescues) | Median per episode (s) | Median first-attempt success time (s) | Peak VRAM (MiB) | Total time |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| X-think (reference) | 22/36 = 61% | 30/36 = 83% | 10 (8) | 53,8 | 28,4 | 4546 | 77 min |
-| R-q4 | 27/36 = 75% | 29/36 = 81% | 3 (2) | 40,3 | 35,5 | 5800 | 72 min |
-| R-q6 | 23/36 = 64% | 28/36 = 78% | 7 (5) | 38,0 | 35,7 | 6618 | 59 min |
+| X-think (reference) | 22/36 = 61% | 30/36 = 83% | 10 (8) | 53.8 | 28.4 | 4546 | 77 min |
+| R-q4 | 27/36 = 75% | 29/36 = 81% | 3 (2) | 40.3 | 35.5 | 5800 | 72 min |
+| R-q6 | 23/36 = 64% | 28/36 = 78% | 7 (5) | 38.0 | 35.7 | 6618 | 59 min |
 
 Both combined arms use MTP, context checkpoints, KV q4_0, prompt cache, 64K context, temperature 0, and --cache-ram 2048. R-q4 uses Q4_K_M; R-q6 uses Q6_K_L. Both escalate with thinking if the visible test fails.
 
@@ -298,11 +312,11 @@ Paired comparisons (exact McNemar):
 
 | Comparison | Only the first passed | Only the second passed | p |
 | --- | ---: | ---: | ---: |
-| R-q4 versus X-think, 1st attempt | 3 (X-think) | 8 (R-q4) | 0,227 |
+| R-q4 versus X-think, 1st attempt | 3 (X-think) | 8 (R-q4) | 0.227 |
 | R-q4 versus X-think, final result | 2 (X-think) | 1 (R-q4) | 1,000 |
 | R-q6 versus X-think, 1st attempt | 5 (X-think) | 6 (R-q6) | 1,000 |
-| R-q6 versus X-think, final result | 4 (X-think) | 2 (R-q6) | 0,688 |
-| R-q6 versus R-q4, 1st attempt | 7 (R-q4) | 3 (R-q6) | 0,344 |
+| R-q6 versus X-think, final result | 4 (X-think) | 2 (R-q6) | 0.688 |
+| R-q6 versus R-q4, 1st attempt | 7 (R-q4) | 3 (R-q6) | 0.344 |
 | R-q6 versus R-q4, final result | 3 (R-q4) | 2 (R-q6) | 1,000 |
 
 | Task | X-think (r1, r2, r3) | R-q4 (r1, r2, r3) | R-q6 (r1, r2, r3) |
@@ -323,8 +337,8 @@ Paired comparisons (exact McNemar):
 1 = passed on the first attempt; F = passed only after escalation; 0 = failed. The sequence represents repetitions 1 through 3.
 
 Interpretation and conclusions:
-- R-q4 finished at 29/36 versus 30/36 for X-think; the paired difference was not significant (p = 1,000). First-attempt passes rose from 22/36 to 27/36, also without significance (p = 0,227).
-- R-q4 used 3 escalations, versus 10 in the reference. Median episode time fell from 53,8 s to 40,3 s, but median first-attempt success time was higher (35,5 s versus 28,4 s).
-- R-q6 finished at 28/36, with no gain over R-q4 (29/36), and consumed 818 MiB more VRAM (about 0,8 GB).
-- The --cache-ram 2048 limit was chosen after WSL stopped the server for lack of memory: RSS reached 6,9 GB, and the 8 GiB default cache matches the 8 GiB WSL RAM. Because X-think used the default cache, this comparison does not isolate the effect of the 2 GiB limit.
+- R-q4 finished at 29/36 versus 30/36 for X-think; the paired difference was not significant (p = 1,000). First-attempt passes rose from 22/36 to 27/36, also without significance (p = 0.227).
+- R-q4 used 3 escalations, versus 10 in the reference. Median episode time fell from 53.8 s to 40.3 s, but median first-attempt success time was higher (35.5 s versus 28.4 s).
+- R-q6 finished at 28/36, with no gain over R-q4 (29/36), and consumed 818 MiB more VRAM (about 0.8 GB).
+- The --cache-ram 2048 limit was chosen after WSL stopped the server for lack of memory: RSS reached 6.9 GB, and the 8 GiB default cache matches the 8 GiB WSL RAM. Because X-think used the default cache, this comparison does not isolate the effect of the 2 GiB limit.
 - py_range failed in all arms. The corpus also saturates: 8 of the 12 tasks almost always pass.

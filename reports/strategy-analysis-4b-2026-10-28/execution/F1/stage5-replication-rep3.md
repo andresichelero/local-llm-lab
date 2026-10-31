@@ -22,7 +22,7 @@ By repetition:
 
 ## Cascade with thinking: confirmed
 
-- **10 escalations, 8 rescues and no losses.** The exact McNemar test comparing the 1st attempt and final result gives p = 0,008.
+- **10 escalations, 8 rescues and no losses.** The exact McNemar test comparing the 1st attempt and final result gives p = 0.008.
 - Rescues occurred in:
   - `cont_quote`: 3/3;
   - `py_query`: 2/3;
@@ -39,7 +39,7 @@ By repetition:
 | Only RTK passed | 3 |
 | Both passed or both failed | 25 |
 
-- The exact McNemar test gives p = 0,23. The drop from 61% to 47% repeats the direction of stage 5 (6/12), but is not significant.
+- The exact McNemar test gives p = 0.23. The drop from 61% to 47% repeats the direction of stage 5 (6/12), but is not significant.
 - RTK consistently loses on `recover_date`, `js_sign` and `cont_path`, and wins on `cont_quote`.
 - The hypothesis remains unverified: summarized pytest output may hide the model error.
 

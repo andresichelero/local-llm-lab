@@ -19,12 +19,12 @@ The D: and E: roots were accessible. The final enumeration returned code 0 and f
 
 | File | Path | Bytes | SHA-256 |
 |---|---|---:|---|
-| Qwen3.5-4B Q4_K_M | E:\LocalLLMLabArchive\models\bartowski-Qwen_Qwen3.5-4B-GGUF\4168f45a16a1290d65a4ec0fa312ae917a4c15d6\Qwen_Qwen3.5-4B-Q4_K_M.gguf | 3.013.027.808 | 13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983 |
-| Qwen3.5-4B Q5_K_M | <workspace>\qwen-optimization-cache\models\qwen-4b-unsloth-qwen3-5-4b-gguf-q5-k-m-523af779a39fdf28\Qwen3.5-4B-Q5_K_M.gguf | 3.143.656.608 | not calculated |
-| Qwen3.5-4B Q5_K_S | <workspace>\qwen-optimization-cache\models\qwen-4b-unsloth-qwen3-5-4b-gguf-q5-k-s-c290a3d9efc52920\Qwen3.5-4B-Q5_K_S.gguf | 3.024.934.048 | not calculated |
-| Qwen3.5-4B Q6_K | <workspace>\qwen-optimization-cache\models\qwen-4b-unsloth-qwen3-5-4b-gguf-q6-k-1943f53d06a9a1e6\Qwen3.5-4B-Q6_K.gguf | 3.525.956.768 | fdedd781c9ce676ab66b018ca247ff78e8a33c98098a822c1e2d5075e7718f66 |
-| Qwen3.5-4B Q8_0 | <workspace>\qwen-optimization-cache\models\qwen-4b-unsloth-qwen3-5-4b-gguf-q8-0-8c94708900a06875\Qwen3.5-4B-Q8_0.gguf | 4.482.403.488 | not calculated |
-| Qwen3.5-4B UD-Q5_K_XL | <workspace>\qwen-optimization-cache\models\qwen-4b-unsloth-qwen3-5-4b-gguf-ud-q5-k-xl-1027ef16cfbfd447\Qwen3.5-4B-UD-Q5_K_XL.gguf | 3.250.869.408 | not calculated |
+| Qwen3.5-4B Q4_K_M | E:\LocalLLMLabArchive\models\bartowski-Qwen_Qwen3.5-4B-GGUF\4168f45a16a1290d65a4ec0fa312ae917a4c15d6\Qwen_Qwen3.5-4B-Q4_K_M.gguf | 3,013,027,808 | 13c16f426047e2de38cd075bdade4a7bcbc8c774384876f677740cda65f8a983 |
+| Qwen3.5-4B Q5_K_M | <workspace>\qwen-optimization-cache\models\qwen-4b-unsloth-qwen3-5-4b-gguf-q5-k-m-523af779a39fdf28\Qwen3.5-4B-Q5_K_M.gguf | 3,143,656,608 | not calculated |
+| Qwen3.5-4B Q5_K_S | <workspace>\qwen-optimization-cache\models\qwen-4b-unsloth-qwen3-5-4b-gguf-q5-k-s-c290a3d9efc52920\Qwen3.5-4B-Q5_K_S.gguf | 3,024,934,048 | not calculated |
+| Qwen3.5-4B Q6_K | <workspace>\qwen-optimization-cache\models\qwen-4b-unsloth-qwen3-5-4b-gguf-q6-k-1943f53d06a9a1e6\Qwen3.5-4B-Q6_K.gguf | 3,525,956,768 | fdedd781c9ce676ab66b018ca247ff78e8a33c98098a822c1e2d5075e7718f66 |
+| Qwen3.5-4B Q8_0 | <workspace>\qwen-optimization-cache\models\qwen-4b-unsloth-qwen3-5-4b-gguf-q8-0-8c94708900a06875\Qwen3.5-4B-Q8_0.gguf | 4,482,403,488 | not calculated |
+| Qwen3.5-4B UD-Q5_K_XL | <workspace>\qwen-optimization-cache\models\qwen-4b-unsloth-qwen3-5-4b-gguf-ud-q5-k-xl-1027ef16cfbfd447\Qwen3.5-4B-UD-Q5_K_XL.gguf | 3,250,869,408 | not calculated |
 
 Q4_K_M matches the expected October SHA-256. The Q6_K SHA-256 was calculated as requested; the other variant hashes were not calculated.
 
@@ -67,7 +67,7 @@ Static confirmation in local source:
 - tools/server/server.cpp:290,292: POST /tokenize and POST /apply-template.
 - tools/server/server.cpp:303-304: GET /slots and POST /slots/:id_slot.
 - tools/server/server-context.cpp:5415-5421: dispatch of action=save and action=restore; handlers read filename from the body.
-- tools/server/server-common.cpp:86,88: fields timings.cache_n and timings.prompt_n.
+- tools/server/server-common.cpp:86.88: fields timings.cache_n and timings.prompt_n.
 
 No server was started; routes were checked in code, without an HTTP runtime test. Other llama-server binaries exist under tools/, but the three runners indicated resolve the symlink above; they are not builds referenced by those scripts.
 
@@ -141,7 +141,7 @@ The report was accepted. Independent checks:
 
 - Q4_K_M SHA-256 on E:: recalculated, matches (`13c16f42…8a983`).
 - `llama-server --version`: returns 0.7.0-dev, commit 620d222. All 5 cache flags are present in `--help`.
-- Free space in WSL: 36 GB, enough to copy the model (3,0 GB).
+- Free space in WSL: 36 GB, enough to copy the model (3.0 GB).
 
 Outstanding items before F1 and F3, dependent on user approval:
 

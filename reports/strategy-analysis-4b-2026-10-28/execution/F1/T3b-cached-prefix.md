@@ -66,11 +66,11 @@ The campaign ran from the ext4 snapshot, commit `c05d697`, and saved results in 
 
 | Arm | TTFT (median) | Processed prompt | Cache tokens | Time/episode | Decode | Median peak VRAM per episode |
 |---|---:|---:|---:|---:|---:|---:|
-| P-W16 (excerpts up to 16K, no prefix) | 82 ms | 557 | 2.844 | 8,3 s | 85 tok/s | 3.871 MiB |
-| P-WL-cold (prefix about 46K, cold cache) | **16,1 s** | 46.075 | 0 | 22,1 s | 66 tok/s | 4.510 MiB |
-| P-WL-warm (same prefix, already cached) | **158 ms** | 393 | 45.455 (99,5%) | 9,2 s | 67 tok/s | 4.508 MiB |
+| P-W16 (excerpts up to 16K, no prefix) | 82 ms | 557 | 2.844 | 8.3 s | 85 tok/s | 3,871 MiB |
+| P-WL-cold (prefix about 46K, cold cache) | **16.1 s** | 46.075 | 0 | 22.1 s | 66 tok/s | 4,510 MiB |
+| P-WL-warm (same prefix, already cached) | **158 ms** | 393 | 45.455 (99.5%) | 9.2 s | 67 tok/s | 4,508 MiB |
 
-- With the repository prefix already cached, time to first token falls **about 100 times** (from 16 s to 0,16 s). Episode cost becomes similar to W16, even with 46 thousand context tokens.
+- With the repository prefix already cached, time to first token falls **about 100 times** (from 16 s to 0.16 s). Episode cost becomes similar to W16, even with 46 thousand context tokens.
 - Long-context cost appears in decode: about 22% slower (85 → 67 tok/s).
 - Long context uses about 640 MiB more VRAM.
 
@@ -95,7 +95,7 @@ Curious differences between cold and warm on the same task (`mcp_header`, `js_si
 
 ### Conclusion and next steps
 
-- **Established:** a cached repository prefix is viable on the 3070. With 46 thousand tokens plus KV q4_0, peak was 4,5 GB, and TTFT falls to about 0,16 s.
+- **Established:** a cached repository prefix is viable on the 3070. With 46 thousand tokens plus KV q4_0, peak was 4.5 GB, and TTFT falls to about 0.16 s.
 - **Not established:** whether long context improves quality. Measuring this would require:
   1. showing the actual current excerpt of masked lines in the WL package (or building the unmasked prefix from each task's file), so SEARCH has a correct source;
   2. allowing a repair when an edit is rejected as well, returning the `zero_occurrences` diagnostic to the model;
@@ -120,9 +120,9 @@ There were zero infrastructure failures.
 
 | Arm | Passed | Episodes with edit repair | Last rejection | TTFT (median) | Time/episode |
 |---|---|---:|---|---:|---:|
-| P-W16 | 2/12 (`cont_path`, `recover_decode`) | 6 | 1 `zero_occurrences` | 1,0 s | 11,9 s |
-| P-WL-cold | 2/12 (`cont_path`, `recover_decode`) | 10 | 9 `zero_occurrences`, 1 `malformed_output` | 17,8 s | 32,3 s |
-| P-WL-warm | 2/12 (`cont_path`, `recover_decode`) | 9 | 8 `zero_occurrences`, 1 `malformed_output` | 2,1 s | 13,8 s |
+| P-W16 | 2/12 (`cont_path`, `recover_decode`) | 6 | 1 `zero_occurrences` | 1.0 s | 11.9 s |
+| P-WL-cold | 2/12 (`cont_path`, `recover_decode`) | 10 | 9 `zero_occurrences`, 1 `malformed_output` | 17.8 s | 32.3 s |
+| P-WL-warm | 2/12 (`cont_path`, `recover_decode`) | 9 | 8 `zero_occurrences`, 1 `malformed_output` | 2.1 s | 13.8 s |
 
 The two passes are the same in all three arms. W16's dominant failure changed: in 7 of 12 tasks, the model responded `BLOCKED: insufficient_context` because the selected window did not contain the buggy code.
 
@@ -136,7 +136,7 @@ The two passes are the same in all three arms. W16's dominant failure changed: i
 
 ### Conclusion
 
-- **Established again:** latency cost. Warm WL is close to W16 (13,8 s versus 11,9 s), and cold WL costs almost 3 times more (32,3 s).
+- **Established again:** latency cost. Warm WL is close to W16 (13.8 s versus 11.9 s), and cold WL costs almost 3 times more (32.3 s).
 - **Quality:** in this single-call worker with SEARCH/REPLACE, long context **did not improve** the pass rate (2/12 in all three arms). The bottleneck is the 4B's exact SEARCH copying, not lack of context. This applies to both the common prefix and the omitted-lines section.
 - Continuing T3b would require changing the editing protocol, not the context. Two options:
   - return the closest lines from the real file in the error (approximate search);

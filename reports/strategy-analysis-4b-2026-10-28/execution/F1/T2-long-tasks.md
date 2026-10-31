@@ -45,13 +45,13 @@ Stage 3 was active at the first check; the authorized 60 s loop waited until the
 | --- | ---: | ---: |
 | Final oracles `py_query`, `py_range` | passed, failed | passed, failed |
 | Visible checks for each submission | passed, passed | passed, passed |
-| Submission time | 24,80 s; 15,37 s | 23,52 s; 21,85 s |
-| Total attempt time | 48,57 s | 54,61 s |
+| Submission time | 24.80 s; 15.37 s | 23.52 s; 21.85 s |
+| Total attempt time | 48.57 s | 54.61 s |
 | OpenCode prompt / generated tokens | 217.337 / 1.892 | 249.916 / 1.570 |
 | Requests with timings / total | 18 / 18 | 19 / 19 |
 | Compaction requests in SQLite | 1 | 2 |
 | Resets | 0 | 1 |
-| Peak device VRAM | 4.079 MiB | 4.076 MiB |
+| Peak device VRAM | 4,079 MiB | 4,076 MiB |
 | Detected context overflow occurrences / OOM evidence | 0 / no | 0 / no |
 
 In both, the `py_query` oracle passed after the first submission and remained passing after the second; `py_range` failed final evaluation despite passing the visible test. No regression was observed. `L-compact` retained the same ID across both calls; `L-reset` used different IDs and the inspected `PROGRESS.md` contained the previous objective, visible status and diff. Both OpenCode isolation proofs passed. Per-objective results are not proof of statistical efficacy.
@@ -60,4 +60,4 @@ Raw artifacts in WSL: `/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencod
 
 Final checks: `pytest -q tests/test_long_tasks.py tests/test_opencode_baseline.py tests/test_baseline_report.py tests/test_qwen_f1_diagnostic.py tests/test_opencode_controlled_probe.py` with the requested Python: **63 passed**. Ruff on T2 files and covered baseline/report files: **All checks passed**. `compileall` ended with code 0; no typecheck configuration was found in the project, and compilation is not typecheck. The existing baseline schedule test was updated from 276/144 to 300/168 units after an external commit added two repetitions of `C4-think`; the two protected files were not edited by T2.
 
-The full `pytest -q` suite is not green: **16 failed, 1083 passed, 19 skipped, 187 subtests passed**. Rerunning only the failures confirmed: six failures where WSL Git cannot resolve the Windows path in this worktree's `.git` file; eight failures from missing manifests/catalogs of other campaigns; and two from insufficient space for download and hot-cache test floors. At verification there were approximately 6,7 GiB free on the Linux filesystem. These problems were not fixed with global changes, fabricated files or data cleanup. The 63 focused tests above passed independently of the full suite.
+The full `pytest -q` suite is not green: **16 failed, 1083 passed, 19 skipped, 187 subtests passed**. Rerunning only the failures confirmed: six failures where WSL Git cannot resolve the Windows path in this worktree's `.git` file; eight failures from missing manifests/catalogs of other campaigns; and two from insufficient space for download and hot-cache test floors. At verification there were approximately 6.7 GiB free on the Linux filesystem. These problems were not fixed with global changes, fabricated files or data cleanup. The 63 focused tests above passed independently of the full suite.

@@ -1,6 +1,7 @@
 {
-  "protocol_id": "qwen-4b-opencode-long-tasks-20261029-v2",
-  "output": "/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-long-tasks-20261029-v2",
+  "protocol_id": "qwen-4b-opencode-long-tasks-v3",
+  "output": "/home/foxtrot/local-llm-benchmark/results/qwen-4b-opencode-long-tasks-v3",
+  "repetitions": 3,
   "wall_seconds": 1800,
   "steps": 40,
   "marathons": {

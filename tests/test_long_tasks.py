@@ -8,14 +8,15 @@ from benchmark import long_tasks
 def test_schedule_interleaves_marathons_and_keeps_all_listed_objectives():
     config = long_tasks.load_config()
     units = long_tasks.schedule(config)
-    assert len(units) == 8
-    assert [unit['marathon'] for unit in units] == ['M1', 'M2'] * 4
+    assert len(units) == 24
+    assert [unit['marathon'] for unit in units[:8]] == ['M1', 'M2'] * 4
     assert len(config['marathons']['M1']) == 5
     assert len(config['marathons']['M2']) == 6
     assert [unit['arm'] for unit in units[:4]] == [
         'L-compact', 'L-bigctx', 'L-reset', 'L-headroom'
     ]
     assert len({(unit['arm'], unit['marathon']) for unit in units}) == 8
+    assert len({(unit['arm'], unit['marathon'], unit['repetition']) for unit in units}) == 24
 
 
 def test_regressions_require_a_prior_pass_and_a_later_failure():
@@ -110,11 +111,12 @@ def test_compaction_count_from_database(tmp_path):
     db.parent.mkdir(parents=True)
     with sqlite3.connect(db) as conn:
         conn.execute('CREATE TABLE part (session_id TEXT, data TEXT)')
+        conn.execute('CREATE TABLE message (session_id TEXT, data TEXT)')
         conn.executemany('INSERT INTO part VALUES (?, ?)', [
             ('s1', '{"type":"compaction","auto":true}'),
             ('s1', '{"type":"text"}'),
             ('s2', '{"type":"compaction","auto":true}')])
-    assert long_tasks.count_compactions(tmp_path, ['s1']) == 1
+    assert long_tasks.count_compactions(tmp_path, ['s1']) == {'requested': 1, 'completed': 0}
     assert long_tasks.count_compactions(tmp_path / 'missing', ['s1']) is None
 
 
@@ -178,3 +180,24 @@ def test_unreleased_and_phase_one_objectives_do_not_get_private_pass(tmp_path):
     assert result['cont_quote:2']['status'] == 'not_started'
     phase1 = long_tasks.grade_objective(config, 'cont_quote:1', workspace, tmp_path / 'phase1', 30)
     assert phase1 == {'passed': None, 'status': 'no_private_phase1_oracle'}
+
+
+def test_three_repetitions_run_each_arm_on_both_marathons():
+    config = {'arms': {'a': {}, 'b': {}, 'c': {}, 'd': {}}, 'marathons': {'M1': [], 'M2': []}, 'repetitions': 3}
+    units = long_tasks.schedule(config)
+    assert len(units) == 24
+    assert len({(u['arm'], u['marathon'], u['repetition']) for u in units}) == 24
+
+
+def test_only_finished_summaries_count_as_completed(tmp_path):
+    database = tmp_path / '.local/share/opencode/opencode.db'
+    database.parent.mkdir(parents=True)
+    with sqlite3.connect(database) as conn:
+        conn.execute('CREATE TABLE part (session_id text, data text)')
+        conn.execute('CREATE TABLE message (session_id text, data text)')
+        conn.executemany('INSERT INTO part VALUES (?, ?)', [('s', '{"type": "compaction"}')] * 2 + [('other', '{"type": "compaction"}')])
+        rows = ['{"mode": "compaction", "summary": true, "finish": "stop"}',
+                '{"mode": "compaction", "summary": true, "error": {"name": "x"}}',
+                '{"mode": "build", "summary": {"diffs": []}, "finish": "stop"}']
+        conn.executemany('INSERT INTO message VALUES (?, ?)', [('s', row) for row in rows])
+    assert long_tasks.count_compactions(tmp_path, ['s']) == {'requested': 2, 'completed': 1}

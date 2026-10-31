@@ -49,7 +49,7 @@ The project's CMake resets output directories to `build/bin`, regardless of the 
 
 ## Smoke, validation and rollback
 
-`llama-server --version` returned `0.8.0-dev (build 1, commit 8642541)`. `--help` included `--cache-prompt`, `--cache-reuse`, `--ctx-checkpoints`, `--cache-ram`, `--slot-save-path`, `--reasoning`, `--cache-type-k` and `q4_0`. The test used the requested local GGUF, `-ngl 99 --ctx-size 16384 --cache-type-k q4_0 --cache-type-v q4_0 --flash-attn on --reasoning off --jinja`, `127.0.0.1:18080` and a single slot. `/tokenize` returned 2.201 tokens for the prefix; `/apply-template` returned a nonempty prompt. Two identical requests with `cache_prompt=true`:
+`llama-server --version` returned `0.8.0-dev (build 1, commit 8642541)`. `--help` included `--cache-prompt`, `--cache-reuse`, `--ctx-checkpoints`, `--cache-ram`, `--slot-save-path`, `--reasoning`, `--cache-type-k` and `q4_0`. The test used the requested local GGUF, `-ngl 99 --ctx-size 16384 --cache-type-k q4_0 --cache-type-v q4_0 --flash-attn on --reasoning off --jinja`, `127.0.0.1:18080` and a single slot. `/tokenize` returned 2,201 tokens for the prefix; `/apply-template` returned a nonempty prompt. Two identical requests with `cache_prompt=true`:
 
 | Request | `timings.prompt_n` | `timings.cache_n` | `timings.prompt_ms` |
 |---|---:|---:|---:|
@@ -73,7 +73,7 @@ PYTHONDONTWRITEBYTECODE=1 /home/foxtrot/local-llm-benchmark/envs/lab-validation/
 /home/foxtrot/.local/bin/ruff check benchmark/guarded_edit.py benchmark/qwen_engines.py benchmark/qwen_workloads.py
 ```
 
-Pytest: **43 passed in 11,48 s** in the original environment; the same set passed in candidate `lab-validation-20261028` (**43 in 11,22 s**). Ruff 0.17.3: **4 errors** (`I001` in `guarded_edit.py` and `qwen_workloads.py`, `SIM114` in `guarded_edit.py`, `PIE790` in `qwen_engines.py`); log `ruff.log`. Older Ruff 0.15.17 passed the same command. Project code was not edited to make lint pass. The result does not validate the other harnesses or the GPU smoke.
+Pytest: **43 passed in 11.48 s** in the original environment; the same set passed in candidate `lab-validation-20261028` (**43 in 11.22 s**). Ruff 0.17.3: **4 errors** (`I001` in `guarded_edit.py` and `qwen_workloads.py`, `SIM114` in `guarded_edit.py`, `PIE790` in `qwen_engines.py`); log `ruff.log`. Older Ruff 0.15.17 passed the same command. Project code was not edited to make lint pass. The result does not validate the other harnesses or the GPU smoke.
 
 ## System
 

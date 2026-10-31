@@ -30,7 +30,7 @@ The first tag in the order below is primary and the others are secondary. Signal
 
 It selects the first attempt except `server_exited`, `server_http_error`, `harness_configuration_error` or `grader_infrastructure`, using `failure`, not `category`. This retains the first attempt incorrectly classified as infrastructure in v5. Infrastructure-only attempts are excluded and not converted into model failures. Older results without taxonomy or complete timings do not receive invented values.
 
-Run only on v5, without reading v6: B0 **16/24**, rate 0,6667, Wilson 95% [0,4671; 0,8203]; median time 42,2508 s; 6.722.306 prompt tokens, 85.053 generated and 1.528,6387 s in unsuccessful episodes. Server totals remained blank because not all requests had complete timings. Outputs persisted alongside this report: `T1-analysis-v5.md` and `T1-analysis-v5.csv`.
+Run only on v5, without reading v6: B0 **16/24**, rate 0,6667, Wilson 95% [0.4671; 0.8203]; median time 42,2508 s; 6,722,306 prompt tokens, 85.053 generated and 1.528,6387 s in unsuccessful episodes. Server totals remained blank because not all requests had complete timings. Outputs persisted alongside this report: `T1-analysis-v5.md` and `T1-analysis-v5.csv`.
 
 ## Stage 4
 
@@ -40,7 +40,7 @@ All use Q4_K_M bartowski, KV q4_0/q4_0, context 65536, cache enabled, thinking d
 | --- | --- | ---: | ---: |
 | C4-q4 | control | 3 | 36 |
 | C4-q6 | Q6_K Unsloth | 3 | 36 |
-| S-qwen-sampling | temperature 0,7; top_p 0,8; top_k 20; min_p 0; presence_penalty 1,5 | 1 | 12 |
+| S-qwen-sampling | temperature 0.7; top_p 0.8; top_k 20; min_p 0; presence_penalty 1.5 | 1 | 12 |
 | S-steps80 | 80 steps | 1 | 12 |
 | S-ctx48 | context 49152 | 1 | 12 |
 | S-cache-reuse | `--cache-reuse 256 --ctx-checkpoints 16` | 1 | 12 |
@@ -49,7 +49,7 @@ All use Q4_K_M bartowski, KV q4_0/q4_0, context 65536, cache enabled, thinking d
 
 The v0.8.0 server `--help` confirms the three flag names; `common/speculative.cpp` creates the MTP draft context from the target, and the control GGUF contains `qwen35.nextn_predict_layers=1` and `blk.32.nextn.*` tensors. Interface support and metadata do not demonstrate operation or inference gains. The Unsloth model card at the revision below confirms general non-thinking parameters. The sampling profile was accepted by `opencode debug config` offline.
 
-Unsloth model: `Qwen3.5-4B-Q4_K_M-unsloth.gguf`, 2.740.937.888 bytes, `/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/`; revision `e87f176479d0855a907a41277aca2f8ee7a09523`, SHA-256 `00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4`, verified after download. URL: https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf.
+Unsloth model: `Qwen3.5-4B-Q4_K_M-unsloth.gguf`, 2,740,937,888 bytes, `/home/foxtrot/local-llm-benchmark/models/gguf/qwen3.5-4b/`; revision `e87f176479d0855a907a41277aca2f8ee7a09523`, SHA-256 `00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4`, verified after download. URL: https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf.
 
 ## Verification and future execution
 
