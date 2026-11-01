@@ -46,4 +46,21 @@ These requests are the 240 W point of test E0. Busy samples only.
 | Busy samples in SW power cap | 100% | 100% |
 | Peak temperature | 70°C | 72°C |
 
-The rest of E0 needs the power limit and memory clock changed by hand, which takes administrator rights or MSI Afterburner. `benchmark/e0_power_memory.ps1` walks through those points and ends on a repeat of the 240 W control. Its reading should rest on the long prompt, given the short prompt's spread between loads.
+## Raised GPU clocks
+
+The run above used stock clocks. On 01/11/2026 the core and memory clocks were raised by hand, the power limit stayed at 240 W, and the f16 arm ran again with 6 loads in a row. The first load is left out for the reason given below.
+
+| Prompt | Clocks | Requests | Median tok/s | Range | Prefill tok/s | Median core | Median memory | Median power |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Short | Stock | 12 | 146.5 | 140.9 to 155.3 | 500 | 1,905 MHz | 7,001 MHz | 230.4 W |
+| Short | Raised | 15 | 147.2 | 140.1 to 154.0 | 499 | 1,905 MHz | 7,301 MHz | 232.5 W |
+| Long | Stock | 12 | 103.3 | 100.9 to 111.0 | 3,147 | 1,875 MHz | 7,001 MHz | 233.7 W |
+| Long | Raised | 15 | 103.7 | 101.2 to 107.5 | 3,144 | 1,875 MHz | 7,301 MHz | 233.8 W |
+
+Decode did not change: +0.5% and +0.4%, both inside the spread of the two groups, with prefill flat as well. Memory ran 4.3% faster, so on this card, at this limit, decode does not follow memory clock. The median core clock stayed the same and the SW power cap covered the median request in both groups, which suggests the core has no spare power to use a higher offset. The two groups come from different sessions rather than alternating blocks, so this rules out a gain of several percent and cannot rule out one near 1%.
+
+Memory read 7,501 MHz at idle and 7,301 MHz under the compute load. NVML under WSL reports both offsets as zero, so the offsets themselves are not on record.
+
+Two earlier runs at the same clocks are not in the table. In the first, VLC was open and held 739 MiB of GPU memory, and 9 of 12 long requests fell below 98 tok/s. In the second, a logger read the Windows GPU counters every 4 seconds, no other process showed GPU use, and all 12 long requests fell below 98 tok/s. Neither cause was isolated. In the kept run, the first load was also slow, down to 72.7 tok/s, with Windows CPU load at 80% to 100%; the next five loads saw 7% to 73%. That load was the coolest of the run, so temperature does not explain it. Any later speed run should log CPU load and keep the PC otherwise idle.
+
+All 84 counted requests in the three runs gave the same text as the stock run, and Windows logged no `nvlddmkm` event in that hour, so this short test showed no instability. The power half of E0 was dropped because the limit stays at 240 W, which leaves open whether decode follows the power limit.
