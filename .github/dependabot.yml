@@ -1,0 +1,22 @@
+# The hosts under corpus/hosts are frozen benchmark fixtures hashed in
+# corpus/manifest.json. A bump there stops campaigns from starting, so
+# Dependabot leaves them alone. `ignore` covers security updates too;
+# `exclude-paths` would only cover version updates.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directories:
+      - /corpus/hosts/**
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: "*"
+  - package-ecosystem: pip
+    directories:
+      - /corpus/hosts/**
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0
+    ignore:
+      - dependency-name: "*"
