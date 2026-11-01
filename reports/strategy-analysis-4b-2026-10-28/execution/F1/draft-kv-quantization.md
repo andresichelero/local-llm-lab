@@ -59,7 +59,7 @@ The run above used stock clocks. On 01/11/2026 the core and memory clocks were r
 
 Decode did not change: +0.5% and +0.4%, both inside the spread of the two groups, with prefill flat as well. Memory ran 4.3% faster, so on this card, at this limit, decode does not follow memory clock. The median core clock stayed the same and the SW power cap covered the median request in both groups, which suggests the core has no spare power to use a higher offset. The two groups come from different sessions rather than alternating blocks, so this rules out a gain of several percent and cannot rule out one near 1%.
 
-Memory read 7,501 MHz at idle and 7,301 MHz under the compute load. NVML under WSL reports both offsets as zero, so the offsets themselves are not on record.
+Memory read 7,501 MHz at idle in P0 and 7,301 MHz under the compute load, each 300 MHz above the stock P0 and P2 readings of 7,201 and 7,001 MHz. NVML under WSL reports both offsets as zero, so the core offset is not on record.
 
 Two earlier runs at the same clocks are not in the table. In the first, VLC was open and held 739 MiB of GPU memory, and 9 of 12 long requests fell below 98 tok/s. In the second, a logger read the Windows GPU counters every 4 seconds, no other process showed GPU use, and all 12 long requests fell below 98 tok/s. Neither cause was isolated. In the kept run, the first load was also slow, down to 72.7 tok/s, with Windows CPU load at 80% to 100%; the next five loads saw 7% to 73%. That load was the coolest of the run, so temperature does not explain it. Any later speed run should log CPU load and keep the PC otherwise idle.
 
